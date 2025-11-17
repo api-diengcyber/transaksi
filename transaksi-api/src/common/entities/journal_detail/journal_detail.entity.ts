@@ -5,17 +5,21 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  OneToMany,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
-import { JournalBalanceEntity } from '../journal_balance/journal_balance.entity';
+import { JournalEntity } from '../journal/journal.entity';
 
-@Entity('journal')
-export class JournalEntity {
+@Entity('journal_detail')
+export class JournalDetailEntity {
   @PrimaryGeneratedColumn('uuid')
   uuid: string;
 
-  @Column({ length: 500, unique: true })
-  code: string;
+  @Column({ length: 500 })
+  key: string;
+
+  @Column({ length: 500 })
+  value: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
@@ -35,6 +39,12 @@ export class JournalEntity {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
 
-  @OneToMany(() => JournalBalanceEntity, (bal) => bal.journal)
-  balances: JournalBalanceEntity[];
+  @ManyToOne(() => JournalEntity, (journal) => journal.details, {
+    onDelete: 'CASCADE', 
+  })
+  @JoinColumn({ name: 'journal_code', referencedColumnName: 'code' })
+  journal: JournalEntity;
+
+  @Column({ name: 'journal_code' })
+  journalCode: string;
 }

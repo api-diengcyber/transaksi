@@ -17,9 +17,6 @@ export class ProductEntity {
   uuid: string;
 
   @Column({ length: 500 })
-  barcode: string;
-
-  @Column({ length: 500 })
   name: string;
 
   @Column({ name: 'default_unit_uuid', type: 'uuid', nullable: true })

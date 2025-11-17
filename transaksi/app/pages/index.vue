@@ -1,200 +1,143 @@
-<template>
-  <div class="p-fluid">
-    <h1 class="text-3xl font-bold mb-6 text-900 dark:text-0">
-      👋 Selamat Datang di Dashboard RetailPulse
-    </h1>
-
-    <div class="grid mb-6">
-      <div class="col-12 lg:col-6 xl:col-3">
-        <Card class="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <template #content>
-            <div class="flex justify-content-between mb-3">
-              <div>
-                <span class="block text-500 font-medium mb-3">Total Penjualan</span>
-                <div class="text-900 font-bold text-xl">Rp 120.500.000</div>
-              </div>
-              <div class="flex align-items-center justify-content-center bg-blue-100 dark:bg-blue-900 rounded-full" 
-                   style="width: 2.5rem; height: 2.5rem">
-                <i class="pi pi-chart-line text-blue-500 text-xl"></i>
-              </div>
-            </div>
-            <span class="text-green-500 font-medium">↑ 15%</span>
-            <span class="text-500"> Sejak Bulan Lalu</span>
-          </template>
-        </Card>
-      </div>
-
-      <div class="col-12 lg:col-6 xl:col-3">
-        <Card class="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <template #content>
-            <div class="flex justify-content-between mb-3">
-              <div>
-                <span class="block text-500 font-medium mb-3">Total Transaksi</span>
-                <div class="text-900 font-bold text-xl">5.340</div>
-              </div>
-              <div class="flex align-items-center justify-content-center bg-orange-100 dark:bg-orange-900 rounded-full" 
-                   style="width: 2.5rem; height: 2.5rem">
-                <i class="pi pi-shopping-cart text-orange-500 text-xl"></i>
-              </div>
-            </div>
-            <span class="text-red-500 font-medium">↓ 5%</span>
-            <span class="text-500"> Dibanding Kemarin</span>
-          </template>
-        </Card>
-      </div>
-      
-      <div class="col-12 lg:col-6 xl:col-3">
-        <Card class="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <template #content>
-            <div class="flex justify-content-between mb-3">
-              <div>
-                <span class="block text-500 font-medium mb-3">Item Terjual</span>
-                <div class="text-900 font-bold text-xl">18.125 Unit</div>
-              </div>
-              <div class="flex align-items-center justify-content-center bg-cyan-100 dark:bg-cyan-900 rounded-full" 
-                   style="width: 2.5rem; height: 2.5rem">
-                <i class="pi pi-box text-cyan-500 text-xl"></i>
-              </div>
-            </div>
-            <span class="text-green-500 font-medium">↑ 3%</span>
-            <span class="text-500"> Hari Ini</span>
-          </template>
-        </Card>
-      </div>
-      
-      <div class="col-12 lg:col-6 xl:col-3">
-        <Card class="shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <template #content>
-            <div class="flex justify-content-between mb-3">
-              <div>
-                <span class="block text-500 font-medium mb-3">Stok Kritis</span>
-                <div class="text-900 font-bold text-xl text-red-600">45 Item</div>
-              </div>
-              <div class="flex align-items-center justify-content-center bg-red-100 dark:bg-red-900 rounded-full" 
-                   style="width: 2.5rem; height: 2.5rem">
-                <i class="pi pi-exclamation-triangle text-red-500 text-xl"></i>
-              </div>
-            </div>
-            <span class="text-red-500 font-medium">Segera</span>
-            <span class="text-500"> Lakukan *Restock*</span>
-          </template>
-        </Card>
-      </div>
-    </div>
-
-    <div class="grid">
-      <div class="col-12 lg:col-8">
-        <Card>
-          <template #title>
-            Tren Penjualan 6 Bulan Terakhir
-          </template>
-          <template #content>
-            <Chart type="line" :data="chartData" :options="chartOptions" class="h-30rem" />
-          </template>
-        </Card>
-      </div>
-
-      <div class="col-12 lg:col-4">
-        <Card>
-          <template #title>
-            Top 5 Produk Stok Rendah
-          </template>
-          <template #content>
-            <ul class="list-none p-0 m-0">
-              <li v-for="(product, index) in lowStockProducts" :key="index"
-                  class="flex align-items-center py-3 px-2 border-bottom-1 surface-border hover:surface-hover transition-colors duration-150">
-                <i :class="product.icon" class="text-lg mr-3" :style="{ color: product.color }"></i>
-                <div class="flex-1">
-                  <div class="text-900">{{ product.name }}</div>
-                  <div class="text-500 text-sm">SKU: {{ product.sku }}</div>
-                </div>
-                <Badge :value="product.stock" severity="danger"></Badge>
-              </li>
-            </ul>
-            <Button label="Lihat Semua Stok Kritis" icon="pi pi-list" text class="mt-4 w-full" />
-          </template>
-        </Card>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { ref } from 'vue';
-// Pastikan komponen ini sudah di-register di nuxt.config.ts Anda
-import Chart from 'primevue/chart';
-import Card from 'primevue/card';
-import Badge from 'primevue/badge';
-import Button from 'primevue/button';
-// Import InputText jika belum
-import InputText from 'primevue/inputtext';
 
-// 1. Data untuk Grafik (Line Chart)
-const chartData = ref({
-    labels: ['Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt'],
-    datasets: [
-        {
-            label: 'Penjualan Bersih (Rp Juta)',
-            data: [100, 115, 95, 125, 120, 150],
-            fill: true,
-            borderColor: 'var(--blue-500)',
-            tension: 0.4,
-            backgroundColor: 'rgba(59, 130, 246, 0.1)' // Tailwind blue-500 with opacity
-        }
-    ]
-});
-
-// Opsi untuk Grafik
-const chartOptions = ref({
-    plugins: {
-        legend: {
-            display: false
-        }
+// Data Shortcut Menu
+const menus = ref([
+    {
+        title: 'TRANSAKSI',
+        items: [
+            { 
+                label: 'Penjualan Baru', 
+                icon: 'pi pi-shopping-cart', 
+                route: '/transaction/sale', 
+                desc: 'Kasir / POS',
+                color: 'text-emerald-600', 
+                bg: 'bg-emerald-100 dark:bg-emerald-900/20' 
+            },
+            { 
+                label: 'Pembelian Stok', 
+                icon: 'pi pi-truck', 
+                route: '/transaction/buy', 
+                desc: 'Pembelian Barang',
+                color: 'text-orange-600', 
+                bg: 'bg-orange-100 dark:bg-orange-900/20' 
+            },
+            { 
+                label: 'Retur Barang', 
+                icon: 'pi pi-refresh', 
+                route: '/transaksi/retur', 
+                desc: 'Pengembalian',
+                color: 'text-red-600', 
+                bg: 'bg-red-100 dark:bg-red-900/20' 
+            }
+        ]
     },
-    scales: {
-        x: {
-            ticks: {
-                color: 'var(--text-color-secondary)'
-            },
-            grid: {
-                color: 'var(--surface-border)'
+    {
+        title: 'MANAJEMEN',
+        items: [
+            { 
+                label: 'Master Produk', 
+                icon: 'pi pi-box', 
+                route: '/product', 
+                desc: 'Kelola Item & Harga',
+                color: 'text-blue-600', 
+                bg: 'bg-blue-100 dark:bg-blue-900/20' 
             }
-        },
-        y: {
-            beginAtZero: true,
-            ticks: {
-                color: 'var(--text-color-secondary)',
-                callback: function(value) {
-                    return 'Rp ' + value + ' Jt';
-                }
+        ]
+    },
+    {
+        title: 'LAPORAN & ANALISIS',
+        items: [
+            { 
+                label: 'Laporan Penjualan', 
+                icon: 'pi pi-file-pdf', 
+                route: '/report/sale', 
+                desc: 'Rekap Omset',
+                color: 'text-purple-600', 
+                bg: 'bg-purple-100 dark:bg-purple-900/20' 
             },
-            grid: {
-                color: 'var(--surface-border)'
+            { 
+                label: 'Laporan Pembelian', 
+                icon: 'pi pi-shopping-bag', 
+                route: '/report/buy', 
+                desc: 'Rekap Pengeluaran',
+                color: 'text-indigo-600', 
+                bg: 'bg-indigo-100 dark:bg-indigo-900/20' 
+            },
+            { 
+                label: 'Grafik Analisis', 
+                icon: 'pi pi-chart-line', 
+                route: '/report/graph', 
+                desc: 'Tren Bisnis',
+                color: 'text-cyan-600', 
+                bg: 'bg-cyan-100 dark:bg-cyan-900/20' 
             }
-        }
+        ]
     }
-});
-
-// 2. Data Produk Stok Rendah
-const lowStockProducts = ref([
-    { name: 'Kemeja Basic Pria L', sku: 'KMBAS-L', stock: 12, icon: 'pi pi-shirt', color: '#EF4444' },
-    { name: 'Sepatu Running V2 40', sku: 'SRV2-40', stock: 18, icon: 'pi pi-shoe', color: '#F97316' },
-    { name: 'Celana Jeans Slim Fit', sku: 'CJSLIM', stock: 25, icon: 'pi pi-wallet', color: '#14B8A6' },
-    { name: 'Hoodie Fleece XL', sku: 'HOOF-XL', stock: 30, icon: 'pi pi-star', color: '#6366F1' },
-    { name: 'Topi Baseball Hitam', sku: 'TBBS-H', stock: 35, icon: 'pi pi-palette', color: '#FBBF24' }
 ]);
 
-// Konfigurasi Layout Nuxt
 definePageMeta({
-  layout: 'dashboard' // Memanggil layout yang sudah kita buat sebelumnya
-})
-
+    layout: 'default'
+});
 </script>
 
+<template>
+    <div class="p-4 md:p-8 animate-fade-in">
+        
+        <div class="mb-10 bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+            <div class="relative z-10">
+                <h1 class="text-3xl md:text-4xl font-bold mb-2">Halo, Admin! 👋</h1>
+                <p class="text-primary-100 text-lg">Selamat datang kembali di RetailApp. Apa yang ingin Anda lakukan hari ini?</p>
+            </div>
+            <i class="pi pi-chart-bar absolute -right-5 -bottom-10 text-[10rem] text-white opacity-10 rotate-12"></i>
+        </div>
+
+        <div v-for="(group, index) in menus" :key="index" class="mb-10">
+            
+            <h2 class="text-sm font-bold text-surface-500 dark:text-surface-400 uppercase tracking-widest mb-4 ml-1 border-b border-surface-200 dark:border-surface-700 pb-2 inline-block">
+                {{ group.title }}
+            </h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <NuxtLink 
+                    v-for="item in group.items" 
+                    :key="item.label" 
+                    :to="item.route"
+                    class="group relative bg-white dark:bg-surface-900 p-6 rounded-2xl border border-surface-100 dark:border-surface-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+                >
+                    <div class="flex items-start justify-between mb-4">
+                        <div :class="['w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner', item.bg, item.color]">
+                            <i :class="item.icon"></i>
+                        </div>
+                        
+                        <div class="w-8 h-8 rounded-full bg-surface-50 dark:bg-surface-800 flex items-center justify-center text-surface-400 group-hover:bg-primary-500 group-hover:text-white transition-colors">
+                            <i class="pi pi-arrow-right text-sm"></i>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-bold text-surface-800 dark:text-surface-100 mb-1 group-hover:text-primary-600 transition-colors">
+                            {{ item.label }}
+                        </h3>
+                        <p class="text-sm text-surface-500 dark:text-surface-400">
+                            {{ item.desc }}
+                        </p>
+                    </div>
+                </NuxtLink>
+            </div>
+        </div>
+
+    </div>
+</template>
+
 <style scoped>
-/* PrimeFlex Grid digunakan secara default dengan class col-12, lg:col-6, dll. */
-/* Tidak perlu menambahkan CSS Grid kustom lagi di sini */
-.h-30rem {
-    height: 30rem;
+/* Animasi halus saat masuk */
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 </style>

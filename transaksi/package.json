@@ -12,6 +12,7 @@
   "dependencies": {
     "@primeuix/themes": "^1.2.5",
     "chart.js": "^4.5.1",
+    "dayjs": "^1.11.19",
     "nuxt": "^4.2.1",
     "primeicons": "^7.0.0",
     "primevue": "^4.4.1",
@@ -19,6 +20,9 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
-    "@primevue/nuxt-module": "^4.4.1"
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "@primevue/nuxt-module": "^4.4.1",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6"
   }
 }

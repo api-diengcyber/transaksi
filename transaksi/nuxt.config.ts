@@ -1,19 +1,32 @@
+// nuxt.config.ts
 import Aura from '@primeuix/themes/aura';
 
-// https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  compatibilityDate: '2025-07-15',
+  compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:3000'
+    }
+  },
   modules: [
-    '@primevue/nuxt-module'
+    '@primevue/nuxt-module',
+    '@nuxtjs/tailwindcss'
   ],
   primevue: {
     options: {
       theme: {
-        preset: Aura
+        preset: Aura,
+        options: {
+          darkModeSelector: '.dark', 
+        }
       },
-      ripple: true
+      ripple: true,
     },
-    autoImport: true
-  }
+    autoImport: true,
+  },
+  css: [
+    'primeicons/primeicons.css',
+    '~/assets/css/base.css'
+  ]
 })

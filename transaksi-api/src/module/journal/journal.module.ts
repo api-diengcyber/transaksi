@@ -1,19 +1,21 @@
 
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from 'src/common/db/database.module';
-import { journalProvider } from 'src/common/entity/journal/journal.provider';
+import { journalProvider } from 'src/common/entities/journal/journal.provider';
 import { JournalService } from './journal.service';
 import { JournalController } from './journal.controller';
-import { journalDetailProvider } from 'src/common/entity/journal_detail/journal_detail.provider';
-import { journalBalanceProvider } from 'src/common/entity/journal_balance/journal_balance.provider';
+import { journalDetailProvider } from 'src/common/entities/journal_detail/journal_detail.provider';
+import { ProductModule } from '../product/product.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [
+    DatabaseModule,
+    ProductModule
+  ],
   controllers: [JournalController],
   providers: [
     ...journalProvider,
     ...journalDetailProvider,
-    ...journalBalanceProvider,
     JournalService,
   ],
 })

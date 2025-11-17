@@ -17,6 +17,10 @@ export enum ProductUnitEnum {
   LUSIN = 'LUSIN',
   DUS = 'DUS',
   KARTON = 'KARTON',
+  BOX = 'BOX',    
+  KG = 'KG',         
+  LITER = 'LITER',   
+  PACK = 'PACK',     
 }
 
 @Entity('product_unit')
@@ -37,6 +41,9 @@ export class ProductUnitEntity {
     default: 1,
   })
   unitMultiplier: number;
+
+  @Column({ length: 500, nullable: true })
+  barcode: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

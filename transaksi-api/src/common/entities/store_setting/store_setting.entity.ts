@@ -8,10 +8,10 @@ import {
   JoinColumn,
   ManyToOne,
 } from 'typeorm';
-import { JournalEntity } from '../journal/journal.entity';
+import { StoreEntity } from '../store/store.entity';
 
-@Entity('journal_detail')
-export class JournalDetailEntity {
+@Entity('store_setting')
+export class StoreSettingEntity {
   @PrimaryGeneratedColumn('uuid')
   uuid: string;
 
@@ -38,11 +38,13 @@ export class JournalDetailEntity {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
-  
-  @ManyToOne(() => JournalEntity, (journal) => journal.balances)
-  @JoinColumn({ name: 'journal_code', referencedColumnName: 'code' })
-  journal: JournalEntity;
 
-  @Column({ name: 'journal_code' })
-  journalCode: string;
+  @ManyToOne(() => StoreEntity, (store) => store.settings, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'store_uuid' })
+  store: StoreEntity;
+  
+  @Column({ name: 'store_uuid', type: 'uuid' })
+  storeUuid: string;
 }

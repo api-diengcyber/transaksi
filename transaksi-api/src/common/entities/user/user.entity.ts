@@ -5,21 +5,24 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  JoinColumn,
-  ManyToOne,
 } from 'typeorm';
-import { JournalEntity } from '../journal/journal.entity';
 
-@Entity('journal_balance')
-export class JournalBalanceEntity {
+@Entity('user')
+export class UserEntity {
   @PrimaryGeneratedColumn('uuid')
   uuid: string;
 
-  @Column({ length: 500, unique: true })
-  code: string;
+  @Column({ length: 500 })
+  username: string;
 
-  @Column({ type: 'double', nullable: true })
-  balance: number;
+  @Column({ length: 500 })
+  password: string;
+
+  @Column({ length: 500 })
+  email: string;
+  
+  @Column({ name: 'refresh_token', nullable: true })
+  refreshToken: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
@@ -38,11 +41,4 @@ export class JournalBalanceEntity {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
-  
-  @ManyToOne(() => JournalEntity, (journal) => journal.balances)
-  @JoinColumn({ name: 'journal_code', referencedColumnName: 'code' })
-  journal: JournalEntity;
-
-  @Column({ name: 'journal_code' })
-  journalCode: string;
 }
