@@ -7,7 +7,6 @@ import {
   DeleteDateColumn,
   JoinColumn,
   ManyToOne,
-  OneToOne,
 } from 'typeorm';
 import { ProductEntity } from '../product/product.entity';
 import { ProductUnitEntity } from '../product_unit/product_unit.entity';
@@ -16,6 +15,9 @@ import { ProductUnitEntity } from '../product_unit/product_unit.entity';
 export class ProductPriceEntity {
   @PrimaryGeneratedColumn('uuid')
   uuid: string;
+
+  @Column({ length: 255 })
+  name: string;
 
   @Column({ type: 'double', default: 0 })
   price: number;
@@ -47,7 +49,7 @@ export class ProductPriceEntity {
   @Column({ name: 'product_uuid', type: 'uuid' })
   productUuid: string;
   
-  @OneToOne(() => ProductUnitEntity, { onDelete: 'SET NULL' })
+  @ManyToOne(() => ProductUnitEntity, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'unit_uuid' })
   unit: ProductUnitEntity;
 

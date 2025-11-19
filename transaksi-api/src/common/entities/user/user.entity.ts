@@ -5,24 +5,32 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  ManyToMany,
+  JoinTable,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { StoreEntity } from '../store/store.entity';
 
 @Entity('user')
 export class UserEntity {
   @PrimaryGeneratedColumn('uuid')
   uuid: string;
 
-  @Column({ length: 500 })
+  @Column({ length: 500, unique: true })
   username: string;
 
   @Column({ length: 500 })
   password: string;
 
-  @Column({ length: 500 })
+  @Column({ length: 500, nullable: true })
   email: string;
   
   @Column({ name: 'refresh_token', nullable: true })
   refreshToken: string;
+
+  @Column({ name: 'default_store_uuid', type: 'uuid', nullable: true })
+  defaultStoreUuid: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
@@ -41,4 +49,22 @@ export class UserEntity {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
+
+  @ManyToOne(() => StoreEntity, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'default_store_uuid' })
+  defaultStore: StoreEntity;
+
+  @ManyToMany(() => StoreEntity, (store) => store.users)
+  @JoinTable({
+    name: 'user_stores', // Nama tabel pivot
+    joinColumn: {
+      name: 'user_uuid',
+      referencedColumnName: 'uuid',
+    },
+    inverseJoinColumn: {
+      name: 'store_uuid',
+      referencedColumnName: 'uuid',
+    },
+  })
+  stores: StoreEntity[];
 }

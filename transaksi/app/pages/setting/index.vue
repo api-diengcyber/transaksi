@@ -1,71 +1,114 @@
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
+import { useAuthStore } from '~/stores/auth.store';
 
 const toast = useToast();
 const confirm = useConfirm();
+const authStore = useAuthStore();
 
-// --- STATE NAVIGASI SIDEBAR ---
-const activeTab = ref('general'); // general, pos, users, data
+// --- STATE NAVIGASI ---
+const activeTab = ref('general'); 
 
 const menuItems = [
     { id: 'general', label: 'Profil Toko', icon: 'pi pi-building' },
-    { id: 'pos', label: 'Preferensi Transaksi', icon: 'pi pi-calculator' },
-    { id: 'users', label: 'Manajemen Akses', icon: 'pi pi-users' },
-    { id: 'data', label: 'Data & Keamanan', icon: 'pi pi-database' },
+    { id: 'transaction', label: 'Transaksi', icon: 'pi pi-calculator' },
+    // ... menu lain
 ];
 
-// --- STATE FORM DATA ---
+// --- DATA STORE ---
+const currentStore = computed(() => authStore.activeStore);
+
+// --- FORM STATE ---
 const loading = ref(false);
 
 // 1. Profil Toko
-const storeSettings = reactive({
-    name: 'Toko Maju Jaya',
-    address: 'Jl. Sudirman No. 45, Jakarta Selatan',
-    phone: '0812-3456-7890',
-    email: 'admin@majujaya.com',
-    footerReceipt: 'Terima kasih telah berbelanja!\nBarang yang dibeli tidak dapat dikembalikan.',
-    logo: null
+const storeForm = reactive({
+    name: '',
+    address: '',
+    phone: ''
 });
 
-// 2. Preferensi POS
-const posSettings = reactive({
-    taxEnabled: true,
-    taxPercentage: 11,
-    allowNegativeStock: false, 
-    printReceiptAuto: true,
-    printerWidth: '58mm', 
-    currencySymbol: 'Rp',
+// 2. Settings Transaksi (Penjualan & Pembelian)
+const saleSettings = reactive({
+    taxEnabled: false,
+    taxPercentage: 0,
+    printReceiptAuto: false,
+    printerWidth: '58mm',
+    allowNegativeStock: false
 });
 
-// 3. Manajemen User (Dummy Data)
-const users = ref([
-    { id: 1, name: 'Budi Santoso', role: 'Admin', status: 'Active', email: 'budi@store.com' },
-    { id: 2, name: 'Siti Aminah', role: 'Kasir', status: 'Active', email: 'siti@store.com' },
-    { id: 3, name: 'Joko Anwar', role: 'Kasir', status: 'Inactive', email: 'joko@store.com' },
-]);
+const purchaseSettings = reactive({
+    requireSupplier: false,
+    autoApprove: true,
+    defaultPaymentTerm: 0 // Hari
+});
 
-// --- ACTIONS ---
+// Populate
+const populateForms = () => {
+    if (currentStore.value) {
+        storeForm.name = currentStore.value.name || '';
+        storeForm.address = currentStore.value.address || '';
+        storeForm.phone = currentStore.value.phone || '';
+        
+        const s = currentStore.value.settings || {};
+        
+        // Mapping Sale Settings
+        saleSettings.printerWidth = s.printer_width || '58mm';
+        saleSettings.taxPercentage = Number(s.tax_percentage) || 0;
+        saleSettings.taxEnabled = !!saleSettings.taxPercentage;
+        saleSettings.printReceiptAuto = s.auto_print === 'true';
+        saleSettings.allowNegativeStock = s.allow_negative_stock === 'true';
 
-const saveSettings = () => {
-    loading.value = true;
-    setTimeout(() => {
-        loading.value = false;
-        toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Pengaturan berhasil disimpan.', life: 3000 });
-    }, 1000);
+        // Mapping Purchase Settings (Contoh)
+        purchaseSettings.requireSupplier = s.buy_require_supplier === 'true';
+        purchaseSettings.autoApprove = s.buy_auto_approve !== 'false'; // Default true
+    }
 };
 
-const handleResetDatabase = () => {
-    confirm.require({
-        message: 'PERHATIAN: Tindakan ini akan menghapus SELURUH data transaksi dan produk. Apakah Anda yakin?',
-        header: 'Zona Bahaya',
-        icon: 'pi pi-exclamation-triangle',
-        acceptClass: 'p-button-danger',
-        accept: () => {
-            toast.add({ severity: 'error', summary: 'Reset', detail: 'Database telah direset (Simulasi).', life: 3000 });
-        }
-    });
+onMounted(async () => {
+    if (!authStore.stores.length) {
+        await authStore.fetchUserStores();
+    }
+    populateForms();
+});
+
+watch(currentStore, () => populateForms());
+
+// --- ACTIONS ---
+const saveSettings = async () => {
+    loading.value = true;
+    try {
+        // Gabungkan semua setting ke payload key-value
+        const payload = {
+            name: storeForm.name,
+            address: storeForm.address,
+            phone: storeForm.phone,
+            settings: [
+                // Sale
+                { key: 'printer_width', value: saleSettings.printerWidth },
+                { key: 'tax_percentage', value: saleSettings.taxEnabled ? String(saleSettings.taxPercentage) : '0' },
+                { key: 'auto_print', value: String(saleSettings.printReceiptAuto) },
+                { key: 'allow_negative_stock', value: String(saleSettings.allowNegativeStock) },
+                
+                // Purchase
+                { key: 'buy_require_supplier', value: String(purchaseSettings.requireSupplier) },
+                { key: 'buy_auto_approve', value: String(purchaseSettings.autoApprove) }
+            ]
+        };
+
+        // Simulasi API Call
+        await new Promise(r => setTimeout(r, 800));
+        // await storeService.updateStore(currentStore.value.uuid, payload);
+        await authStore.fetchUserStores();
+
+        toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Pengaturan disimpan.', life: 3000 });
+    } catch (e) {
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menyimpan', life: 3000 });
+    } finally {
+        loading.value = false;
+    }
 };
 
 definePageMeta({ layout: 'default' });
@@ -79,10 +122,10 @@ definePageMeta({ layout: 'default' });
         <div class="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto px-4">
             
             <aside class="w-full lg:w-1/4 shrink-0">
-                <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden sticky top-24">
+                 <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden sticky top-24">
                     <div class="p-4 bg-surface-50 dark:bg-surface-800 border-b border-surface-100 dark:border-surface-700">
-                        <h2 class="font-bold text-surface-700 dark:text-surface-200">Pengaturan</h2>
-                        <p class="text-xs text-surface-500">Konfigurasi sistem toko Anda</p>
+                        <h2 class="font-bold text-surface-700 dark:text-surface-200">Pengaturan Toko</h2>
+                        <p class="text-xs text-surface-500">Konfigurasi sistem toko</p>
                     </div>
                     <ul class="p-2 flex flex-col gap-1">
                         <li v-for="item in menuItems" :key="item.id">
@@ -91,7 +134,7 @@ definePageMeta({ layout: 'default' });
                                 class="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 text-left"
                                 :class="activeTab === item.id 
                                     ? 'bg-primary-50 text-primary-700 border-l-4 border-primary-500' 
-                                    : 'text-surface-600 hover:bg-surface-50 dark:text-surface-300 dark:hover:bg-surface-800 hover:text-surface-900'"
+                                    : 'text-surface-600 hover:bg-surface-50 dark:text-surface-300 hover:text-surface-900'"
                             >
                                 <i :class="[item.icon, activeTab === item.id ? 'text-primary-600' : 'text-surface-400']"></i>
                                 {{ item.label }}
@@ -104,158 +147,110 @@ definePageMeta({ layout: 'default' });
             <main class="w-full lg:w-3/4">
                 
                 <div v-if="activeTab === 'general'" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 md:p-8">
-                    <div class="mb-6 border-b border-surface-100 dark:border-surface-700 pb-4">
-                        <h2 class="text-xl font-bold text-surface-800 dark:text-surface-0">Profil Toko</h2>
-                        <p class="text-surface-500 text-sm">Informasi yang akan tampil pada struk belanja.</p>
+                     <div class="mb-6 border-b border-surface-100 dark:border-surface-700 pb-4 flex justify-between items-center">
+                        <div>
+                            <h2 class="text-xl font-bold text-surface-800 dark:text-surface-0">Profil Toko</h2>
+                            <p class="text-surface-500 text-sm">Informasi identitas toko.</p>
+                        </div>
+                        <Button label="Simpan" icon="pi pi-save" size="small" @click="saveSettings" :loading="loading" />
                     </div>
-
                     <div class="grid grid-cols-1 gap-6 max-w-2xl">
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Nama Toko</label>
-                            <InputText v-model="storeSettings.name" class="w-full" />
+                        <div class="field">
+                            <label class="text-sm font-semibold block mb-1">Nama Toko</label>
+                            <InputText v-model="storeForm.name" class="w-full" />
                         </div>
-
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Alamat Lengkap</label>
-                            <Textarea v-model="storeSettings.address" rows="3" class="w-full" />
+                        <div class="field">
+                            <label class="text-sm font-semibold block mb-1">Alamat</label>
+                            <Textarea v-model="storeForm.address" rows="2" class="w-full" />
                         </div>
+                         <div class="field">
+                            <label class="text-sm font-semibold block mb-1">Telepon</label>
+                            <InputText v-model="storeForm.phone" class="w-full" />
+                        </div>
+                    </div>
+                </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Nomor Telepon</label>
-                                <InputText v-model="storeSettings.phone" class="w-full" />
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Email Admin</label>
-                                <InputText v-model="storeSettings.email" class="w-full" />
+                <div v-if="activeTab === 'transaction'" class="space-y-6">
+                    
+                    <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+                        <div class="p-4 border-b border-surface-100 dark:border-surface-700 bg-green-50 dark:bg-green-900/10 flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                                    <i class="pi pi-shopping-cart text-sm"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-green-800 dark:text-green-100 text-sm">Penjualan </h3>
+                                    <p class="text-xs text-green-600 dark:text-green-300">Pengaturan kasir dan struk.</p>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Footer Struk (Catatan Bawah)</label>
-                            <Textarea v-model="storeSettings.footerReceipt" rows="2" class="w-full font-mono text-sm" />
-                        </div>
-
-                        <div class="pt-4">
-                            <Button label="Simpan Perubahan" icon="pi pi-save" @click="saveSettings" :loading="loading" />
-                        </div>
-                    </div>
-                </div>
-
-                <div v-if="activeTab === 'pos'" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 md:p-8">
-                    <div class="mb-6 border-b border-surface-100 dark:border-surface-700 pb-4">
-                        <h2 class="text-xl font-bold text-surface-800 dark:text-surface-0">Preferensi Transaksi</h2>
-                        <p class="text-surface-500 text-sm">Aturan main kasir dan pencetakan struk.</p>
-                    </div>
-
-                    <div class="space-y-8 max-w-3xl">
-                        <div class="flex items-start justify-between p-4 border border-surface-100 rounded-lg bg-surface-50 dark:bg-surface-800/50">
-                            <div>
-                                <h4 class="font-bold text-surface-800 dark:text-surface-100 text-sm">Pajak (PPN)</h4>
-                                <p class="text-xs text-surface-500 mt-1">Tambahkan pajak otomatis pada total transaksi.</p>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <InputNumber v-if="posSettings.taxEnabled" v-model="posSettings.taxPercentage" suffix="%" :min="0" :max="100" inputClass="w-16 text-center !py-1 !text-sm" />
-                                <InputSwitch v-model="posSettings.taxEnabled" />
-                            </div>
-                        </div>
-
-                        <div class="flex items-start justify-between p-4 border border-surface-100 rounded-lg bg-surface-50 dark:bg-surface-800/50">
-                            <div>
-                                <h4 class="font-bold text-surface-800 dark:text-surface-100 text-sm">Izinkan Stok Minus</h4>
-                                <p class="text-xs text-surface-500 mt-1">Kasir tetap bisa melakukan transaksi meski stok produk 0.</p>
-                            </div>
-                            <InputSwitch v-model="posSettings.allowNegativeStock" />
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                             <div class="flex flex-col gap-2">
-                                <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Ukuran Kertas Printer</label>
-                                <SelectButton v-model="posSettings.printerWidth" :options="['58mm', '80mm']" aria-labelledby="basic" class="w-full" />
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <label class="text-sm font-semibold text-surface-700 dark:text-surface-200">Otomatis Cetak</label>
-                                <div class="flex items-center gap-2 h-full">
-                                    <Checkbox v-model="posSettings.printReceiptAuto" binary inputId="autoprint" />
-                                    <label for="autoprint" class="text-sm text-surface-600 dark:text-surface-300 cursor-pointer">Langsung cetak setelah bayar</label>
+                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="border border-surface-100 rounded-lg p-3">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-semibold">Pajak (PPN)</span>
+                                    <InputSwitch v-model="saleSettings.taxEnabled" />
                                 </div>
+                                <InputNumber v-if="saleSettings.taxEnabled" v-model="saleSettings.taxPercentage" suffix="%" :min="0" :max="100" inputClass="w-full text-center" placeholder="0%" />
                             </div>
-                        </div>
 
-                        <div class="pt-4">
-                            <Button label="Simpan Preferensi" icon="pi pi-save" severity="primary" @click="saveSettings" :loading="loading" />
-                        </div>
-                    </div>
-                </div>
+                            <div class="border border-surface-100 rounded-lg p-3 flex justify-between items-center">
+                                <div>
+                                    <span class="text-sm font-semibold block">Stok Minus</span>
+                                    <span class="text-xs text-surface-500">Boleh jual barang kosong?</span>
+                                </div>
+                                <InputSwitch v-model="saleSettings.allowNegativeStock" />
+                            </div>
 
-                <div v-if="activeTab === 'users'" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 md:p-8">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-surface-100 dark:border-surface-700 pb-4">
-                        <div>
-                            <h2 class="text-xl font-bold text-surface-800 dark:text-surface-0">Manajemen Akses</h2>
-                            <p class="text-surface-500 text-sm">Daftar pengguna yang dapat mengakses sistem.</p>
-                        </div>
-                        <Button label="Tambah User" icon="pi pi-user-plus" size="small" />
-                    </div>
-
-                    <DataTable :value="users" stripedRows tableStyle="min-width: 40rem">
-                        <Column field="name" header="Nama Pengguna">
-                            <template #body="slotProps">
-                                <div class="flex items-center gap-3">
-                                    <Avatar :label="slotProps.data.name.charAt(0)" shape="circle" class="bg-primary-100 text-primary-700 font-bold" />
-                                    <div>
-                                        <div class="font-bold text-sm text-surface-800 dark:text-surface-100">{{ slotProps.data.name }}</div>
-                                        <div class="text-xs text-surface-500">{{ slotProps.data.email }}</div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="text-sm font-semibold block mb-2">Konfigurasi Printer</label>
+                                <div class="flex gap-4 items-center">
+                                    <SelectButton v-model="saleSettings.printerWidth" :options="['58mm', '80mm']" class="text-xs" />
+                                    <div class="flex items-center gap-2">
+                                        <Checkbox v-model="saleSettings.printReceiptAuto" binary inputId="autoprint" />
+                                        <label for="autoprint" class="text-sm cursor-pointer">Auto Print</label>
                                     </div>
                                 </div>
-                            </template>
-                        </Column>
-                        <Column field="role" header="Role">
-                            <template #body="slotProps">
-                                <Tag :value="slotProps.data.role" :severity="slotProps.data.role === 'Admin' ? 'info' : 'warning'" />
-                            </template>
-                        </Column>
-                        <Column field="status" header="Status">
-                            <template #body="slotProps">
-                                <span :class="slotProps.data.status === 'Active' ? 'text-green-600' : 'text-red-500'" class="text-xs font-bold uppercase">
-                                    {{ slotProps.data.status }}
-                                </span>
-                            </template>
-                        </Column>
-                        <Column header="Aksi" style="width: 10%">
-                            <template #body>
-                                <Button icon="pi pi-pencil" text rounded severity="secondary" />
-                            </template>
-                        </Column>
-                    </DataTable>
-                </div>
-
-                <div v-if="activeTab === 'data'" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 md:p-8">
-                    <div class="mb-6 border-b border-surface-100 dark:border-surface-700 pb-4">
-                        <h2 class="text-xl font-bold text-surface-800 dark:text-surface-0">Data & Keamanan</h2>
-                        <p class="text-surface-500 text-sm">Backup, restore, dan reset sistem.</p>
-                    </div>
-
-                    <div class="space-y-6">
-                        <div class="p-4 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-800/50 flex justify-between items-center">
-                            <div>
-                                <h4 class="font-bold text-surface-800 dark:text-surface-100 text-sm">Export Data Transaksi</h4>
-                                <p class="text-xs text-surface-500 mt-1">Unduh semua data penjualan dalam format Excel/CSV.</p>
-                            </div>
-                            <Button label="Download Backup" icon="pi pi-download" severity="secondary" outlined />
-                        </div>
-
-                        <div class="border-t border-surface-100 dark:border-surface-700 my-4"></div>
-
-                        <div class="border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-xl p-4">
-                            <h4 class="font-bold text-red-700 dark:text-red-400 mb-2 text-sm">Zona Bahaya</h4>
-                            <div class="flex justify-between items-center">
-                                <p class="text-xs text-red-600 dark:text-red-300 max-w-md">
-                                    Mereset database akan menghapus semua produk, transaksi, dan user secara permanen. Tindakan ini tidak dapat dibatalkan.
-                                </p>
-                                <Button label="Reset Database" icon="pi pi-exclamation-triangle" severity="danger" @click="handleResetDatabase" />
                             </div>
                         </div>
                     </div>
+
+                    <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+                        <div class="p-4 border-b border-surface-100 dark:border-surface-700 bg-orange-50 dark:bg-orange-900/10 flex justify-between items-center">
+                             <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                    <i class="pi pi-truck text-sm"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-orange-800 dark:text-orange-100 text-sm">Pembelian (Stok Masuk)</h3>
+                                    <p class="text-xs text-orange-600 dark:text-orange-300">Aturan kulakan barang.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-6 space-y-4">
+                            <div class="flex items-center justify-between border-b border-surface-100 pb-3">
+                                <div>
+                                    <span class="text-sm font-semibold block">Wajib Isi Supplier</span>
+                                    <span class="text-xs text-surface-500">Harus memilih supplier saat input stok?</span>
+                                </div>
+                                <InputSwitch v-model="purchaseSettings.requireSupplier" />
+                            </div>
+
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-sm font-semibold block">Auto Approve</span>
+                                    <span class="text-xs text-surface-500">Stok langsung bertambah tanpa perlu persetujuan supervisor?</span>
+                                </div>
+                                <InputSwitch v-model="purchaseSettings.autoApprove" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <Button label="Simpan Semua Pengaturan" icon="pi pi-save" size="large" @click="saveSettings" :loading="loading" />
+                    </div>
+
                 </div>
 
             </main>

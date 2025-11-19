@@ -7,12 +7,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   app.enableCors({
-  origin: [
-    'http://localhost:3001', 
-    'http://localhost:3000'
-  ],
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-  credentials: true,
+    origin: [
+      'http://localhost:3001', 
+      'http://localhost:3000'
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
   });
   
   app.useGlobalPipes(new ValidationPipe());
@@ -21,9 +21,19 @@ async function bootstrap() {
     .setTitle('Transaksi API')
     .setDescription('The transaksi API description')
     .setVersion('1.0.0')
+    // --- TAMBAHKAN BARIS INI ---
+    .addBearerAuth() 
+    // ---------------------------
     .build();
+
   const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, documentFactory);
+  
+  // Opsi tambahan agar token tersimpan di browser saat refresh (opsional)
+  SwaggerModule.setup('docs', app, documentFactory, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
   
   await app.listen(process.env.PORT ?? 3000);
 }

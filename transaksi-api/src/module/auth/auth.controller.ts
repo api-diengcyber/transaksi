@@ -18,11 +18,6 @@ import { AuthDto } from './dto/auth.dto';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @Post('signup')
-  signup(@Body() dto: AuthDto) {
-    return this.authService.signup(dto);
-  }
-
   @Post('signin')
   @HttpCode(HttpStatus.OK)
   signin(@Body() dto: AuthDto) {
@@ -44,7 +39,8 @@ export class AuthController {
   refreshTokens(
     @GetUser('sub') userId: string,
     @GetUser('refreshToken') refreshToken: string,
+    @GetUser('storeUuid') storeUuid: string, // [BARU] Ambil storeUuid dari RT lama
   ) {
-    return this.authService.refreshTokens(userId, refreshToken);
+    return this.authService.refreshTokens(userId, refreshToken, storeUuid);
   }
 }

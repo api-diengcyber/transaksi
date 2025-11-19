@@ -19,5 +19,6 @@ import { AuthService } from './auth.service';
     RtStrategy,
     ...userProvider,
   ],
+  exports: [AuthService],
 })
 export class AuthModule {}

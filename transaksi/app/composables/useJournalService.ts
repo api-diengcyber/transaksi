@@ -7,7 +7,7 @@ export const useJournalService = () => {
     const DEFAULT_USER_ID = 'user-uuid-123-mock';
 
     const createSaleTransaction = async (payload: any) => {
-        return await $fetch(`${API_BASE}/sale`, {
+        return await useApi(`${API_BASE}/sale`, {
             method: 'POST',
             body: {
                 ...payload,
@@ -17,26 +17,26 @@ export const useJournalService = () => {
     };
     
     const createBuyTransaction = async (payload: any) => {
-        return await $fetch(`${API_BASE}/buy`, {
+        return await useApi(`${API_BASE}/buy`, {
             method: 'POST',
             body: { ...payload, userId: DEFAULT_USER_ID }
         });
     };
     
     const getSalesReport = async () => {
-        return await $fetch(`${API_BASE}/report/SALE`, {
+        return await useApi(`${API_BASE}/report/SALE`, {
             method: 'GET'
         });
     };
 
     const getPurchaseReport = async () => {
-        return await $fetch(`${API_BASE}/report/BUY`, {
+        return await useApi(`${API_BASE}/report/BUY`, {
             method: 'GET'
         });
     };
     
     const getChartData = async (startDate: string, endDate: string) => {
-        return await $fetch(`${API_BASE}/chart`, {
+        return await useApi(`${API_BASE}/chart`, {
             method: 'GET',
             params: { startDate, endDate }
         });

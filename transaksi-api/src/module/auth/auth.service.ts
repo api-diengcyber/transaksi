@@ -10,7 +10,6 @@ import * as bcrypt from 'bcrypt';
 import { UserEntity } from 'src/common/entities/user/user.entity';
 import { AuthDto } from './dto/auth.dto';
 
-// Interface untuk return type Token
 export type Tokens = {
   accessToken: string;
   refreshToken: string;
@@ -25,51 +24,26 @@ export class AuthService {
   ) {}
 
   // ============================
-  // SIGN UP (REGISTER)
+  // SIGN IN (LOGIN)
   // ============================
-  async signup(dto: AuthDto): Promise<Tokens> {
-    // 1. Cek apakah username sudah ada
-    const userExists = await this.userRepository.findOne({
-      where: { username: dto.username },
-    });
-    if (userExists) {
-      throw new BadRequestException('Username already exists');
-    }
-
-    // 2. Hash Password
-    const hash = await this.hashData(dto.password);
-
-    // 3. Simpan User ke DB
-    const newUser = this.userRepository.create({
-      username: dto.username,
-      password: hash,
-    });
-    await this.userRepository.save(newUser);
-
-    // 4. Generate Token (Access & Refresh)
-    const tokens = await this.getTokens(newUser.uuid, newUser.username);
-
-    // 5. Simpan Hash dari Refresh Token ke DB
-    await this.updateRefreshToken(newUser.uuid, tokens.refreshToken);
-
-    return tokens;
-  }
-
   async signin(dto: AuthDto): Promise<Tokens> {
-    // 1. Cari User
+    // 1. Cari User beserta Default Store-nya
     const user = await this.userRepository.findOne({
       where: { username: dto.username },
+      relations: ['defaultStore'], // <--- Load Relasi Default Store
     });
+
     if (!user) throw new ForbiddenException('Access Denied');
 
-    // 2. Bandingkan Password
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatches) throw new ForbiddenException('Access Denied');
 
-    // 3. Generate Token
-    const tokens = await this.getTokens(user.uuid, user.username);
+    // 2. Ambil Store UUID (Jika ada)
+    const storeUuid = user.defaultStore ? user.defaultStore.uuid : null;
 
-    // 4. Update Refresh Token di DB
+    // 3. Generate Token dengan Store UUID
+    const tokens = await this.getTokens(user.uuid, user.username, storeUuid);
+    
     await this.updateRefreshToken(user.uuid, tokens.refreshToken);
 
     return tokens;
@@ -78,62 +52,66 @@ export class AuthService {
   async logout(userId: string) {
     await this.userRepository.update(
         { uuid: userId }, 
-        { refreshToken: '' }
+        { refreshToken: '' } // Pastikan nullable
     );
     return { message: 'Logged out successfully' };
   }
 
-  async refreshTokens(userId: string, rt: string): Promise<Tokens> {
-    // 1. Cari User
+  // ============================
+  // REFRESH TOKEN
+  // ============================
+  // [UPDATED] Terima parameter storeUuid dari token lama
+  async refreshTokens(userId: string, rt: string, storeUuid: string | null): Promise<Tokens> {
     const user = await this.userRepository.findOne({
       where: { uuid: userId },
     });
+    
     if (!user || !user.refreshToken)
       throw new ForbiddenException('Access Denied');
 
     const rtMatches = await bcrypt.compare(rt, user.refreshToken);
     if (!rtMatches) throw new ForbiddenException('Access Denied');
 
-    // 3. Generate Token Baru
-    const tokens = await this.getTokens(user.uuid, user.username);
-
-    // 4. Update RT baru di DB
+    // Generate Token Baru dengan Store UUID yang SAMA dengan sebelumnya
+    const tokens = await this.getTokens(user.uuid, user.username, storeUuid);
     await this.updateRefreshToken(user.uuid, tokens.refreshToken);
 
     return tokens;
   }
 
-  // ============================
-  // HELPER METHODS
-  // ============================
-
-  // Helper untuk Hash Data (Password / Token)
-  async hashData(data: string) {
-    return bcrypt.hash(data, 10);
-  }
-
-  // Helper untuk Update RT di DB
+  // ... Helper hashData & updateRefreshToken SAMA ...
   async updateRefreshToken(userId: string, rt: string) {
     const hash = await this.hashData(rt);
     await this.userRepository.update({ uuid: userId }, { refreshToken: hash });
   }
+  
+  async hashData(data: string) {
+    return bcrypt.hash(data, 10);
+  }
 
-  // Helper Generate JWT
-  async getTokens(userId: string, username: string): Promise<Tokens> {
+  // ============================
+  // GET TOKENS (MODIFIED)
+  // ============================
+  async getTokens(userId: string, username: string, storeUuid: string | null): Promise<Tokens> {
+    // Payload sekarang memuat storeUuid
+    const payload = {
+        sub: userId,
+        username,
+        storeUuid // <--- Tambahkan ini
+    };
+
     const [at, rt] = await Promise.all([
-      // Access Token (Expired Cepat: 15 menit)
       this.jwtService.signAsync(
-        { sub: userId, username },
+        payload,
         {
-          secret: 'at-secret', // Ganti dengan process.env.AT_SECRET nanti
+          secret: 'at-secret', 
           expiresIn: '15m',
         },
       ),
-      // Refresh Token (Expired Lama: 7 hari)
       this.jwtService.signAsync(
-        { sub: userId, username },
+        payload, // Refresh token juga membawa info store agar konsisten saat refresh
         {
-          secret: 'rt-secret', // Ganti dengan process.env.RT_SECRET nanti
+          secret: 'rt-secret', 
           expiresIn: '7d',
         },
       ),

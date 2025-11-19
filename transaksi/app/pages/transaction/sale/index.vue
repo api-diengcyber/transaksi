@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import ProductCreateModal from '~/components/ProductCreateModal.vue';
 
 const productService = useProductService();
 const journalService = useJournalService();
@@ -12,8 +13,8 @@ const filteredProducts = ref([]);
 const cart = ref([]);
 const searchQuery = ref('');
 const loading = ref(true);
+const showCreateModal = ref(false);
 
-// State Pembayaran (Simpel: Hanya Amount)
 const payment = reactive({
     amount: null,
 });
@@ -37,28 +38,26 @@ const canCheckout = computed(() => {
 
 // --- ACTIONS ---
 
+const onSearchKeydown = (event) => {
+    if (event.key === 'Enter') handleSearch();
+};
+
 const loadProducts = async () => {
     loading.value = true;
     try {
         const data = await productService.getAllProducts();
+        // Normalisasi Data
         products.value = (data || []).map(p => ({
             ...p,
             prices: p.prices || p.price || [],
-            stock: p.stock || []
+            stock: p.stock || [],
+            units: p.units || []
         }));
         filteredProducts.value = products.value;
     } catch (error) {
-        console.error(error);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat produk', life: 3000 });
     } finally {
         loading.value = false;
-    }
-};
-
-// [FIX] Wrapper untuk handle keydown enter manual
-const onSearchKeydown = (event) => {
-    if (event.key === 'Enter') {
-        handleSearch();
     }
 };
 
@@ -68,17 +67,20 @@ const handleSearch = () => {
         filteredProducts.value = products.value;
         return;
     }
-    const exactMatch = products.value.find(p => {
-        return p.units.some(u => u.barcode === query);
-    });
 
-    if (exactMatch) {
-        const matchedUnit = exactMatch.units.find(u => u.barcode === query);
-        addToCart(exactMatch, matchedUnit);
+    // 1. Cari Exact Match Barcode di Level UNIT
+    // Ini memungkinkan scan barcode "DUS" langsung masuk sebagai "DUS"
+    const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
+
+    if (exactProduct) {
+        const matchedUnit = exactProduct.units.find(u => u.barcode === query);
+        addToCart(exactProduct, matchedUnit);
+        
         searchQuery.value = ''; 
         filteredProducts.value = products.value; 
-        toast.add({ severity: 'success', summary: 'Scan', detail: `${exactMatch.name} (${matchedUnit.unitName})`, life: 1500 });
+        toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name} (${matchedUnit.unitName})`, life: 1500 });
     } else {
+        // 2. Filter Manual (Nama Produk)
         filteredProducts.value = products.value.filter(p => 
             p.name.toLowerCase().includes(query) || 
             p.units.some(u => u.barcode?.includes(query))
@@ -87,45 +89,82 @@ const handleSearch = () => {
 };
 
 const addToCart = (product, specificUnit = null) => {
+    // Tentukan Unit: Jika scan, pakai unit spesifik. Jika klik, pakai Default/Pertama.
     let selectedUnit = specificUnit;
     if (!selectedUnit) {
         selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
     }
+
     if (!selectedUnit) {
-        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk tidak memiliki satuan', life: 3000 });
+        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk error (tanpa satuan)', life: 3000 });
         return;
     }
-    const priceInfo = product.prices.find(p => p.unitUuid === selectedUnit.uuid);
-    const finalPrice = priceInfo ? priceInfo.price : 0;
 
+    // Tentukan Harga Awal: Cari harga 'Umum' untuk unit ini, atau harga pertama yg ketemu
+    const unitPrices = product.prices.filter(p => p.unitUuid === selectedUnit.uuid);
+    // Prioritas: Harga default -> Harga bernama 'Umum' -> Harga pertama -> 0
+    const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
+    const finalPrice = defaultPriceObj ? defaultPriceObj.price : 0;
+
+    // Cek apakah item identik (Produk sama + Unit sama) sudah ada di cart
     const existingItem = cart.value.find(item => item.productUuid === product.uuid && item.unitUuid === selectedUnit.uuid);
+
     if (existingItem) {
         existingItem.qty++;
     } else {
         cart.value.push({
+            // Identitas Produk
             productUuid: product.uuid,
             name: product.name,
+            
+            // Data Transaksi Aktif
             unitUuid: selectedUnit.uuid,
             unitName: selectedUnit.unitName,
-            barcode: selectedUnit.barcode,
-            price: finalPrice, 
+            price: finalPrice, // Harga yang bisa di-custom
             qty: 1,
+            selectedPriceObj: defaultPriceObj, // Untuk tracking dropdown harga
+            
+            // Referensi Data Master (Untuk Dropdown)
             availableUnits: product.units,
             allPrices: product.prices 
         });
     }
 };
 
-const changeCartItemUnit = (item, newUnit) => {
+// Ganti Satuan di Cart -> Reset Harga ke Default Unit tsb
+const changeCartItemUnit = (item, newUnitUuid) => {
+    const newUnit = item.availableUnits.find(u => u.uuid === newUnitUuid);
+    if (!newUnit) return;
+
     item.unitUuid = newUnit.uuid;
     item.unitName = newUnit.unitName;
-    item.barcode = newUnit.barcode;
-    const newPriceObj = item.allPrices.find(p => p.unitUuid === newUnit.uuid);
-    item.price = newPriceObj ? newPriceObj.price : 0; 
+    
+    // Cari harga default untuk unit baru ini
+    const unitPrices = item.allPrices.filter(p => p.unitUuid === newUnit.uuid);
+    const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
+    
+    item.selectedPriceObj = defaultPriceObj;
+    item.price = defaultPriceObj ? defaultPriceObj.price : 0;
+};
+
+// Ganti Tier Harga (Umum -> Grosir) -> Update Nominal
+const changeCartItemPriceTier = (item, newPriceObj) => {
+    item.selectedPriceObj = newPriceObj;
+    item.price = newPriceObj.price;
 };
 
 const removeFromCart = (index) => {
     cart.value.splice(index, 1);
+};
+
+// Callback Product Created
+const onProductCreated = async (newProduct) => {
+    await loadProducts();
+    const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
+    if (fullProduct) {
+        addToCart(fullProduct);
+        toast.add({ severity: 'info', summary: 'Info', detail: 'Produk baru masuk keranjang', life: 3000 });
+    }
 };
 
 const processCheckout = async () => {
@@ -139,29 +178,29 @@ const processCheckout = async () => {
                 payment_method: 'CASH',
                 payment_received: payment.amount,
                 change: changeAmount.value,
-                grand_total: grandTotal.value,
-                total_items_count: cart.value.length 
+                total_items_count: cart.value.length,
+                grand_total: grandTotal.value
             }
         };
 
+        // Mapping Flat Key untuk Backend
         cart.value.forEach((item, index) => {
             payload.details[`product_uuid#${index}`] = item.productUuid;
             payload.details[`unit_uuid#${index}`] = item.unitUuid;
             payload.details[`qty#${index}`] = item.qty;
-            payload.details[`price#${index}`] = item.price;
+            payload.details[`price#${index}`] = item.price; // Harga final (bisa custom)
             payload.details[`subtotal#${index}`] = item.qty * item.price;
         });
 
         await journalService.createSaleTransaction(payload);
         
-        toast.add({ severity: 'success', summary: 'Transaksi Berhasil', detail: 'Kembalian: ' + formatCurrency(changeAmount.value), life: 5000 });
+        toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Kembalian: ' + formatCurrency(changeAmount.value), life: 5000 });
         
         cart.value = [];
         payment.amount = null;
-        await loadProducts();
+        await loadProducts(); 
 
     } catch (e) {
-        console.error(e);
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Transaksi gagal diproses', life: 3000 });
     } finally {
         loading.value = false;
@@ -186,23 +225,31 @@ definePageMeta({ layout: 'default' });
 </script>
 
 <template>
-    <div class="flex flex-col lg:flex-row h-[calc(100vh-6rem)] gap-3 p-2 overflow-hidden bg-surface-100 dark:bg-surface-950">
+    <div class="flex flex-col lg:flex-row h-[calc(100vh-5rem)] gap-3 p-2 overflow-hidden bg-surface-100 dark:bg-surface-950">
         <Toast />
 
         <div class="flex-1 flex flex-col bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 h-full overflow-hidden min-w-[350px]">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 shrink-0">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-blue-50/50 dark:bg-blue-900/10">
+                <div class="flex justify-between items-center mb-2">
+                    <div class="text-xs font-bold text-blue-600 uppercase tracking-wide flex items-center gap-1">
+                        <i class="pi pi-box"></i> Katalog
+                    </div>
+                    <Button label="Baru" icon="pi pi-plus" size="small" class="!py-1 !px-2 !text-xs" @click="showCreateModal = true" />
+                </div>
+                
                 <IconField iconPosition="left" class="w-full">
-                    <InputIcon class="pi pi-search text-primary-500" />
+                    <InputIcon class="pi pi-search text-primary-500 text-xs" />
                     <InputText 
                         v-model="searchQuery" 
-                        placeholder="Scan / Cari Produk..." 
-                        class="w-full !text-base !py-2 !rounded-lg !border-none !bg-surface-100 dark:!bg-surface-800 focus:!ring-2 focus:!ring-primary-200" 
+                        placeholder="Scan Barcode / Cari..." 
+                        class="w-full !text-sm !h-9 !rounded-lg" 
                         @keydown="onSearchKeydown" 
                         @input="handleSearch" 
                         autofocus
                     />
                 </IconField>
             </div>
+            
             <div class="flex-1 overflow-y-auto p-2 bg-surface-50 dark:bg-surface-950 scrollbar-hide">
                 <div v-if="filteredProducts.length > 0" class="grid grid-cols-2 xl:grid-cols-3 gap-2">
                     <div 
@@ -211,14 +258,14 @@ definePageMeta({ layout: 'default' });
                         @click="addToCart(prod)"
                         class="cursor-pointer bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 p-3 rounded-xl hover:border-primary-500 hover:shadow-md transition-all group relative overflow-hidden"
                     >
-                        <div class="absolute left-0 top-0 bottom-0 w-1 transition-colors" 
-                             :class="getStockLevelColor(prod.stock?.reduce((a,b)=>a+b.qty,0)||0)"></div>
-                        
+                         <div class="absolute left-0 top-0 bottom-0 w-1 transition-colors" 
+                            :class="getStockLevelColor(prod.stock?.reduce((a,b)=>a+b.qty,0)||0)"></div>
+
                         <div class="pl-2">
-                            <div class="font-bold text-surface-800 dark:text-surface-100 text-xs mb-2 line-clamp-2 h-8 leading-snug group-hover:text-primary-600 transition-colors">
+                            <div class="font-bold text-surface-800 dark:text-surface-100 text-xs mb-2 line-clamp-2 h-8 leading-snug group-hover:text-blue-600 transition-colors">
                                 {{ prod.name }}
                             </div>
-                            <div class="flex justify-between items-end mt-1">
+                            <div class="flex justify-between items-end">
                                 <div class="flex flex-col">
                                     <span class="text-[9px] text-surface-400 uppercase font-bold tracking-wider">Stok</span>
                                     <span class="text-xs font-black" :class="(prod.stock?.reduce((a,b)=>a+b.qty,0)||0) > 0 ? 'text-surface-700 dark:text-surface-200' : 'text-red-500'">
@@ -227,14 +274,14 @@ definePageMeta({ layout: 'default' });
                                 </div>
                                 <div class="flex flex-col items-end">
                                     <span class="text-[9px] text-surface-400 uppercase font-bold mb-0.5">
-                                        {{ (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.unitName || 'Unit' }}
+                                        {{ (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.unitName }}
                                     </span>
                                     <span class="font-black text-primary-600 text-sm bg-primary-50 dark:bg-primary-900/30 px-2 py-0.5 rounded-md">
                                         {{ 
                                             (() => {
                                                 const defUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
-                                                const price = prod.prices?.find(p => p.unitUuid === defUnit?.uuid)?.price || 0;
-                                                return formatCurrency(price);
+                                                const defPrice = prod.prices?.find(p => p.unitUuid === defUnit?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0];
+                                                return formatCurrency(defPrice?.price || 0);
                                             })()
                                         }}
                                     </span>
@@ -243,16 +290,16 @@ definePageMeta({ layout: 'default' });
                         </div>
                     </div>
                 </div>
-                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-2">
-                    <div class="w-16 h-16 bg-surface-200 dark:bg-surface-800 rounded-full flex items-center justify-center">
-                         <i class="pi pi-search text-3xl opacity-50"></i>
-                    </div>
-                    <p class="text-sm font-medium">Produk tidak ditemukan</p>
+                
+                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-3">
+                    <i class="pi pi-box text-3xl opacity-30"></i>
+                    <p class="text-xs">Produk tidak ditemukan</p>
+                    <Button label="Buat Produk Baru" size="small" outlined @click="showCreateModal = true" />
                 </div>
             </div>
         </div>
 
-        <div class="w-[400px] flex flex-col bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
+        <div class="w-[450px] flex flex-col bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
             <div class="p-3 border-b border-surface-100 dark:border-surface-700 flex justify-between items-center bg-surface-50/50 dark:bg-surface-800 shrink-0">
                 <h2 class="font-bold text-base text-surface-800 dark:text-surface-100 flex items-center gap-2">
                     <i class="pi pi-shopping-cart text-primary-500"></i>
@@ -265,7 +312,7 @@ definePageMeta({ layout: 'default' });
                 <table class="w-full text-xs border-collapse">
                     <thead class="bg-surface-100 dark:bg-surface-800 sticky top-0 z-10 text-[10px] uppercase text-surface-500 font-bold tracking-wider border-b border-surface-200 dark:border-surface-700">
                         <tr>
-                            <th class="p-2 text-left pl-3 font-bold">Item</th>
+                            <th class="p-2 text-left pl-3 w-[45%]">Item</th>
                             <th class="p-2 text-center w-14 font-bold">Qty</th>
                             <th class="p-2 text-right w-20 font-bold">Subtotal</th>
                             <th class="p-2 w-8"></th>
@@ -276,30 +323,52 @@ definePageMeta({ layout: 'default' });
                             <td class="p-2 pl-3 align-top">
                                 <div class="font-bold text-surface-800 dark:text-surface-100 mb-1 line-clamp-1" :title="item.name">{{ item.name }}</div>
                                 
-                                <div class="flex items-center gap-1 bg-surface-100 dark:bg-surface-800 rounded p-0.5 w-fit border border-transparent focus-within:border-primary-300 transition-colors">
+                                <div class="flex items-center gap-1 bg-surface-100 dark:bg-surface-800 rounded p-0.5 w-full border border-transparent focus-within:border-primary-300 transition-colors">
+                                    
                                     <Dropdown 
-                                        :modelValue="item.availableUnits.find(u => u.uuid === item.unitUuid)" 
+                                        v-model="item.unitUuid"
                                         :options="item.availableUnits" 
                                         optionLabel="unitName"
+                                        optionValue="uuid"
                                         class="w-[65px] !h-6 text-[10px] !p-0 !border-none !shadow-none bg-transparent text-primary-700 font-bold"
-                                        @update:modelValue="(val) => changeCartItemUnit(item, val)"
+                                        @change="(e) => changeCartItemUnit(item, e.value)"
                                     >
                                          <template #value="slotProps">
-                                            <div class="text-[10px] px-1">{{ slotProps.value.unitName }}</div>
-                                        </template>
-                                        <template #option="slotProps">
-                                            <div class="text-[10px]">{{ slotProps.option.unitName }}</div>
+                                            <div class="text-[10px] px-1">{{ slotProps.value?.unitName || 'Unit' }}</div>
                                         </template>
                                     </Dropdown>
                                     
                                     <div class="w-px h-3 bg-surface-300"></div>
 
+                                    <Dropdown 
+                                        v-model="item.selectedPriceObj"
+                                        :options="item.allPrices.filter(p => p.unitUuid === item.unitUuid)"
+                                        optionLabel="name"
+                                        class="flex-1 !h-6 text-[10px] !p-0 !border-none !shadow-none bg-transparent min-w-[50px]"
+                                        placeholder="Custom"
+                                        @change="(e) => changeCartItemPriceTier(item, e.value)"
+                                    >
+                                        <template #value="slotProps">
+                                            <div class="text-[10px] px-1 truncate">{{ slotProps.value ? slotProps.value.name : 'Custom' }}</div>
+                                        </template>
+                                        <template #option="slotProps">
+                                            <div class="text-[10px] flex justify-between w-full gap-2">
+                                                <span>{{ slotProps.option.name }}</span>
+                                                <span class="font-bold">{{ formatCurrency(slotProps.option.price) }}</span>
+                                            </div>
+                                        </template>
+                                    </Dropdown>
+
+                                    <div class="w-px h-3 bg-surface-300"></div>
+
                                     <InputNumber 
                                         v-model="item.price" 
                                         mode="currency" currency="IDR" locale="id-ID" 
-                                        class="flex-1 !h-6 w-[80px]"
+                                        class="w-[75px] !h-6"
                                         inputClass="!text-[10px] !py-0 !px-1 !h-6 !text-right !font-mono text-surface-600 focus:text-primary-600 !bg-transparent border-none focus:ring-0"
                                         :min="0"
+                                        v-tooltip.bottom="'Edit Harga Manual'"
+                                        @input="item.selectedPriceObj = null" 
                                     />
                                 </div>
                             </td>
@@ -401,17 +470,26 @@ definePageMeta({ layout: 'default' });
                 />
             </div>
         </div>
+
+        <ProductCreateModal 
+            v-model:visible="showCreateModal" 
+            @product-created="onProductCreated" 
+        />
+
     </div>
 </template>
 
 <style scoped>
-/* Modern Scrollbar */
 .scrollbar-thin::-webkit-scrollbar { width: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Hide scrollbar for cleaner look in grid */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Dropdown PrimeVue Compact */
+:deep(.custom-dropdown .p-dropdown-label) {
+    padding: 2px 6px !important;
+}
 </style>

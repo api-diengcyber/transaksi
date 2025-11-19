@@ -22,69 +22,69 @@ export class ProductService {
   ) {}
   
   async create(payload: CreateProductDto) {
-    const { name, userId, units } = payload;
-
-    if (!units || units.length === 0) {
-      throw new BadRequestException('Minimal harus ada 1 satuan (unit)');
-    }
+    const { name, userId, units, prices, stocks } = payload;
 
     return await this.dataSource.transaction(async (manager) => {
-      
-      // 1. Simpan Produk (Tanpa Barcode)
-      const newProduct = manager.create(ProductEntity, {
-        name,
-        createdBy: userId,
-      });
+      // 1. Product
+      const newProduct = manager.create(ProductEntity, { name, createdBy: userId });
       const savedProduct = await manager.save(newProduct);
 
       let defaultUnitUuid: string | null = null;
       let defaultPriceUuid: string | null = null;
+      const unitUuidMap = new Map<number, string>();
 
-      for (const unitDto of units) {
-        // a. Simpan Unit (Dengan Barcode)
+      // 2. Units
+      for (const u of units) {
         const newUnit = manager.create(ProductUnitEntity, {
           productUuid: savedProduct.uuid,
-          unitName: unitDto.unitName,
-          unitMultiplier: unitDto.unitMultiplier,
-          barcode: unitDto.barcode, // <--- Simpan Barcode Disini
-          createdBy: userId,
+          unitName: u.name,
+          unitMultiplier: u.multiplier,
+          barcode: u.barcode,
+          createdBy: userId
         });
         const savedUnit = await manager.save(newUnit);
+        unitUuidMap.set(u.tempId, savedUnit.uuid); // Map tempId -> real UUID
+        if (u.isDefault) defaultUnitUuid = savedUnit.uuid;
+      }
 
-        // b. Simpan Harga
-        const newPrice = manager.create(ProductPriceEntity, {
-          productUuid: savedProduct.uuid,
-          unitUuid: savedUnit.uuid,
-          price: unitDto.price,
-          createdBy: userId,
-        });
-        const savedPrice = await manager.save(newPrice);
-
-        // c. Simpan Stok
-        const newStock = manager.create(ProductStockEntity, {
-          productUuid: savedProduct.uuid,
-          unitUuid: savedUnit.uuid,
-          qty: unitDto.stock,
-          createdBy: userId,
-        });
-        await manager.save(newStock);
-
-        if (unitDto.isDefault) {
-          defaultUnitUuid = savedUnit.uuid;
-          defaultPriceUuid = savedPrice.uuid;
+      // 3. Prices
+      for (const p of prices) {
+        const realUnitUuid = unitUuidMap.get(p.unitTempId);
+        if (realUnitUuid) {
+          const newPrice = manager.create(ProductPriceEntity, {
+            productUuid: savedProduct.uuid,
+            unitUuid: realUnitUuid,
+            name: p.name || 'Umum',
+            price: p.price,
+            createdBy: userId
+          });
+          const savedPrice = await manager.save(newPrice);
+          if (p.isDefault) defaultPriceUuid = savedPrice.uuid;
         }
       }
 
-      if (defaultUnitUuid && defaultPriceUuid) {
+      // 4. Stocks
+      for (const s of stocks) {
+        const realUnitUuid = unitUuidMap.get(s.unitTempId);
+        if (realUnitUuid && s.qty > 0) {
+          const newStock = manager.create(ProductStockEntity, {
+            productUuid: savedProduct.uuid,
+            unitUuid: realUnitUuid,
+            qty: s.qty,
+            createdBy: userId
+          });
+          await manager.save(newStock);
+        }
+      }
+
+      // 5. Set Defaults
+      if (defaultUnitUuid) {
         savedProduct.defaultUnitUuid = defaultUnitUuid;
-        savedProduct.defaultPriceUuid = defaultPriceUuid;
+        if (defaultPriceUuid) savedProduct.defaultPriceUuid = defaultPriceUuid;
         await manager.save(savedProduct);
       }
 
-      return await manager.findOne(ProductEntity, {
-        where: { uuid: savedProduct.uuid },
-        relations: ['units', 'price', 'stock'],
-      });
+      return savedProduct;
     });
   }
 
@@ -150,38 +150,13 @@ export class ProductService {
     return this.productRepo.restore(uuid);
   }
 
-  async addPrice(
-    productUuid: string,
-    price: number,
-    unitUuid: string,
-    setAsDefault = false,
-    userId?: string,
-  ) {
+  async addPrice(productUuid: string, price: number, unitUuid: string, name = 'Umum', setAsDefault = false, userId?: string) {
     const product = await this.findOne(productUuid);
     if (!product) throw new BadRequestException('Product not found');
 
-    if (price < 0) throw new BadRequestException('Price must be >= 0');
-    let priceEntity = await this.priceRepo.findOne({
-      where: {
-        productUuid: productUuid,
-        unitUuid: unitUuid,
-      },
-    });
+    const newPrice = this.priceRepo.create({ productUuid, price, unitUuid, name, createdBy: userId });
+    const savedPrice = await this.priceRepo.save(newPrice);
 
-    if (priceEntity) {
-      priceEntity.price = price;
-      priceEntity.updatedBy = userId;
-    } else {
-      const unit = await this.unitRepo.findOne({ where: { uuid: unitUuid } });
-      if (!unit) throw new BadRequestException('Unit not found');
-      priceEntity = this.priceRepo.create({
-        productUuid,
-        price,
-        unitUuid,
-        createdBy: userId,
-      });
-    }
-    const savedPrice = await this.priceRepo.save(priceEntity);
     if (setAsDefault) {
       product.defaultPriceUuid = savedPrice.uuid;
       await this.productRepo.save(product);

@@ -6,8 +6,10 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   OneToMany,
+  ManyToMany,
 } from 'typeorm';
 import { StoreSettingEntity } from '../store_setting/store_setting.entity';
+import { UserEntity } from '../user/user.entity';
 
 @Entity('store')
 export class StoreEntity {
@@ -16,6 +18,12 @@ export class StoreEntity {
 
   @Column({ length: 500 })
   name: string;
+
+  @Column({ length: 500, nullable: true })
+  address: string;
+
+  @Column({ length: 50, nullable: true })
+  phone: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
@@ -34,7 +42,10 @@ export class StoreEntity {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
-  
+
+  @ManyToMany(() => UserEntity, (user) => user.stores)
+  users: UserEntity[];
+
   @OneToMany(() => StoreSettingEntity, (setting) => setting.store)
   settings: StoreSettingEntity[];
 }

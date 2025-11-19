@@ -1,25 +1,30 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue'; 
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '~/stores/auth.store'; 
 
 const router = useRouter();
+const authService = useAuthService();
+const authStore = useAuthStore();
 
-// --- MENU UTAMA (NAVIGASI) ---
+const storeName = computed(() => authStore.activeStore?.name || 'RetailApp');
+
+// --- MENU UTAMA ---
 const items = ref([
     { label: 'Dashboard', icon: 'pi pi-home', route: '/' },
     { 
         label: 'Manajemen', 
         icon: 'pi pi-briefcase',
         items: [
-            { label: 'Produk', icon: 'pi pi-box', route: '/product' },
+            { label: 'Produk', icon: 'pi pi-box', route: '/product' }, // Pastikan route benar (/products bukan /product jika file indexnya di folder products)
         ]
     },
     { 
         label: 'Transaksi', 
         icon: 'pi pi-wallet',
         items: [
-            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/transaction/sale' },
-            { label: 'Pembelian', icon: 'pi pi-truck', route: '/transaction/buy' },
+            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/transaction/sale' }, // Sesuaikan route
+            { label: 'Pembelian', icon: 'pi pi-truck', route: '/transaction/buy' }, // Sesuaikan route
         ]
     },
     { 
@@ -33,15 +38,9 @@ const items = ref([
     }
 ]);
 
-const profileMenu = ref(); 
+// --- MENU PROFIL ---
+const profileMenu = ref();
 const profileItems = ref([
-    { 
-        label: 'Toko', 
-        icon: 'pi pi-cog', 
-        command: () => {
-            router.push('/setting/store');
-        }
-    },
     { 
         label: 'Pengaturan', 
         icon: 'pi pi-cog', 
@@ -53,11 +52,9 @@ const profileItems = ref([
     { 
         label: 'Logout', 
         icon: 'pi pi-sign-out', 
-        class: 'text-red-600', // Kasih warna merah biar beda
-        command: () => {
-            // Logic Logout disini
-            console.log('Logout User');
-            // router.push('/login');
+        class: 'text-red-600', 
+        command: async () => { 
+            await authService.logout();
         }
     }
 ]);
@@ -74,13 +71,18 @@ const toggleProfile = (event) => {
             <Menubar :model="items" class="!bg-transparent !border-none px-4 lg:px-8 h-16 !rounded-none">
                 
                 <template #start>
-                    <NuxtLink to="/" class="flex items-center gap-2 mr-8 group">
+                    <NuxtLink to="/" class="flex items-center gap-3 mr-8 group">
                         <div class="w-9 h-9 bg-white text-primary-600 rounded-lg flex items-center justify-center font-black text-xl shadow-sm group-hover:scale-105 transition-transform">
                             R
                         </div>
-                        <span class="text-xl font-bold text-white tracking-tight hidden sm:block group-hover:text-blue-100 transition-colors">
-                            RetailApp
-                        </span>
+                        <div class="flex flex-col">
+                             <span class="text-lg font-bold text-white tracking-tight leading-none group-hover:text-blue-100 transition-colors">
+                                {{ storeName }}
+                            </span>
+                            <span class="text-[10px] text-blue-200 font-medium tracking-wide uppercase">
+                                POS System
+                            </span>
+                        </div>
                     </NuxtLink>
                 </template>
 
@@ -113,16 +115,12 @@ const toggleProfile = (event) => {
 
                 <template #end>
                     <div class="flex items-center gap-2 md:gap-3">
-
-                        <Button icon="pi pi-search" text rounded class="lg:hidden !text-blue-100 hover:!bg-white/10 hover:!text-white" />
-                        <Button icon="pi pi-bell" text rounded v-badge.danger="2" class="!text-blue-100 hover:!bg-white/10 hover:!text-white" />
-                        
                         <div class="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-white/10 rounded-full transition-colors ml-1"
                              @click="toggleProfile"
                              aria-haspopup="true" 
                              aria-controls="profile_menu">
                             
-                            <Avatar label="AD" class="!bg-white !text-primary-600 font-bold border-2 border-primary-400/50" shape="circle" />
+                            <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-white !text-primary-600 font-bold border-2 border-primary-400/50" shape="circle" />
                             <i class="pi pi-chevron-down text-blue-100 text-xs hidden sm:block"></i>
                         </div>
 
@@ -139,22 +137,17 @@ const toggleProfile = (event) => {
 
         <footer class="bg-white dark:bg-surface-900 border-t border-surface-200 dark:border-surface-800 py-6 mt-auto">
             <div class="container mx-auto px-4 text-center text-sm text-surface-500">
-                &copy; 2025 Aplikasi Retail. <span class="text-primary-600 font-bold">Blue Theme</span>.
+                &copy; 2025 {{ storeName }}. <span class="text-primary-600 font-bold">Powered by RetailApp</span>.
             </div>
         </footer>
     </div>
 </template>
 
 <style scoped>
-:deep(.p-menubar) {
-    padding: 0;
-}
+:deep(.p-menubar) { padding: 0; }
+:deep(.p-menubar-root-list) { z-index: 100; }
 
-/* --- STYLING DROPDOWN NAVIGASI UTAMA --- */
-:deep(.p-menubar-root-list) {
-    z-index: 100;
-}
-/* Dropdown Putih Bersih */
+/* Dropdown Menu Utama */
 :deep(.p-submenu-list) {
     background-color: #ffffff !important;
     border: 1px solid var(--p-surface-200) !important;
@@ -163,44 +156,36 @@ const toggleProfile = (event) => {
     padding: 0.5rem !important;
     min-width: 180px !important;
 }
-/* Reset style default */
-:deep(.p-menuitem-content), :deep(.p-menuitem-link), :deep(.p-menuitem-link:hover) {
-    background: transparent !important;
-}
 
-/* --- STYLING POPUP MENU PROFIL --- */
-/* Memaksa menu profil juga putih dan teks kontras */
+/* Style Popup Menu Profil (Override Global) */
 :deep(.p-menu) {
     background-color: #ffffff !important;
     border: 1px solid var(--p-surface-200) !important;
     color: var(--p-surface-700) !important;
     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1) !important;
     border-radius: 0.5rem !important;
+    z-index: 9999 !important; /* Pastikan di atas elemen lain */
 }
 
-:deep(.p-menu .p-menuitem-link) {
+/* Item link dalam menu */
+:deep(.p-menu .p-menuitem-link), :deep(.p-submenu-list .p-menuitem-link) {
     padding: 0.75rem 1rem !important;
     color: var(--p-surface-700) !important;
     transition: all 0.2s !important;
 }
 
-:deep(.p-menu .p-menuitem-link:hover) {
-    background-color: var(--p-primary-50) !important; /* Biru muda saat hover */
-    color: var(--p-primary-600) !important; /* Teks biru */
+/* Hover State */
+:deep(.p-menu .p-menuitem-link:hover), :deep(.p-submenu-list .p-menuitem-link:hover) {
+    background-color: var(--p-primary-50) !important;
+    color: var(--p-primary-600) !important;
 }
 
-:deep(.p-menu .p-menuitem-icon) {
+/* Icon Style */
+:deep(.p-menu .p-menuitem-icon), :deep(.p-submenu-list .p-menuitem-icon) {
     color: var(--p-surface-500);
     margin-right: 0.75rem;
 }
-
-:deep(.p-menu .p-menuitem-link:hover .p-menuitem-icon) {
+:deep(.p-menu .p-menuitem-link:hover .p-menuitem-icon), :deep(.p-submenu-list .p-menuitem-link:hover .p-menuitem-icon) {
     color: var(--p-primary-600);
-}
-
-/* Separator */
-:deep(.p-menu .p-submenu-header), 
-:deep(.p-menu .p-menu-separator) {
-    border-color: var(--p-surface-200) !important;
 }
 </style>

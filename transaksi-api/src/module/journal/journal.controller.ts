@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JournalService } from './journal.service';
-import { ApiOperation, ApiResponse, ApiBody, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiBody, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { AtGuard } from 'src/common/guards/at.guard';
 
 @ApiTags('Journal')
+@ApiBearerAuth()
+@UseGuards(AtGuard)
 @Controller('journal')
 export class JournalController {
   constructor(private readonly journalService: JournalService) {}

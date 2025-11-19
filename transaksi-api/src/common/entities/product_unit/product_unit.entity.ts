@@ -7,10 +7,11 @@ import {
   DeleteDateColumn,
   JoinColumn,
   ManyToOne,
-  OneToOne,
+  OneToMany,
 } from 'typeorm';
 import { ProductEntity } from '../product/product.entity';
 import { ProductStockEntity } from '../product_stock/product_stock.entity';
+import { ProductPriceEntity } from '../product_price/product_price.entity';
 
 export enum ProductUnitEnum {
   PCS = 'PCS',
@@ -72,6 +73,9 @@ export class ProductUnitEntity {
   @Column({ name: 'product_uuid', type: 'uuid' })
   productUuid: string;
   
-  @OneToOne(() => ProductStockEntity, (stock) => stock.unit)
-  stock?: ProductStockEntity;
+  @OneToMany(() => ProductStockEntity, (stock) => stock.unit)
+  stock?: ProductStockEntity[];
+  
+  @OneToMany(() => ProductPriceEntity, (price) => price.unit)
+  prices: ProductPriceEntity[];
 }
