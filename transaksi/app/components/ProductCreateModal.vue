@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import ShelfCreateModal from '~/components/ShelfCreateModal.vue'; 
+import ShelveCreateModal from '~/components/ShelveCreateModal.vue';
 
 const props = defineProps({
     visible: Boolean,
@@ -11,6 +11,7 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'product-created', 'product-updated']);
 
 const productService = useProductService();
+const shelveService = useShelveService(); // Service Rak ditambahkan
 const toast = useToast();
 
 const submitted = ref(false);
@@ -21,30 +22,100 @@ const isEditMode = computed(() => !!props.productUuid);
 const product = reactive({ name: '' });
 const configUnits = ref([]); 
 const configPrices = ref([]);
-// Structure: [{ unitTempId, unitName, totalQty: 0, allocations: [{ shelfUuid, qty }] }]
 const configStocks = ref([]); 
 
-// State Modal Rak & Data Rak
+// State Modal Rak
 const showShelfModal = ref(false);
 const shelfOptions = ref([]); 
 
 const unitOptions = ['PCS', 'BOX', 'KG', 'LITER', 'PACK', 'CARTON', 'DUS', 'LUSIN'];
 
-// --- MOCK SERVICE RAK ---
+// --- FETCH DATA UTILS ---
+
 const fetchShelves = async () => {
-    // Simulasi data rak
-    shelfOptions.value = [
-        { uuid: 'rak-01', name: 'Rak A-01 (Depan)' },
-        { uuid: 'rak-02', name: 'Rak B-05 (Gudang)' },
-        { uuid: 'rak-03', name: 'Display Toko' }
-    ];
+    try {
+        // Mengambil data Rak Real dari API
+        const data = await shelveService.getAllShelves();
+        shelfOptions.value = data || [];
+    } catch (e) {
+        console.error("Gagal mengambil data rak", e);
+        // Fallback opsional jika API gagal, agar UI tidak crash
+        shelfOptions.value = [];
+    }
 };
 
-const onShelfCreated = () => {
+const onShelveCreated = () => {
+    // Refresh dropdown rak setelah rak baru dibuat
     fetchShelves(); 
 };
 
-// --- HELPER INIT FORM ---
+// --- LOAD DATA FOR EDIT ---
+const loadProductData = async (uuid) => {
+    loading.value = true;
+    try {
+        // 1. Ambil data dari Backend
+        // Pastikan method ini ada di productService (biasanya findOne atau getProduct)
+        const data = await productService.getProduct(uuid); 
+        
+        if (!data) throw new Error("Data produk tidak ditemukan");
+
+        // 2. Isi Nama
+        product.name = data.name;
+
+        // 3. Mapping Units (Backend UUID -> Frontend)
+        configUnits.value = data.units.map(u => ({
+            uuid: u.uuid, 
+            tempId: u.uuid, 
+            unitName: u.unitName,
+            multiplier: Number(u.unitMultiplier),
+            barcode: u.barcode,
+            isDefault: data.defaultUnitUuid === u.uuid
+        }));
+
+        // 4. Mapping Prices
+        configPrices.value = (data.price || []).map(p => ({
+            uuid: p.uuid,
+            tempId: Date.now() + Math.random(),
+            unitTempId: p.unitUuid,
+            name: p.name,
+            price: Number(p.price),
+            isDefault: data.defaultPriceUuid === p.uuid
+        }));
+
+        // 5. Mapping Stocks & Shelves
+        syncStocks(); 
+
+        // Isi nilai stok dan alokasi rak
+        configStocks.value.forEach(stockItem => {
+            const backendStock = (data.stock || []).find(s => s.unitUuid === stockItem.unitTempId);
+            
+            if (backendStock) {
+                stockItem.totalQty = Number(backendStock.qty);
+            }
+
+            // Backend mengembalikan array product_shelve, filter berdasarkan unit
+            // Perhatikan structure response dari backend untuk 'shelve'
+            // Asumsi: data.shelve adalah array ProductShelveEntity yang di-join
+            const backendShelves = (data.shelve || []).filter(s => s.unitUuid === stockItem.unitTempId);
+            
+            if (backendShelves.length > 0) {
+                stockItem.allocations = backendShelves.map(bs => ({
+                    shelfUuid: bs.shelveUuid,
+                    qty: Number(bs.qty)
+                }));
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data produk', life: 3000 });
+        closeDialog();
+    } finally {
+        loading.value = false;
+    }
+};
+
+// --- HELPER INIT FORM (RESET) ---
 const initForm = () => {
     product.name = '';
     const tempId = Date.now();
@@ -53,7 +124,7 @@ const initForm = () => {
     syncStocks();
 };
 
-// Sync Stok List saat Unit Berubah
+// Sync Struktur Stok berdasarkan Unit yang ada
 const syncStocks = () => {
     const newStocks = configUnits.value.map(u => {
         const existing = configStocks.value.find(s => s.unitTempId === u.tempId);
@@ -61,7 +132,6 @@ const syncStocks = () => {
         return {
             unitTempId: u.tempId,
             unitName: u.unitName,
-            // Pisahkan Total Stok Fisik dengan Alokasi Rak
             totalQty: existing ? existing.totalQty : 0, 
             allocations: existing ? existing.allocations : [] 
         };
@@ -72,8 +142,13 @@ const syncStocks = () => {
 // --- WATCHERS ---
 watch(() => props.visible, async (val) => {
     if (val) {
+        // Selalu fetch rak terbaru saat modal dibuka
         fetchShelves();
-        if (!isEditMode.value) {
+        
+        submitted.value = false;
+        if (isEditMode.value && props.productUuid) {
+            await loadProductData(props.productUuid);
+        } else {
             initForm();
         }
     }
@@ -81,14 +156,18 @@ watch(() => props.visible, async (val) => {
 
 watch(configUnits, () => syncStocks(), { deep: true });
 
-// --- ACTION HANDLERS ---
+// --- ACTION HANDLERS (Row Management) ---
 const addUnitRow = () => {
     const newId = Date.now();
     configUnits.value.push({ tempId: newId, unitName: 'PCS', multiplier: 1, barcode: '', isDefault: configUnits.value.length === 0 });
     configPrices.value.push({ tempId: newId + 1, unitTempId: newId, name: 'Umum', price: 0, isDefault: true });
 };
+
 const removeUnitRow = (index) => {
-    if (configUnits.value.length === 1) return;
+    if (configUnits.value.length === 1) {
+         toast.add({ severity: 'warn', summary: 'Warning', detail: 'Minimal harus ada 1 satuan.', life: 2000 });
+         return;
+    }
     const removed = configUnits.value[index];
     configUnits.value.splice(index, 1);
     configPrices.value = configPrices.value.filter(p => p.unitTempId !== removed.tempId);
@@ -106,12 +185,11 @@ const setPriceDefault = (index) => { configPrices.value.forEach((p, i) => p.isDe
 const addStockAllocation = (stockIndex) => {
     configStocks.value[stockIndex].allocations.push({ shelfUuid: null, qty: 0 });
 };
-
 const removeStockAllocation = (stockIndex, allocIndex) => {
     configStocks.value[stockIndex].allocations.splice(allocIndex, 1);
 };
 
-// --- SAVE ---
+// --- SAVE / UPDATE ---
 const saveProduct = async () => {
     submitted.value = true;
     if (!product.name) return;
@@ -121,23 +199,24 @@ const saveProduct = async () => {
         const payload = {
             name: product.name,
             units: configUnits.value.map(u => ({
-                tempId: u.tempId,
+                uuid: u.uuid, 
+                tempId: u.tempId, 
                 name: u.unitName,
                 multiplier: u.multiplier,
                 barcode: u.barcode,
                 isDefault: u.isDefault
             })),
             prices: configPrices.value.map(p => ({
-                unitTempId: p.unitTempId,
+                uuid: p.uuid, 
+                unitTempId: p.unitTempId, 
                 name: p.name || 'Umum',
                 price: p.price,
                 isDefault: p.isDefault
             })),
-            // Payload Stok: Kirim Total Qty DAN Alokasi Rak secara terpisah/bersarang
             stocks: configStocks.value.map(s => ({
                 unitTempId: s.unitTempId,
-                qty: s.totalQty, // Total Stok (Inventory)
-                allocations: s.allocations // Detail penempatan (Warehouse)
+                qty: s.totalQty,
+                allocations: s.allocations
                     .filter(a => a.qty > 0 && a.shelfUuid)
                     .map(a => ({
                         shelfUuid: a.shelfUuid,
@@ -147,7 +226,10 @@ const saveProduct = async () => {
         };
 
         if (isEditMode.value) {
-            toast.add({ severity: 'info', summary: 'Info', detail: 'Fitur update belum tersedia.', life: 3000 });
+            // Pastikan method updateProduct di service mensupport payload ini
+            await productService.updateProduct(props.productUuid, payload);
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil diperbarui', life: 3000 });
+            emit('product-updated');
         } else {
             const newProd = await productService.createProduct(payload);
             toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil dibuat', life: 3000 });
@@ -155,7 +237,8 @@ const saveProduct = async () => {
         }
         closeDialog();
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi kesalahan', life: 3000 });
+        console.error(e);
+        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi kesalahan server', life: 3000 });
     } finally {
         loading.value = false;
     }
@@ -265,6 +348,7 @@ const closeDialog = () => emit('update:visible', false);
                     <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">3</div>
                     Stok Awal (Total)
                 </span>
+                <span v-if="isEditMode" class="text-[10px] text-orange-500 ml-auto italic bg-orange-50 px-2 py-1 rounded">Perubahan stok sebaiknya lewat menu Stock Opname</span>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
                 <div v-for="s in configStocks" :key="s.unitTempId" class="bg-surface-50 dark:bg-surface-800 p-2 rounded border border-surface-200 dark:border-surface-700">
@@ -294,7 +378,7 @@ const closeDialog = () => emit('update:visible', false);
                     </div>
 
                     <div v-if="s.allocations.length === 0" class="text-center py-2 text-xs text-surface-400 italic border border-dashed border-surface-200 rounded bg-white dark:bg-surface-900">
-                        Belum ada penempatan rak. (Stok masuk ke gudang default)
+                        Belum ada penempatan rak.
                     </div>
 
                     <div v-else class="bg-white dark:bg-surface-900 rounded border border-surface-100 dark:border-surface-700 overflow-hidden">
@@ -336,14 +420,14 @@ const closeDialog = () => emit('update:visible', false);
         <template #footer>
             <div class="flex justify-end gap-2 pt-3 border-t border-surface-200 dark:border-surface-700 mt-2">
                 <Button label="Batal" icon="pi pi-times" text @click="closeDialog" severity="secondary" size="small" />
-                <Button :label="isEditMode ? 'Simpan' : 'Buat Produk'" icon="pi pi-check" @click="saveProduct" :loading="loading" size="small" />
+                <Button :label="isEditMode ? 'Simpan Perubahan' : 'Buat Produk'" icon="pi pi-check" @click="saveProduct" :loading="loading" size="small" />
             </div>
         </template>
     </Dialog>
 
-    <ShelfCreateModal 
+    <ShelveCreateModal 
         v-model:visible="showShelfModal" 
-        @saved="onShelfCreated" 
+        @saved="onShelveCreated" 
     />
 </template>
 

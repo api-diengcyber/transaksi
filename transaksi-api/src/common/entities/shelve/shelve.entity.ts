@@ -5,7 +5,9 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { ProductShelveEntity } from '../product_shelve/product_shelve.entity';
 
 @Entity('shelve')
 export class ShelveEntity {
@@ -17,6 +19,9 @@ export class ShelveEntity {
 
     @Column({ length: 500 })
     description: string;
+
+    @Column({ type: 'double' })
+    capacity: number;
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
     createdAt: Date;
@@ -35,4 +40,10 @@ export class ShelveEntity {
 
     @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
     deletedBy?: string;
+    
+    @OneToMany(() => ProductShelveEntity, (ps) => ps.shelve)
+    productShelves: ProductShelveEntity[];
+
+    // [NEW] Property virtual untuk menampung jumlah item (tidak masuk database)
+    totalItems?: number;
 }

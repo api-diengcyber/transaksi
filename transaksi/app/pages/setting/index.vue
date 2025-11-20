@@ -1,267 +1,394 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
-import { useAuthStore } from '~/stores/auth.store';
+import { useAuthStore } from '~/stores/auth.store'; 
 
+const authStore = useAuthStore();
 const toast = useToast();
 const confirm = useConfirm();
-const authStore = useAuthStore();
 
-// --- STATE NAVIGASI ---
-const activeTab = ref('general'); 
+// --- STATE UI ---
+const activeTab = ref('general');
+const loading = ref(false);
+const initialLoading = ref(true);
 
 const menuItems = [
-    { id: 'general', label: 'Profil Toko', icon: 'pi pi-building' },
-    { id: 'transaction', label: 'Transaksi', icon: 'pi pi-calculator' },
-    // ... menu lain
+    { id: 'general', label: 'Identitas Toko', icon: 'pi pi-building', desc: 'Nama, alamat, dan kontak' },
+    { id: 'sales', label: 'Transaksi Penjualan', icon: 'pi pi-shopping-cart', desc: 'Pajak, struk, dan stok' },
+    { id: 'purchase', label: 'Pembelian (Stok)', icon: 'pi pi-truck', desc: 'Supplier dan persetujuan' },
+    { id: 'device', label: 'Perangkat & Printer', icon: 'pi pi-print', desc: 'Konfigurasi hardware' },
 ];
 
-// --- DATA STORE ---
-const currentStore = computed(() => authStore.activeStore);
+const settings = reactive({
+    // 1. General
+    store_name: '',
+    store_phone: '',
+    store_address: '',
+    store_footer_msg: '',
 
-// --- FORM STATE ---
-const loading = ref(false);
+    // 2. Sales
+    sale_tax_enabled: false,        
+    sale_tax_percentage: 0,        
+    sale_tax_method: 'exclusive',   
+    sale_allow_negative_stock: false,
+    sale_require_customer: false,
+    
+    // 3. Purchase
+    buy_require_supplier: true,
+    buy_auto_approve: true,
+    buy_default_due_days: 30,
 
-// 1. Profil Toko
-const storeForm = reactive({
-    name: '',
-    address: '',
-    phone: ''
+    // 4. Device
+    dev_printer_width: '58mm',
+    dev_auto_print_receipt: true,
+    dev_show_logo_receipt: false
 });
 
-// 2. Settings Transaksi (Penjualan & Pembelian)
-const saleSettings = reactive({
-    taxEnabled: false,
-    taxPercentage: 0,
-    printReceiptAuto: false,
-    printerWidth: '58mm',
-    allowNegativeStock: false
-});
+// --- LOGIC MAPPER ---
 
-const purchaseSettings = reactive({
-    requireSupplier: false,
-    autoApprove: true,
-    defaultPaymentTerm: 0 // Hari
-});
+const mapApiToState = (apiSettingsObj) => {
+    if (!apiSettingsObj || typeof apiSettingsObj !== 'object') return;
 
-// Populate
-const populateForms = () => {
-    if (currentStore.value) {
-        storeForm.name = currentStore.value.name || '';
-        storeForm.address = currentStore.value.address || '';
-        storeForm.phone = currentStore.value.phone || '';
-        
-        const s = currentStore.value.settings || {};
-        
-        // Mapping Sale Settings
-        saleSettings.printerWidth = s.printer_width || '58mm';
-        saleSettings.taxPercentage = Number(s.tax_percentage) || 0;
-        saleSettings.taxEnabled = !!saleSettings.taxPercentage;
-        saleSettings.printReceiptAuto = s.auto_print === 'true';
-        saleSettings.allowNegativeStock = s.allow_negative_stock === 'true';
-
-        // Mapping Purchase Settings (Contoh)
-        purchaseSettings.requireSupplier = s.buy_require_supplier === 'true';
-        purchaseSettings.autoApprove = s.buy_auto_approve !== 'false'; // Default true
+    // Handle jika backend mengembalikan Array [{key, value}]
+    if (Array.isArray(apiSettingsObj)) {
+        apiSettingsObj.forEach(item => {
+            updateSettingValue(item.key, item.value);
+        });
+    } else {
+        // Handle jika backend mengembalikan Object {key: value}
+        for (const [key, value] of Object.entries(apiSettingsObj)) {
+            updateSettingValue(key, value);
+        }
     }
 };
 
-onMounted(async () => {
-    if (!authStore.stores.length) {
-        await authStore.fetchUserStores();
+const updateSettingValue = (key, value) => {
+    if (settings.hasOwnProperty(key)) {
+        const currentType = typeof settings[key];
+        if (currentType === 'boolean') {
+            settings[key] = String(value) === 'true' || String(value) === '1';
+        } else if (currentType === 'number') {
+            settings[key] = Number(value) || 0;
+        } else {
+            settings[key] = value;
+        }
     }
-    populateForms();
-});
+}
 
-watch(currentStore, () => populateForms());
+const mapStateToPayload = () => {
+    const settingsArray = [];
+    // Field profil utama tidak masuk ke tabel settings
+    const profileKeys = ['store_name', 'store_phone', 'store_address']; 
+
+    for (const [key, value] of Object.entries(settings)) {
+        if (profileKeys.includes(key)) continue;
+
+        let formattedValue = value;
+        if (typeof value === 'boolean') formattedValue = value ? 'true' : 'false';
+        if (typeof value === 'number') formattedValue = String(value);
+        
+        settingsArray.push({ key, value: formattedValue });
+    }
+    return settingsArray;
+};
 
 // --- ACTIONS ---
+
+const fetchSettings = async () => {
+    initialLoading.value = true;
+    try {
+        await authStore.fetchUserStores();
+        const storeData = authStore.activeStore;
+
+        if (storeData) {
+            // 1. Map Profil
+            settings.store_name = storeData.name || '';
+            settings.store_phone = storeData.phone || '';
+            settings.store_address = storeData.address || '';
+            
+            // 2. Map Settings
+            if (storeData.settings) {
+                mapApiToState(storeData.settings);
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat pengaturan toko' });
+    } finally {
+        initialLoading.value = false;
+    }
+};
+
 const saveSettings = async () => {
     loading.value = true;
     try {
-        // Gabungkan semua setting ke payload key-value
         const payload = {
-            name: storeForm.name,
-            address: storeForm.address,
-            phone: storeForm.phone,
-            settings: [
-                // Sale
-                { key: 'printer_width', value: saleSettings.printerWidth },
-                { key: 'tax_percentage', value: saleSettings.taxEnabled ? String(saleSettings.taxPercentage) : '0' },
-                { key: 'auto_print', value: String(saleSettings.printReceiptAuto) },
-                { key: 'allow_negative_stock', value: String(saleSettings.allowNegativeStock) },
-                
-                // Purchase
-                { key: 'buy_require_supplier', value: String(purchaseSettings.requireSupplier) },
-                { key: 'buy_auto_approve', value: String(purchaseSettings.autoApprove) }
-            ]
+            name: settings.store_name,
+            phone: settings.store_phone,
+            address: settings.store_address,
+            
+            settings: mapStateToPayload() 
         };
 
-        // Simulasi API Call
-        await new Promise(r => setTimeout(r, 800));
-        // await storeService.updateStore(currentStore.value.uuid, payload);
-        await authStore.fetchUserStores();
+        console.log("Saving Payload:", payload);
 
-        toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Pengaturan disimpan.', life: 3000 });
+        await authStore.saveStoreSettings(payload);
+        
+        await authStore.fetchUserStores(); 
+        
+        toast.add({ severity: 'success', summary: 'Tersimpan', detail: 'Pengaturan berhasil diperbarui.', life: 3000 });
+
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menyimpan', life: 3000 });
+        console.error(e);
+        // Tampilkan pesan error spesifik dari backend jika ada
+        const msg = e.response?._data?.message || e.message || 'Terjadi kesalahan saat menyimpan.';
+        toast.add({ severity: 'error', summary: 'Gagal', detail: msg });
     } finally {
         loading.value = false;
     }
 };
 
+const handleReset = () => {
+    confirm.require({
+        message: 'Kembalikan ke pengaturan terakhir disimpan?',
+        header: 'Konfirmasi Reset',
+        icon: 'pi pi-refresh',
+        acceptClass: 'p-button-danger',
+        accept: () => {
+            fetchSettings();
+        }
+    });
+};
+
+onMounted(() => {
+    fetchSettings();
+});
+
 definePageMeta({ layout: 'default' });
 </script>
 
 <template>
-    <div class="py-6 animate-fade-in">
+    <div class="min-h-screen bg-surface-50 dark:bg-surface-950 p-4 md:p-6 animate-fade-in">
         <Toast />
         <ConfirmDialog />
 
-        <div class="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto px-4">
-            
-            <aside class="w-full lg:w-1/4 shrink-0">
-                 <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden sticky top-24">
-                    <div class="p-4 bg-surface-50 dark:bg-surface-800 border-b border-surface-100 dark:border-surface-700">
-                        <h2 class="font-bold text-surface-700 dark:text-surface-200">Pengaturan Toko</h2>
-                        <p class="text-xs text-surface-500">Konfigurasi sistem toko</p>
-                    </div>
-                    <ul class="p-2 flex flex-col gap-1">
-                        <li v-for="item in menuItems" :key="item.id">
-                            <button 
-                                @click="activeTab = item.id"
-                                class="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 text-left"
-                                :class="activeTab === item.id 
-                                    ? 'bg-primary-50 text-primary-700 border-l-4 border-primary-500' 
-                                    : 'text-surface-600 hover:bg-surface-50 dark:text-surface-300 hover:text-surface-900'"
-                            >
-                                <i :class="[item.icon, activeTab === item.id ? 'text-primary-600' : 'text-surface-400']"></i>
-                                {{ item.label }}
-                            </button>
-                        </li>
-                    </ul>
+        <div class="max-w-6xl mx-auto">
+            <!-- Header Page -->
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-2xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Pengaturan Toko</h1>
+                    <p class="text-surface-500 text-sm mt-1">Kelola profil, preferensi transaksi, dan konfigurasi sistem.</p>
                 </div>
-            </aside>
+                <div class="flex gap-3">
+                    <Button label="Reset" icon="pi pi-refresh" severity="secondary" text @click="handleReset" :disabled="loading" />
+                    <Button label="Simpan Perubahan" icon="pi pi-save" @click="saveSettings" :loading="loading" raised />
+                </div>
+            </div>
 
-            <main class="w-full lg:w-3/4">
+            <div class="flex flex-col lg:flex-row gap-8">
                 
-                <div v-if="activeTab === 'general'" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 md:p-8">
-                     <div class="mb-6 border-b border-surface-100 dark:border-surface-700 pb-4 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-xl font-bold text-surface-800 dark:text-surface-0">Profil Toko</h2>
-                            <p class="text-surface-500 text-sm">Informasi identitas toko.</p>
-                        </div>
-                        <Button label="Simpan" icon="pi pi-save" size="small" @click="saveSettings" :loading="loading" />
-                    </div>
-                    <div class="grid grid-cols-1 gap-6 max-w-2xl">
-                        <div class="field">
-                            <label class="text-sm font-semibold block mb-1">Nama Toko</label>
-                            <InputText v-model="storeForm.name" class="w-full" />
-                        </div>
-                        <div class="field">
-                            <label class="text-sm font-semibold block mb-1">Alamat</label>
-                            <Textarea v-model="storeForm.address" rows="2" class="w-full" />
-                        </div>
-                         <div class="field">
-                            <label class="text-sm font-semibold block mb-1">Telepon</label>
-                            <InputText v-model="storeForm.phone" class="w-full" />
-                        </div>
-                    </div>
-                </div>
-
-                <div v-if="activeTab === 'transaction'" class="space-y-6">
-                    
-                    <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
-                        <div class="p-4 border-b border-surface-100 dark:border-surface-700 bg-green-50 dark:bg-green-900/10 flex justify-between items-center">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                                    <i class="pi pi-shopping-cart text-sm"></i>
+                <!-- SIDEBAR MENU -->
+                <aside class="w-full lg:w-64 shrink-0 space-y-2">
+                    <div class="bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
+                        <div class="p-2">
+                            <button 
+                                v-for="item in menuItems" 
+                                :key="item.id"
+                                @click="activeTab = item.id"
+                                class="w-full text-left p-3 rounded-lg flex items-start gap-3 transition-all duration-200 group relative overflow-hidden"
+                                :class="activeTab === item.id 
+                                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-bold ring-1 ring-primary-200 dark:ring-primary-800' 
+                                    : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800 hover:text-surface-900'"
+                            >
+                                <div class="mt-0.5" :class="activeTab === item.id ? 'text-primary-600' : 'text-surface-400 group-hover:text-surface-600'">
+                                    <i :class="item.icon"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-bold text-green-800 dark:text-green-100 text-sm">Penjualan </h3>
-                                    <p class="text-xs text-green-600 dark:text-green-300">Pengaturan kasir dan struk.</p>
+                                    <div class="text-sm">{{ item.label }}</div>
+                                    <div class="text-[10px] opacity-70 font-normal mt-0.5 leading-tight">{{ item.desc }}</div>
                                 </div>
-                            </div>
+                                <div v-if="activeTab === item.id" class="absolute left-0 top-2 bottom-2 w-1 bg-primary-500 rounded-r-full"></div>
+                            </button>
                         </div>
+                    </div>
+                </aside>
+
+                <!-- CONTENT AREA -->
+                <main class="flex-1">
+                    <div v-if="initialLoading" class="flex justify-center py-20">
+                        <ProgressSpinner style="width: 50px; height: 50px" />
+                    </div>
+
+                    <div v-else class="space-y-6">
                         
-                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="border border-surface-100 rounded-lg p-3">
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-sm font-semibold">Pajak (PPN)</span>
-                                    <InputSwitch v-model="saleSettings.taxEnabled" />
+                        <!-- TAB: GENERAL -->
+                        <div v-if="activeTab === 'general'" class="animate-fade-in space-y-6">
+                            <div class="card-section">
+                                <h3 class="section-title">Identitas Utama</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="field">
+                                        <label>Nama Toko</label>
+                                        <InputText v-model="settings.store_name" class="w-full" placeholder="Contoh: Toko Makmur Jaya" />
+                                    </div>
+                                    <div class="field">
+                                        <label>No. Telepon</label>
+                                        <InputText v-model="settings.store_phone" class="w-full" placeholder="0812..." />
+                                    </div>
+                                    <div class="field md:col-span-2">
+                                        <label>Alamat Lengkap</label>
+                                        <Textarea v-model="settings.store_address" rows="3" class="w-full" />
+                                    </div>
                                 </div>
-                                <InputNumber v-if="saleSettings.taxEnabled" v-model="saleSettings.taxPercentage" suffix="%" :min="0" :max="100" inputClass="w-full text-center" placeholder="0%" />
                             </div>
 
-                            <div class="border border-surface-100 rounded-lg p-3 flex justify-between items-center">
-                                <div>
-                                    <span class="text-sm font-semibold block">Stok Minus</span>
-                                    <span class="text-xs text-surface-500">Boleh jual barang kosong?</span>
+                            <div class="card-section">
+                                <h3 class="section-title">Struk / Nota</h3>
+                                <div class="field">
+                                    <label>Pesan Kaki (Footer Note)</label>
+                                    <InputText v-model="settings.store_footer_msg" class="w-full" placeholder="Contoh: Terimakasih telah berbelanja!" />
+                                    <small class="text-surface-500">Teks ini akan muncul di bagian paling bawah struk belanja.</small>
                                 </div>
-                                <InputSwitch v-model="saleSettings.allowNegativeStock" />
+                            </div>
+                        </div>
+
+                        <!-- TAB: SALES -->
+                        <div v-if="activeTab === 'sales'" class="animate-fade-in space-y-6">
+                            <div class="card-section">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h3 class="section-title !mb-0">Pajak Penjualan (PPN)</h3>
+                                        <p class="text-xs text-surface-500 mt-1">Atur pajak pertambahan nilai otomatis.</p>
+                                    </div>
+                                    <InputSwitch v-model="settings.sale_tax_enabled" />
+                                </div>
+
+                                <div v-if="settings.sale_tax_enabled" class="bg-surface-50 dark:bg-surface-800 p-4 rounded-xl border border-surface-200 dark:border-surface-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                    <div class="field">
+                                        <label>Persentase Pajak (%)</label>
+                                        <InputNumber v-model="settings.sale_tax_percentage" suffix="%" :min="0" :max="100" class="w-full" />
+                                    </div>
+                                    <div class="field">
+                                        <label>Metode Perhitungan</label>
+                                        <SelectButton v-model="settings.sale_tax_method" 
+                                            :options="[{label: 'Exclude (Harga + PPN)', value: 'exclusive'}, {label: 'Include (Harga tmsk PPN)', value: 'inclusive'}]" 
+                                            optionLabel="label" optionValue="value" 
+                                            class="w-full text-xs"
+                                            :pt="{ button: { class: '!text-xs !py-2' } }"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="col-span-1 md:col-span-2">
-                                <label class="text-sm font-semibold block mb-2">Konfigurasi Printer</label>
-                                <div class="flex gap-4 items-center">
-                                    <SelectButton v-model="saleSettings.printerWidth" :options="['58mm', '80mm']" class="text-xs" />
-                                    <div class="flex items-center gap-2">
-                                        <Checkbox v-model="saleSettings.printReceiptAuto" binary inputId="autoprint" />
-                                        <label for="autoprint" class="text-sm cursor-pointer">Auto Print</label>
+                            <div class="card-section">
+                                <h3 class="section-title">Kebijakan Stok & Pelanggan</h3>
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between p-3 border border-surface-200 dark:border-surface-700 rounded-lg hover:bg-surface-50 transition-colors">
+                                        <div>
+                                            <div class="font-bold text-sm text-surface-800 dark:text-surface-100">Izinkan Stok Minus</div>
+                                            <div class="text-xs text-surface-500">Kasir tetap bisa input barang meski stok 0.</div>
+                                        </div>
+                                        <InputSwitch v-model="settings.sale_allow_negative_stock" />
+                                    </div>
+                                    <div class="flex items-center justify-between p-3 border border-surface-200 dark:border-surface-700 rounded-lg hover:bg-surface-50 transition-colors">
+                                        <div>
+                                            <div class="font-bold text-sm text-surface-800 dark:text-surface-100">Wajib Pilih Pelanggan</div>
+                                            <div class="text-xs text-surface-500">Transaksi tidak bisa diproses tanpa data pelanggan.</div>
+                                        </div>
+                                        <InputSwitch v-model="settings.sale_require_customer" />
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
-                        <div class="p-4 border-b border-surface-100 dark:border-surface-700 bg-orange-50 dark:bg-orange-900/10 flex justify-between items-center">
-                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
-                                    <i class="pi pi-truck text-sm"></i>
-                                </div>
-                                <div>
-                                    <h3 class="font-bold text-orange-800 dark:text-orange-100 text-sm">Pembelian (Stok Masuk)</h3>
-                                    <p class="text-xs text-orange-600 dark:text-orange-300">Aturan kulakan barang.</p>
+                        <!-- TAB: PURCHASE -->
+                        <div v-if="activeTab === 'purchase'" class="animate-fade-in space-y-6">
+                            <div class="card-section">
+                                <h3 class="section-title">Konfigurasi Pembelian</h3>
+                                <div class="grid grid-cols-1 gap-4">
+                                    <div class="flex items-center justify-between p-3 border border-surface-200 dark:border-surface-700 rounded-lg">
+                                        <div>
+                                            <div class="font-bold text-sm">Wajib Isi Supplier</div>
+                                            <div class="text-xs text-surface-500">Mencegah input stok masuk tanpa asal-usul.</div>
+                                        </div>
+                                        <InputSwitch v-model="settings.buy_require_supplier" />
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-between p-3 border border-surface-200 dark:border-surface-700 rounded-lg">
+                                        <div>
+                                            <div class="font-bold text-sm">Otomatis Approve</div>
+                                            <div class="text-xs text-surface-500">Stok langsung bertambah tanpa perlu persetujuan Supervisor.</div>
+                                        </div>
+                                        <InputSwitch v-model="settings.buy_auto_approve" />
+                                    </div>
+
+                                    <div class="field mt-2">
+                                        <label>Jatuh Tempo Default (Hari)</label>
+                                        <InputNumber v-model="settings.buy_default_due_days" suffix=" Hari" class="w-full md:w-1/2" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="p-6 space-y-4">
-                            <div class="flex items-center justify-between border-b border-surface-100 pb-3">
-                                <div>
-                                    <span class="text-sm font-semibold block">Wajib Isi Supplier</span>
-                                    <span class="text-xs text-surface-500">Harus memilih supplier saat input stok?</span>
+                         <!-- TAB: DEVICE -->
+                        <div v-if="activeTab === 'device'" class="animate-fade-in space-y-6">
+                            <div class="card-section">
+                                <h3 class="section-title">Pengaturan Printer Struk</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="field">
+                                        <label>Ukuran Kertas</label>
+                                        <div class="flex gap-4 mt-1">
+                                            <div class="flex align-items-center">
+                                                <RadioButton v-model="settings.dev_printer_width" inputId="p58" name="paper" value="58mm" />
+                                                <label for="p58" class="ml-2 text-sm">58mm (Kecil)</label>
+                                            </div>
+                                            <div class="flex align-items-center">
+                                                <RadioButton v-model="settings.dev_printer_width" inputId="p80" name="paper" value="80mm" />
+                                                <label for="p80" class="ml-2 text-sm">80mm (Standar)</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label>Opsi Cetak</label>
+                                        <div class="flex flex-col gap-2 mt-1">
+                                             <div class="flex align-items-center">
+                                                <Checkbox v-model="settings.dev_auto_print_receipt" binary inputId="autoprint" />
+                                                <label for="autoprint" class="ml-2 text-sm">Otomatis Print setelah bayar</label>
+                                            </div>
+                                             <div class="flex align-items-center">
+                                                <Checkbox v-model="settings.dev_show_logo_receipt" binary inputId="showlogo" />
+                                                <label for="showlogo" class="ml-2 text-sm">Tampilkan Logo Toko</label>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <InputSwitch v-model="purchaseSettings.requireSupplier" />
-                            </div>
-
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <span class="text-sm font-semibold block">Auto Approve</span>
-                                    <span class="text-xs text-surface-500">Stok langsung bertambah tanpa perlu persetujuan supervisor?</span>
-                                </div>
-                                <InputSwitch v-model="purchaseSettings.autoApprove" />
                             </div>
                         </div>
+
                     </div>
-
-                    <div class="flex justify-end pt-2">
-                        <Button label="Simpan Semua Pengaturan" icon="pi pi-save" size="large" @click="saveSettings" :loading="loading" />
-                    </div>
-
-                </div>
-
-            </main>
+                </main>
+            </div>
         </div>
     </div>
 </template>
 
 <style scoped>
+.card-section {
+    @apply bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6;
+}
+
+.section-title {
+    @apply text-base font-bold text-surface-800 dark:text-surface-100 mb-4 pb-2 border-b border-surface-100 dark:border-surface-700;
+}
+
+.field label {
+    @apply text-xs font-bold text-surface-500 uppercase tracking-wide mb-1.5 block;
+}
+
 .animate-fade-in {
     animation: fadeIn 0.3s ease-in-out;
 }
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }

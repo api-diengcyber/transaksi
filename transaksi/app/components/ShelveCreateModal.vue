@@ -2,23 +2,19 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
-// Props & Emits
 const props = defineProps({
     visible: Boolean,
-    shelfData: { type: Object, default: null } // Jika null = Create, jika ada object = Edit
+    shelfData: { type: Object, default: null } // Object: { uuid, name, description, capacity }
 });
 
 const emit = defineEmits(['update:visible', 'saved']);
 
-// Services (Asumsi Anda akan membuat ShelfService nanti)
-// const shelfService = useShelfService(); 
+const shelveService = useShelveService(); // Panggil Service
 const toast = useToast();
 
-// --- STATE ---
 const submitted = ref(false);
 const loading = ref(false);
 
-// Form State
 const form = reactive({
     name: '',
     description: '',
@@ -39,53 +35,40 @@ const populateForm = () => {
     if (props.shelfData) {
         form.name = props.shelfData.name;
         form.description = props.shelfData.description;
-        form.capacity = props.shelfData.capacity || 0;
+        // Pastikan konversi ke number aman
+        form.capacity = props.shelfData.capacity ? Number(props.shelfData.capacity) : 0;
     }
 };
 
-// Watcher saat modal dibuka/tutup
 watch(() => props.visible, (val) => {
     if (val) {
-        if (props.shelfData) {
-            populateForm();
-        } else {
-            resetForm();
-        }
+        if (props.shelfData) populateForm();
+        else resetForm();
     }
 });
 
 // --- ACTIONS ---
 const handleSave = async () => {
     submitted.value = true;
-
-    // Validasi Sederhana
-    if (!form.name) {
-        return;
-    }
+    if (!form.name) return;
 
     loading.value = true;
-
     try {
-        // Simulasi API Call (Ganti dengan shelfService.create / update nanti)
-        await new Promise(r => setTimeout(r, 800));
-
-        // Construct Payload
         const payload = { ...form };
 
         if (isEditMode.value) {
-            // await shelfService.update(props.shelfData.uuid, payload);
-            toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Data rak diperbarui', life: 3000 });
+            await shelveService.updateShelve(props.shelfData.uuid, payload);
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Data rak diperbarui', life: 3000 });
         } else {
-            // await shelfService.create(payload);
-            toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Rak baru dibuat', life: 3000 });
+            await shelveService.createShelve(payload);
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Rak baru dibuat', life: 3000 });
         }
 
-        // Tutup Modal & Refresh Parent
-        emit('saved');
+        emit('saved'); // Trigger parent untuk refresh list
         closeDialog();
-
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Terjadi kesalahan sistem', life: 3000 });
+        console.error(e);
+        toast.add({ severity: 'error', summary: 'Gagal', detail: e.response?._data?.message || 'Terjadi kesalahan server', life: 3000 });
     } finally {
         loading.value = false;
     }
@@ -106,7 +89,6 @@ const closeDialog = () => {
         class="p-fluid"
     >
         <div class="flex flex-col gap-5 pt-2">
-            
             <div class="field">
                 <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">
                     Kode / Nama Rak <span class="text-red-500">*</span>
@@ -145,7 +127,6 @@ const closeDialog = () => {
                     suffix=" Item" 
                 />
             </div>
-
         </div>
 
         <template #footer>

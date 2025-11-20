@@ -9,7 +9,7 @@ export const useProductService = () => {
         return await useApi(`${API_BASE}/find-all`, { method: 'GET' });
     };
 
-    const getProductDetail = async (uuid: string) => {
+    const getProduct = async (uuid: string) => {
         return await useApi(`${API_BASE}/${uuid}`, { method: 'GET' });
     };
 
@@ -73,7 +73,7 @@ export const useProductService = () => {
 
     return {
         getAllProducts,
-        getProductDetail,
+        getProduct,
         createProduct,
         updateProduct,
         deleteProduct,

@@ -1,191 +1,213 @@
 <script setup>
 import { ref, computed } from 'vue'; 
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '~/stores/auth.store'; 
 
 const router = useRouter();
+const route = useRoute(); 
 const authService = useAuthService();
 const authStore = useAuthStore();
 
 const storeName = computed(() => authStore.activeStore?.name || 'RetailApp');
 
-// --- MENU UTAMA ---
+// --- MENU STRUCTURE ---
 const items = ref([
-    { label: 'Dashboard', icon: 'pi pi-home', route: '/' },
+    { 
+        label: 'Dashboard', 
+        icon: 'pi pi-home', 
+        route: '/',
+        key: 'dashboard'
+    },
     { 
         label: 'Manajemen', 
         icon: 'pi pi-briefcase',
+        key: 'manajemen',
         items: [
-            { label: 'Produk', icon: 'pi pi-box', route: '/product' }, // Pastikan route benar (/products bukan /product jika file indexnya di folder products)
+            { label: 'Produk', icon: 'pi pi-box', route: '/product' },
         ]
     },
     { 
         label: 'Transaksi', 
         icon: 'pi pi-wallet',
+        key: 'transaksi',
         items: [
-            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/transaction/sale' }, // Sesuaikan route
-            { label: 'Pembelian', icon: 'pi pi-truck', route: '/transaction/buy' }, // Sesuaikan route
+            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/transaction/sale' },
+            { label: 'Pembelian', icon: 'pi pi-truck', route: '/transaction/buy' },
         ]
     },
     { 
         label: 'Laporan', 
         icon: 'pi pi-chart-bar',
+        key: 'laporan',
         items: [
-            { label: 'Laporan Penjualan', icon: 'pi pi-file-pdf', route: '/report/sale' },
-            { label: 'Laporan Pembelian', icon: 'pi pi-shopping-bag', route: '/report/buy' },
-            { label: 'Grafik Analisis', icon: 'pi pi-chart-line', route: '/report/graph' },
+            { label: 'Penjualan', icon: 'pi pi-file-pdf', route: '/report/sale' },
+            { label: 'Pembelian', icon: 'pi pi-shopping-bag', route: '/report/buy' },
+            { label: 'Analisis', icon: 'pi pi-chart-line', route: '/report/graph' },
         ]
     }
 ]);
 
-// --- MENU PROFIL ---
+// --- PROFILE MENU ---
 const profileMenu = ref();
 const profileItems = ref([
     { 
         label: 'Pengaturan', 
         icon: 'pi pi-cog', 
-        command: () => {
-            router.push('/setting');
-        }
+        command: () => router.push('/setting')
     },
     { separator: true },
     { 
         label: 'Logout', 
         icon: 'pi pi-sign-out', 
         class: 'text-red-600', 
-        command: async () => { 
-            await authService.logout();
-        }
+        command: async () => await authService.logout()
     }
 ]);
 
 const toggleProfile = (event) => {
     profileMenu.value.toggle(event);
 };
+
+// --- DESKTOP NAVIGATION LOGIC (CLICK TO OPEN) ---
+const desktopMenuRef = ref();
+const desktopSubItems = ref([]);
+
+const toggleDesktopSubMenu = (event, item) => {
+    // Mapping item data ke format PrimeVue Menu
+    desktopSubItems.value = item.items.map(sub => ({
+        label: sub.label,
+        icon: sub.icon,
+        command: () => router.push(sub.route)
+    }));
+    desktopMenuRef.value.toggle(event);
+};
+
+// --- MOBILE NAVIGATION LOGIC ---
+const mobileMenuRef = ref();
+const mobileSubItems = ref([]); 
+
+const onMobileNavClick = (event, item) => {
+    if (item.route && !item.items) {
+        router.push(item.route);
+    } else if (item.items) {
+        mobileSubItems.value = item.items.map(sub => ({
+            label: sub.label,
+            icon: sub.icon,
+            command: () => router.push(sub.route)
+        }));
+        mobileMenuRef.value.toggle(event);
+    }
+};
+
+// Cek Active Route (untuk highlight parent menu)
+const isRouteActive = (item) => {
+    if (item.route) return route.path === item.route;
+    if (item.items) return item.items.some(sub => route.path.startsWith(sub.route));
+    return false;
+};
 </script>
 
 <template>
     <div class="min-h-screen flex flex-col bg-surface-50 dark:bg-surface-950 transition-colors duration-300">
         
-        <header class="sticky top-0 z-50 shadow-lg bg-primary-600 dark:bg-primary-900 border-b border-primary-700 px-4">
-            <Menubar :model="items" class="!bg-transparent !border-none px-4 lg:px-8 h-16 !rounded-none">
+        <header class="sticky top-0 z-50 shadow-lg bg-primary-600 dark:bg-primary-900 border-b border-primary-700 px-2 md:px-4">
+            <div class="flex items-center h-16 w-full max-w-screen-2xl mx-auto">
                 
-                <template #start>
-                    <NuxtLink to="/" class="flex items-center gap-3 mr-8 group">
-                        <div class="w-9 h-9 bg-white text-primary-600 rounded-lg flex items-center justify-center font-black text-xl shadow-sm group-hover:scale-105 transition-transform">
-                            R
-                        </div>
-                        <div class="flex flex-col">
-                             <span class="text-lg font-bold text-white tracking-tight leading-none group-hover:text-blue-100 transition-colors">
-                                {{ storeName }}
-                            </span>
-                            <span class="text-[10px] text-blue-200 font-medium tracking-wide uppercase">
-                                POS System
-                            </span>
-                        </div>
-                    </NuxtLink>
-                </template>
-
-                <template #item="{ item, props, hasSubmenu, root }">
-                    <NuxtLink v-if="item.route && !hasSubmenu" v-slot="{ href, navigate, isActive }" :to="item.route" custom>
-                        <a :href="href" v-bind="props.action" @click="navigate" 
-                           :class="[
-                               'flex items-center px-3 py-2 rounded-md transition-all duration-200 font-medium text-sm',
-                               root && isActive ? 'bg-white/20 text-white shadow-sm' : '',
-                               root && !isActive ? 'text-blue-100 hover:bg-white/10 hover:text-white' : '',
-                               !root && isActive ? 'bg-primary-50 text-primary-700 font-semibold' : '', 
-                               !root && !isActive ? 'text-surface-700 dark:text-surface-200 hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-primary-600' : ''
-                           ]">
-                            <span :class="[item.icon, 'mr-2']" />
-                            <span>{{ item.label }}</span>
-                        </a>
-                    </NuxtLink>
-
-                    <a v-else :href="item.url" :target="item.target" v-bind="props.action" 
-                       :class="[
-                           'flex items-center px-3 py-2 rounded-md group cursor-pointer transition-all duration-200 font-medium text-sm',
-                           root ? 'text-blue-100 hover:bg-white/10 hover:text-white' : 
-                           'text-surface-700 hover:bg-surface-100 hover:text-primary-600'
-                       ]">
-                        <span :class="[item.icon, 'mr-2 transition-colors']" />
-                        <span class="transition-colors">{{ item.label }}</span>
-                        <span v-if="hasSubmenu" class="pi pi-angle-down ml-2 text-xs opacity-70" />
-                    </a>
-                </template>
-
-                <template #end>
-                    <div class="flex items-center gap-2 md:gap-3">
-                        <div class="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-white/10 rounded-full transition-colors ml-1"
-                             @click="toggleProfile"
-                             aria-haspopup="true" 
-                             aria-controls="profile_menu">
-                            
-                            <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-white !text-primary-600 font-bold border-2 border-primary-400/50" shape="circle" />
-                            <i class="pi pi-chevron-down text-blue-100 text-xs hidden sm:block"></i>
-                        </div>
-
-                        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-48" />
+                <NuxtLink to="/" class="flex items-center gap-3 group pl-2 shrink-0">
+                    <div class="w-9 h-9 bg-white text-primary-600 rounded-lg flex items-center justify-center font-black text-xl shadow-sm group-hover:scale-105 transition-transform">
+                        R
                     </div>
-                </template>
+                    <div class="flex flex-col">
+                        <span class="text-lg font-bold text-white tracking-tight leading-none group-hover:text-blue-100 transition-colors">
+                            {{ storeName }}
+                        </span>
+                        <span class="text-[10px] text-blue-200 font-medium tracking-wide uppercase">
+                            POS System
+                        </span>
+                    </div>
+                </NuxtLink>
 
-            </Menubar>
+                <div class="hidden md:flex items-center gap-1 ml-8">
+                    <template v-for="item in items" :key="item.label">
+                        
+                        <NuxtLink v-if="item.route && !item.items" :to="item.route" 
+                            class="px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                            :class="route.path === item.route ? 'bg-white/20 text-white shadow-sm' : 'text-blue-100 hover:bg-white/10 hover:text-white'">
+                            <i :class="item.icon"></i>
+                            <span>{{ item.label }}</span>
+                        </NuxtLink>
+
+                        <button v-else 
+                            @click="(e) => toggleDesktopSubMenu(e, item)"
+                            class="px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 outline-none focus:ring-2 focus:ring-white/20"
+                            :class="isRouteActive(item) ? 'bg-white/20 text-white' : 'text-blue-100 hover:bg-white/10 hover:text-white'"
+                            aria-haspopup="true">
+                            <i :class="item.icon"></i>
+                            <span>{{ item.label }}</span>
+                            <i class="pi pi-angle-down text-xs opacity-70 ml-0.5"></i>
+                        </button>
+
+                    </template>
+                </div>
+
+                <div class="flex-1"></div>
+
+                <div class="flex items-center gap-2 pr-2 shrink-0">
+                    <div class="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                         @click="toggleProfile" aria-haspopup="true" aria-controls="profile_menu">
+                         <span class="hidden md:block text-sm text-white font-medium mr-1">Halo, {{ authStore.user?.username || 'Admin' }}</span>
+                         <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-white !text-primary-600 font-bold border-2 border-primary-400/50" shape="circle" />
+                         <i class="pi pi-chevron-down text-blue-100 text-xs hidden sm:block"></i>
+                    </div>
+                </div>
+
+            </div>
         </header>
 
-        <main class="flex-1 container mx-auto p-4 lg:p-6 max-w-screen-2xl w-full animate-fade-in">
+        <main class="flex-1 container mx-auto p-4 lg:p-6 max-w-screen-2xl w-full animate-fade-in pb-24 md:pb-6">
             <NuxtPage />
         </main>
 
-        <footer class="bg-white dark:bg-surface-900 border-t border-surface-200 dark:border-surface-800 py-6 mt-auto">
+        <footer class="bg-white dark:bg-surface-900 border-t border-surface-200 dark:border-surface-800 py-6 mt-auto hidden md:block">
             <div class="container mx-auto px-4 text-center text-sm text-surface-500">
                 &copy; 2025 {{ storeName }}. <span class="text-primary-600 font-bold">Powered by RetailApp</span>.
             </div>
         </footer>
+
+        <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-900 border-t border-surface-200 dark:border-surface-800 z-50 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="flex justify-around items-center h-16">
+                <button v-for="item in items" :key="item.label"
+                    @click="(event) => onMobileNavClick(event, item)"
+                    class="flex flex-col items-center justify-center w-full h-full space-y-1 transition-all duration-200 active:scale-95"
+                    :class="isRouteActive(item) ? 'text-primary-600 dark:text-primary-400' : 'text-surface-500 dark:text-surface-400 hover:text-surface-900'">
+                    <div class="relative px-3 py-1 rounded-full" :class="isRouteActive(item) ? 'bg-primary-50 dark:bg-primary-900/30' : ''">
+                        <i :class="[item.icon, 'text-xl mb-0.5']"></i>
+                        <div v-if="item.items && isRouteActive(item)" class="absolute -top-0 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-surface-900"></div>
+                    </div>
+                    <span class="text-[10px] font-medium">{{ item.label }}</span>
+                </button>
+            </div>
+        </nav>
+
+        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-48" />
+        
+        <Menu ref="desktopMenuRef" :model="desktopSubItems" :popup="true" class="mt-2 w-48" />
+
+        <Menu ref="mobileMenuRef" :model="mobileSubItems" :popup="true" class="!w-48 !mb-2" />
+
     </div>
 </template>
 
 <style scoped>
-:deep(.p-menubar) { padding: 0; }
-:deep(.p-menubar-root-list) { z-index: 100; }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* Dropdown Menu Utama */
-:deep(.p-submenu-list) {
-    background-color: #ffffff !important;
-    border: 1px solid var(--p-surface-200) !important;
-    border-radius: 0.5rem !important;
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
-    padding: 0.5rem !important;
-    min-width: 180px !important;
-}
-
-/* Style Popup Menu Profil (Override Global) */
+/* Style konsisten untuk semua popup menu */
 :deep(.p-menu) {
-    background-color: #ffffff !important;
-    border: 1px solid var(--p-surface-200) !important;
-    color: var(--p-surface-700) !important;
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1) !important;
-    border-radius: 0.5rem !important;
-    z-index: 9999 !important; /* Pastikan di atas elemen lain */
-}
-
-/* Item link dalam menu */
-:deep(.p-menu .p-menuitem-link), :deep(.p-submenu-list .p-menuitem-link) {
-    padding: 0.75rem 1rem !important;
-    color: var(--p-surface-700) !important;
-    transition: all 0.2s !important;
-}
-
-/* Hover State */
-:deep(.p-menu .p-menuitem-link:hover), :deep(.p-submenu-list .p-menuitem-link:hover) {
-    background-color: var(--p-primary-50) !important;
-    color: var(--p-primary-600) !important;
-}
-
-/* Icon Style */
-:deep(.p-menu .p-menuitem-icon), :deep(.p-submenu-list .p-menuitem-icon) {
-    color: var(--p-surface-500);
-    margin-right: 0.75rem;
-}
-:deep(.p-menu .p-menuitem-link:hover .p-menuitem-icon), :deep(.p-submenu-list .p-menuitem-link:hover .p-menuitem-icon) {
-    color: var(--p-primary-600);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--surface-border);
+    z-index: 9999 !important;
 }
 </style>

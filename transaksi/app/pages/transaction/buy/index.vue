@@ -13,15 +13,18 @@ const filteredProducts = ref([]);
 const cart = ref([]);
 const searchQuery = ref('');
 const loading = ref(true);
+const processing = ref(false);
 const showCreateModal = ref(false);
 
+// State khusus Pembelian
 const purchaseInfo = reactive({
     supplier: '',
-    referenceNo: '', 
+    referenceNo: '',
     notes: ''
 });
 
 // --- COMPUTED ---
+
 const grandTotal = computed(() => {
     return cart.value.reduce((total, item) => {
         return total + (item.buyPrice * item.qty);
@@ -32,7 +35,10 @@ const canCheckout = computed(() => {
     return cart.value.length > 0 && grandTotal.value > 0;
 });
 
+const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
+
 // --- ACTIONS ---
+
 const onSearchKeydown = (event) => {
     if (event.key === 'Enter') handleSearch();
 };
@@ -44,7 +50,8 @@ const loadProducts = async () => {
         products.value = (data || []).map(p => ({
             ...p,
             prices: p.prices || p.price || [],
-            stock: p.stock || []
+            stock: p.stock || [],
+            units: p.units || []
         }));
         filteredProducts.value = products.value;
     } catch (error) {
@@ -60,13 +67,16 @@ const handleSearch = () => {
         filteredProducts.value = products.value;
         return;
     }
-    const exactMatch = products.value.find(p => p.units.some(u => u.barcode === query));
-    if (exactMatch) {
-        const matchedUnit = exactMatch.units.find(u => u.barcode === query);
-        addToCart(exactMatch, matchedUnit);
+
+    const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
+
+    if (exactProduct) {
+        const matchedUnit = exactProduct.units.find(u => u.barcode === query);
+        addToCart(exactProduct, matchedUnit);
+        
         searchQuery.value = ''; 
         filteredProducts.value = products.value; 
-        toast.add({ severity: 'success', summary: 'Scan', detail: `${exactMatch.name} ditambahkan`, life: 1500 });
+        toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name} ditambahkan`, life: 1500 });
     } else {
         filteredProducts.value = products.value.filter(p => 
             p.name.toLowerCase().includes(query) || 
@@ -80,8 +90,9 @@ const addToCart = (product, specificUnit = null) => {
     if (!selectedUnit) {
         selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
     }
+
     if (!selectedUnit) {
-        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk tidak memiliki satuan', life: 3000 });
+        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk error (tanpa satuan)', life: 3000 });
         return;
     }
 
@@ -95,19 +106,23 @@ const addToCart = (product, specificUnit = null) => {
             name: product.name,
             unitUuid: selectedUnit.uuid,
             unitName: selectedUnit.unitName,
-            barcode: selectedUnit.barcode,
             buyPrice: 0, 
             qty: 1,
-            availableUnits: product.units,
-            sellingPrice: product.prices.find(p => p.unitUuid === selectedUnit.uuid)?.price || 0
+            availableUnits: product.units
         });
+        
+        setTimeout(() => {
+            const cartEl = document.getElementById('cart-items-container');
+            if(cartEl) cartEl.scrollTop = cartEl.scrollHeight;
+        }, 50);
     }
 };
 
-const changeCartItemUnit = (item, newUnit) => {
+const changeCartItemUnit = (item, newUnitUuid) => {
+    const newUnit = item.availableUnits.find(u => u.uuid === newUnitUuid);
+    if (!newUnit) return;
     item.unitUuid = newUnit.uuid;
     item.unitName = newUnit.unitName;
-    item.barcode = newUnit.barcode;
 };
 
 const removeFromCart = (index) => {
@@ -119,14 +134,14 @@ const onProductCreated = async (newProduct) => {
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
     if (fullProduct) {
         addToCart(fullProduct);
-        toast.add({ severity: 'info', summary: 'Info', detail: 'Produk baru masuk keranjang', life: 3000 });
+        toast.add({ severity: 'info', summary: 'Info', detail: 'Produk baru masuk list pembelian', life: 3000 });
     }
 };
 
 const processPurchase = async () => {
     if (!canCheckout.value) return;
 
-    loading.value = true;
+    processing.value = true;
     try {
         const payload = {
             details: {
@@ -147,7 +162,8 @@ const processPurchase = async () => {
         });
 
         await journalService.createBuyTransaction(payload);
-        toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Stok berhasil ditambahkan', life: 3000 });
+        
+        toast.add({ severity: 'success', summary: 'Stok Masuk', detail: 'Data pembelian berhasil disimpan', life: 5000 });
         
         cart.value = [];
         purchaseInfo.supplier = '';
@@ -156,220 +172,310 @@ const processPurchase = async () => {
         await loadProducts(); 
 
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Transaksi gagal disimpan', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Transaksi gagal diproses', life: 3000 });
     } finally {
-        loading.value = false;
+        processing.value = false;
     }
 };
 
 const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+};
+
+const getStockColor = (qty) => {
+    if (qty <= 0) return 'bg-red-100 text-red-700 border-red-200';
+    if (qty < 10) return 'bg-orange-100 text-orange-700 border-orange-200';
+    return 'bg-emerald-100 text-emerald-700 border-emerald-200';
 };
 
 onMounted(() => {
     loadProducts();
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'F2') document.getElementById('search-input')?.focus();
+    });
 });
 
 definePageMeta({ layout: 'default' });
 </script>
 
 <template>
-    <div class="flex flex-col lg:flex-row h-[calc(100vh-5rem)] gap-3 p-2 overflow-hidden bg-surface-100 dark:bg-surface-950">
+    <div class="flex flex-col lg:flex-row h-[calc(100vh-5rem)] gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-950 font-sans">
         <Toast />
 
-        <div class="flex-1 flex flex-col bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 h-full overflow-hidden min-w-[350px]">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-blue-50/50 dark:bg-blue-900/10">
-                <div class="flex justify-between items-center mb-2">
-                    <div class="text-xs font-bold text-blue-600 uppercase tracking-wide flex items-center gap-1">
-                        <i class="pi pi-box"></i> Katalog Barang
+        <!-- KOLOM 1: KATALOG PRODUK -->
+        <div class="flex-1 flex flex-col bg-white dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
+            <!-- Header -->
+            <div class="p-4 border-b border-surface-100 dark:border-surface-800 flex flex-col gap-3 bg-surface-50/30">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-2.5 text-orange-600 dark:text-orange-400">
+                        <div class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shadow-sm">
+                            <i class="pi pi-download text-lg"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <h2 class="font-black text-sm uppercase tracking-wide leading-none">Stok Masuk</h2>
+                            <span class="text-[10px] text-surface-500 mt-1 font-medium">Pilih produk untuk restock</span>
+                        </div>
                     </div>
-                    <Button label="Baru" icon="pi pi-plus" size="small" class="!py-1 !px-2 !text-xs" @click="showCreateModal = true" />
+                    <Button label="Produk Baru" icon="pi pi-plus" size="small" outlined severity="warning" class="!text-[11px] !py-1.5 !px-3 !rounded-lg" @click="showCreateModal = true" />
                 </div>
                 
-                <IconField iconPosition="left" class="w-full">
-                    <InputIcon class="pi pi-search text-primary-500 text-xs" />
-                    <InputText 
+                <div class="relative group">
+                    <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm group-focus-within:text-orange-500 transition-colors"></i>
+                    <input 
+                        id="search-input"
                         v-model="searchQuery" 
-                        placeholder="Scan Barcode / Cari Nama..." 
-                        class="w-full !text-sm !h-9 !rounded-lg" 
+                        type="text"
+                        placeholder="Cari nama produk atau scan barcode... (F2)" 
+                        class="w-full pl-9 pr-4 py-2.5 text-xs font-medium bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition-all shadow-sm"
                         @keydown="onSearchKeydown" 
-                        @input="handleSearch" 
+                        @input="handleSearch"
+                        autocomplete="off"
                     />
-                </IconField>
+                </div>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-2 bg-surface-50 dark:bg-surface-950 scrollbar-hide">
-                <div v-if="filteredProducts.length > 0" class="grid grid-cols-2 xl:grid-cols-3 gap-2">
+            <!-- Grid Produk -->
+            <div class="flex-1 overflow-y-auto p-4 bg-surface-50 dark:bg-surface-950 scrollbar-thin">
+                <div v-if="loading" class="flex justify-center py-20">
+                    <ProgressSpinner style="width: 35px; height: 35px" strokeWidth="4" />
+                </div>
+
+                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                     <div 
                         v-for="prod in filteredProducts" 
                         :key="prod.uuid"
                         @click="addToCart(prod)"
-                        class="cursor-pointer bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 p-3 rounded-xl hover:border-blue-500 hover:shadow-md transition-all group relative overflow-hidden"
+                        class="group relative bg-white dark:bg-surface-800 rounded-xl border border-surface-200 dark:border-surface-700 p-3 cursor-pointer hover:border-orange-400 dark:hover:border-orange-600 hover:shadow-md transition-all duration-200 flex flex-col justify-between h-[110px] select-none"
                     >
-                         <div class="absolute left-0 top-0 bottom-0 w-1 transition-colors" 
-                            :class="(prod.stock?.reduce((a,b)=>a+b.qty,0)||0) > 0 ? 'bg-green-500' : 'bg-red-500'"></div>
+                        <!-- Hover indicator -->
+                        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="pi pi-plus-circle text-orange-500 text-lg bg-white rounded-full"></i>
+                        </div>
 
-                        <div class="pl-2">
-                            <div class="font-bold text-surface-800 dark:text-surface-100 text-xs mb-2 line-clamp-2 h-8 leading-snug group-hover:text-blue-600 transition-colors">
-                                {{ prod.name }}
-                            </div>
-                            <div class="flex justify-between items-end">
-                                <div class="flex flex-col">
-                                    <span class="text-[9px] text-surface-400 uppercase font-bold tracking-wider">Sisa Stok</span>
-                                    <span class="text-xs font-black" :class="(prod.stock?.reduce((a,b)=>a+b.qty,0)||0) > 0 ? 'text-surface-700 dark:text-surface-200' : 'text-red-500'">
-                                        {{ prod.stock?.reduce((a,b)=>a+b.qty,0) || 0 }}
-                                    </span>
+                        <div class="flex flex-col h-full justify-between">
+                            <div>
+                                <div class="font-bold text-xs text-surface-700 dark:text-surface-200 leading-snug line-clamp-2 mb-2 group-hover:text-orange-700 transition-colors">
+                                    {{ prod.name }}
                                 </div>
-                                <div class="text-[10px] text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded-full font-bold flex items-center gap-1 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                    <i class="pi pi-plus text-[9px]"></i> Tambah
+                            </div>
+                            
+                            <div class="flex items-end justify-between">
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-[10px] text-surface-400 font-medium">Stok Saat Ini</span>
+                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border w-fit" 
+                                          :class="getStockColor(prod.stock?.reduce((a,b)=>a+b.qty,0)||0)">
+                                        {{ prod.stock?.reduce((a,b)=>a+b.qty,0) || 0 }} {{ (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.unitName }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-3">
-                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center">
-                         <i class="pi pi-search text-3xl opacity-30"></i>
+                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-3 opacity-70">
+                    <div class="w-16 h-16 bg-surface-200 dark:bg-surface-800 rounded-full flex items-center justify-center">
+                         <i class="pi pi-search text-2xl"></i>
                     </div>
-                    <p class="text-xs">Produk tidak ditemukan</p>
-                    <Button label="Buat Produk Baru" size="small" outlined @click="showCreateModal = true" />
+                    <span class="text-xs font-medium">Produk tidak ditemukan</span>
                 </div>
             </div>
         </div>
 
-        <div class="w-[450px] flex flex-col bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 flex justify-between items-center bg-orange-50/50 dark:bg-orange-900/10 shrink-0">
+        <!-- KOLOM 2: KERANJANG (Fixed Width ~380px) -->
+        <div class="w-[380px] flex flex-col bg-white dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
+            <div class="p-3 px-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50">
                 <div class="flex items-center gap-2">
-                    <i class="pi pi-truck text-orange-500"></i>
-                    <span class="text-xs font-bold text-orange-700 uppercase tracking-wide">Barang Masuk</span>
-                    <span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">{{ cart.length }}</span>
+                    <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                        <span class="font-bold text-xs">{{ totalItems }}</span>
+                    </div>
+                    <span class="font-bold text-sm text-surface-700">Item Masuk</span>
                 </div>
-                <Button label="Reset" icon="pi pi-trash" text severity="danger" size="small" @click="cart = []" :disabled="cart.length === 0" class="!text-xs !p-1 !h-7" />
+                <Button 
+                    v-if="cart.length > 0" 
+                    icon="pi pi-trash" 
+                    text 
+                    rounded
+                    severity="danger" 
+                    size="small" 
+                    class="!w-8 !h-8" 
+                    v-tooltip.bottom="'Kosongkan'"
+                    @click="cart = []" 
+                />
             </div>
-            
-            <div class="flex-1 overflow-y-auto p-0 scrollbar-thin bg-surface-50/30">
-                <table class="w-full text-xs border-collapse">
-                    <thead class="bg-surface-100 dark:bg-surface-800 sticky top-0 z-10 text-[10px] uppercase text-surface-500 font-bold tracking-wider border-b border-surface-200 dark:border-surface-700">
-                        <tr>
-                            <th class="p-2 text-left pl-3 w-[45%]">Item</th>
-                            <th class="p-2 text-center w-14">Qty</th>
-                            <th class="p-2 text-right w-[30%]">Harga Beli</th>
-                            <th class="p-2 w-6"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-surface-100 dark:divide-surface-800">
-                        <tr v-for="(item, index) in cart" :key="index + '_' + item.unitUuid" class="hover:bg-white dark:hover:bg-surface-800 transition-colors group">
-                            <td class="p-2 pl-3 align-top">
-                                <div class="font-bold text-surface-800 dark:text-surface-100 mb-1 line-clamp-1" :title="item.name">{{ item.name }}</div>
+
+            <div id="cart-items-container" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30">
+                <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 gap-2 opacity-60">
+                    <i class="pi pi-inbox text-4xl mb-1"></i>
+                    <p class="text-xs font-medium">Belum ada barang dipilih</p>
+                </div>
+
+                <div v-for="(item, index) in cart" :key="index + '_' + item.unitUuid" 
+                     class="bg-white dark:bg-surface-800 rounded-xl border border-surface-200 dark:border-surface-700 p-3 shadow-sm hover:border-orange-300 dark:hover:border-orange-700 transition-all group relative">
+                    
+                    <!-- Delete Button -->
+                    <button class="absolute -top-2 -right-2 w-6 h-6 bg-white dark:bg-surface-700 border border-surface-200 dark:border-surface-600 rounded-full shadow-sm flex items-center justify-center text-surface-400 hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100 z-10 transform scale-90 group-hover:scale-100" 
+                            @click="removeFromCart(index)">
+                        <i class="pi pi-times text-[10px] font-bold"></i>
+                    </button>
+
+                    <!-- Product Name -->
+                    <div class="mb-3 pr-4">
+                        <div class="font-bold text-xs text-surface-800 dark:text-surface-100 leading-relaxed">
+                            {{ item.name }}
+                        </div>
+                    </div>
+
+                    <div class="flex items-end gap-3">
+                        <!-- Left: Unit & Price Controls -->
+                        <div class="flex-1 flex flex-col gap-2">
+                            <!-- Unit Selection (Pill Style) -->
+                            <div class="inline-flex items-center h-7 bg-surface-100 dark:bg-surface-900 rounded-lg px-2 border border-surface-200 dark:border-surface-700 w-fit">
+                                <span class="text-[9px] text-surface-400 font-bold uppercase mr-2 tracking-wide">Satuan</span>
                                 <Dropdown 
-                                    v-model="item.unitUuid"
+                                    v-model="item.unitUuid" 
                                     :options="item.availableUnits" 
-                                    optionLabel="unitName"
-                                    optionValue="uuid"
-                                    class="w-full !h-6 text-[10px] !p-0 !border-surface-200 bg-white"
-                                    @change="(e) => {
-                                        const unit = item.availableUnits.find(u => u.uuid === e.value);
-                                        changeCartItemUnit(item, unit);
+                                    optionLabel="unitName" 
+                                    optionValue="uuid" 
+                                    class="custom-pill-dropdown !h-5 !border-none !bg-transparent !shadow-none min-w-[60px] !items-center"
+                                    :pt="{ 
+                                        input: { class: '!p-0 !text-[11px] font-bold text-surface-700 dark:text-surface-200' }, 
+                                        trigger: { class: '!w-4 text-surface-400' }
                                     }"
+                                    @change="(e) => changeCartItemUnit(item, e.value)"
                                 />
-                            </td>
-                            <td class="p-2 align-top text-center">
-                                <div class="flex flex-col items-center gap-0.5 bg-surface-100 dark:bg-surface-800 rounded py-0.5">
-                                    <i class="pi pi-chevron-up text-[9px] cursor-pointer hover:text-primary-500 text-surface-400 p-0.5" @click="item.qty++"></i>
-                                    <span class="text-xs font-bold text-surface-800">{{ item.qty }}</span>
-                                    <i class="pi pi-chevron-down text-[9px] cursor-pointer hover:text-red-500 text-surface-400 p-0.5" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"></i>
-                                </div>
-                            </td>
-                            <td class="p-2 align-top text-right">
+                            </div>
+
+                            <!-- Buy Price Input (Integrated) -->
+                            <div class="flex items-center border border-surface-200 dark:border-surface-700 rounded-lg bg-white dark:bg-surface-900 h-8 px-2 focus-within:ring-1 focus-within:ring-orange-400 focus-within:border-orange-400 transition-all">
+                                <span class="text-[10px] font-bold text-surface-400 mr-1">@Rp</span>
                                 <InputNumber 
                                     v-model="item.buyPrice" 
                                     mode="currency" currency="IDR" locale="id-ID" 
-                                    class="w-full !h-7"
-                                    inputClass="!text-[11px] !py-1 !px-1 !text-right font-bold text-orange-600 bg-transparent border-none focus:ring-0"
-                                    placeholder="Rp 0"
-                                    :min="0"
+                                    class="w-full !h-full" 
+                                    inputClass="!text-xs !h-full !p-0 !font-mono !font-bold !text-orange-600 !bg-transparent !border-none focus:!ring-0"
+                                    placeholder="0" :min="0" 
                                 />
-                                <div class="text-[9px] text-surface-400 mt-1 font-mono border-t border-dashed border-surface-200 pt-1">
-                                    {{ formatCurrency(item.buyPrice * item.qty) }}
-                                </div>
-                            </td>
-                            <td class="p-2 text-center align-middle">
-                                <button class="text-surface-300 hover:text-red-500 transition-colors p-1" @click="removeFromCart(index)">
-                                    <i class="pi pi-times text-[10px]"></i>
+                            </div>
+                        </div>
+
+                        <!-- Right: Qty & Subtotal -->
+                        <div class="flex flex-col items-end justify-between h-full gap-2">
+                            <!-- Qty Stepper (Compact) -->
+                            <div class="flex items-center bg-surface-100 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700 h-7 shadow-sm">
+                                <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:bg-white hover:text-red-500 rounded-l-lg transition-colors" 
+                                        @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
+                                    <i class="pi pi-minus text-[9px] font-bold"></i>
                                 </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <div v-if="cart.length === 0" class="h-40 flex flex-col items-center justify-center text-surface-300 gap-2">
-                    <i class="pi pi-truck text-4xl opacity-20"></i>
-                    <p class="text-xs font-medium text-surface-400">Belum ada barang masuk</p>
+                                <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800" min="1" />
+                                <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:bg-white hover:text-primary-600 rounded-r-lg transition-colors" 
+                                        @click="item.qty++">
+                                    <i class="pi pi-plus text-[9px] font-bold"></i>
+                                </button>
+                            </div>
+
+                            <!-- Subtotal -->
+                            <div class="text-[11px] font-black text-surface-700 dark:text-surface-300 bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded">
+                                {{ formatCurrency(item.buyPrice * item.qty) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Footer -->
+            <div class="p-4 bg-surface-50 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 shrink-0">
+                <div class="flex justify-between items-end">
+                    <span class="text-xs text-surface-500 uppercase font-bold tracking-wider mb-1">Total Estimasi</span>
+                    <span class="text-2xl font-black text-surface-900 dark:text-white tracking-tight">{{ formatCurrency(grandTotal) }}</span>
                 </div>
             </div>
         </div>
 
-        <div class="w-[300px] flex flex-col bg-surface-50 dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
-            
-            <div class="p-4 bg-white dark:bg-surface-900 m-2 rounded-xl border border-surface-100 shadow-sm">
-                <span class="text-[10px] text-surface-500 uppercase tracking-widest font-bold block mb-1">Total Belanja</span>
-                <span class="text-2xl font-mono font-black text-orange-600 tracking-tight block">{{ formatCurrency(grandTotal) }}</span>
-            </div>
+        <!-- KOLOM 3: FORM INFORMASI (Fixed Width ~320px) -->
+        <div class="w-[320px] flex flex-col bg-white dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
+             <div class="p-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50/30">
+                 <h2 class="font-bold text-sm text-surface-700 flex items-center gap-2">
+                     <div class="w-6 h-6 rounded-md bg-orange-100 flex items-center justify-center">
+                        <i class="pi pi-file-edit text-orange-600 text-xs"></i>
+                     </div>
+                     Data Dokumen
+                 </h2>
+             </div>
+             
+             <div class="p-4 flex-1 flex flex-col gap-5 overflow-y-auto scrollbar-thin">
+                 <!-- Supplier -->
+                 <div class="space-y-1">
+                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Supplier</label>
+                     <div class="relative">
+                        <i class="pi pi-building text-surface-400 text-xs absolute top-1/2 -translate-y-1/2 left-3"></i>
+                        <InputText v-model="purchaseInfo.supplier" placeholder="Nama Supplier / Toko" 
+                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!bg-white transition-colors" />
+                     </div>
+                 </div>
 
-            <div class="flex-1 p-4 flex flex-col gap-4 overflow-y-auto scrollbar-thin">
-                <div class="text-[10px] font-bold text-surface-400 uppercase tracking-widest border-b border-surface-200 pb-1 mb-1">Data Supplier</div>
-                
-                <div>
-                    <label class="text-[10px] text-surface-600 font-bold block mb-1">Nama Supplier</label>
-                    <div class="relative">
-                        <i class="pi pi-user absolute left-2 top-2.5 text-surface-400 text-xs"></i>
-                        <InputText v-model="purchaseInfo.supplier" placeholder="Contoh: Toko Makmur" class="w-full !text-xs !py-2 !pl-7 !rounded-lg" />
-                    </div>
-                </div>
+                 <!-- Referensi -->
+                 <div class="space-y-1">
+                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">No. Referensi</label>
+                     <div class="relative">
+                        <i class="pi pi-hashtag text-surface-400 text-xs absolute top-1/2 -translate-y-1/2 left-3"></i>
+                        <InputText v-model="purchaseInfo.referenceNo" placeholder="No. Faktur / Nota" 
+                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!bg-white transition-colors" />
+                     </div>
+                 </div>
 
-                <div>
-                    <label class="text-[10px] text-surface-600 font-bold block mb-1">No. Nota / Referensi</label>
-                    <div class="relative">
-                        <i class="pi pi-receipt absolute left-2 top-2.5 text-surface-400 text-xs"></i>
-                        <InputText v-model="purchaseInfo.referenceNo" placeholder="INV-2025-..." class="w-full !text-xs !py-2 !pl-7 !rounded-lg" />
-                    </div>
-                </div>
+                 <!-- Catatan -->
+                 <div class="space-y-1 flex-1 flex flex-col">
+                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Catatan</label>
+                     <Textarea v-model="purchaseInfo.notes" placeholder="Keterangan tambahan..." 
+                        class="w-full !text-xs !rounded-xl !bg-surface-50 focus:!bg-white transition-colors !p-3 resize-none flex-1 border-surface-200" />
+                 </div>
+             </div>
 
-                <div>
-                    <label class="text-[10px] text-surface-600 font-bold block mb-1">Catatan</label>
-                    <Textarea v-model="purchaseInfo.notes" rows="3" class="w-full !text-xs !rounded-lg" placeholder="Keterangan tambahan..." />
-                </div>
-            </div>
-
-            <div class="p-3 border-t border-surface-200 bg-white dark:bg-surface-900 shrink-0">
+             <!-- Footer Action -->
+             <div class="p-4 bg-surface-150 relative z-10">
                 <Button 
-                    label="SIMPAN DATA" 
-                    icon="pi pi-save" 
-                    severity="warning"
-                    class="w-full font-bold py-3 text-sm shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 transition-all transform active:scale-95" 
+                    label="SIMPAN STOK" 
+                    icon="pi pi-check-circle" 
+                    iconPos="right"
+                    class="w-full font-bold !py-3 !text-sm !bg-orange-500 hover:!bg-orange-600 !border-none !text-white shadow-lg shadow-orange-900/30 active:translate-y-0.5 transition-all !rounded-xl" 
                     :disabled="!canCheckout" 
-                    :loading="loading"
-                    @click="processPurchase"
-                    rounded
+                    :loading="processing" 
+                    @click="processPurchase" 
                 />
-            </div>
+             </div>
         </div>
 
-        <ProductCreateModal 
-            v-model:visible="showCreateModal" 
-            @product-created="onProductCreated" 
-        />
-
+        <ProductCreateModal v-model:visible="showCreateModal" @product-created="onProductCreated" />
     </div>
 </template>
 
 <style scoped>
+/* Scrollbar Halus */
 .scrollbar-thin::-webkit-scrollbar { width: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+/* Override PrimeVue Dropdown agar rapih */
+:deep(.custom-pill-dropdown .p-dropdown-label) {
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+:deep(.custom-pill-dropdown .p-dropdown-trigger) {
+    width: 16px !important;
+    padding: 0 !important;
+}
+
+/* Remove Input Number Arrows/Spinner */
+:deep(.p-inputnumber-input) {
+    appearance: none;
+    -moz-appearance: textfield;
+}
+:deep(.p-inputnumber-input)::-webkit-inner-spin-button, 
+:deep(.p-inputnumber-input)::-webkit-outer-spin-button { 
+    -webkit-appearance: none;
+    margin: 0; 
+}
 </style>

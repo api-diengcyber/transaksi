@@ -17,6 +17,9 @@ export class ProductShelveEntity {
     @PrimaryGeneratedColumn('uuid')
     uuid: string;
 
+    @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+    qty: number;
+
     @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
     createdAt: Date;
 
@@ -42,7 +45,7 @@ export class ProductShelveEntity {
     @Column({ name: 'shelve_uuid', type: 'uuid', nullable: true })
     shelveUuid?: string;
   
-    @ManyToOne(() => ProductEntity, (product) => product.price, {
+    @ManyToOne(() => ProductEntity, (product) => product.shelve, { // Pastikan relasi di ProductEntity bernama 'shelve'
       onDelete: 'CASCADE',
     })
     @JoinColumn({ name: 'product_uuid' })

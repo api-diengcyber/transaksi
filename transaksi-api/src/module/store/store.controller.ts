@@ -1,12 +1,13 @@
 import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
 import { StoreService } from './store.service';
 import { InstallStoreDto } from './dto/install-store.dto';
+import { SaveSettingDto } from './dto/save-setting.dto'; // Import DTO baru
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 
 @ApiTags('Store')
-@Controller('store')
+@Controller('store') // Base route: /store
 export class StoreController {
   constructor(private readonly storeService: StoreService) {}
 
@@ -19,11 +20,23 @@ export class StoreController {
   @Get('my-store')
   @UseGuards(AtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get list of user stores with active status based on Token' })
+  @ApiOperation({ summary: 'Get list of user stores' })
   async getMyStores(
     @GetUser('sub') userId: string,
     @GetUser('storeUuid') activeStoreUuid: string
   ) {
     return this.storeService.getMyStores(userId, activeStoreUuid);
+  }
+
+  @Post('save-setting')
+  @UseGuards(AtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update store profile and settings' })
+  async saveSettings(
+    @GetUser('sub') userId: string,
+    @GetUser('storeUuid') storeUuid: string,
+    @Body() dto: SaveSettingDto
+  ) {
+    return this.storeService.saveSettings(userId, storeUuid, dto);
   }
 }

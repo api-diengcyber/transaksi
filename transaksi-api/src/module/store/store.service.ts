@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { InstallStoreDto } from './dto/install-store.dto';
@@ -6,6 +6,7 @@ import { StoreEntity } from 'src/common/entities/store/store.entity';
 import { StoreSettingEntity } from 'src/common/entities/store_setting/store_setting.entity';
 import { UserEntity } from 'src/common/entities/user/user.entity';
 import { AuthService } from 'src/module/auth/auth.service';
+import { SaveSettingDto } from './dto/save-setting.dto';
 
 @Injectable()
 export class StoreService {
@@ -100,6 +101,56 @@ export class StoreService {
         settings: formattedSettings,
         isActive: isActive, 
       };
+    });
+  }
+  
+  async saveSettings(userId: string, storeUuid: string, dto: SaveSettingDto) {
+    if (!storeUuid) throw new BadRequestException('Active Store ID not found in token');
+
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Cek Keberadaan Toko
+      const store = await manager.findOne(StoreEntity, { where: { uuid: storeUuid } });
+      if (!store) throw new NotFoundException('Store not found');
+
+      // 2. Update Profil Toko (Root Fields)
+      // Hanya update jika field dikirim di DTO
+      if (dto.name) store.name = dto.name;
+      if (dto.address) store.address = dto.address;
+      if (dto.phone) store.phone = dto.phone;
+      
+      store.updatedBy = userId;
+      await manager.save(store);
+
+      // 3. Update Settings (Key-Value)
+      if (dto.settings && dto.settings.length > 0) {
+        for (const item of dto.settings) {
+          // Cari apakah setting key ini sudah ada di toko ini?
+          const existingSetting = await manager.findOne(StoreSettingEntity, {
+            where: {
+              storeUuid: storeUuid,
+              key: item.key,
+            },
+          });
+
+          if (existingSetting) {
+            // UPDATE existing
+            existingSetting.value = item.value;
+            existingSetting.updatedBy = userId;
+            await manager.save(existingSetting);
+          } else {
+            // CREATE new
+            const newSetting = manager.create(StoreSettingEntity, {
+              storeUuid: storeUuid,
+              key: item.key,
+              value: item.value,
+              createdBy: userId,
+            });
+            await manager.save(newSetting);
+          }
+        }
+      }
+
+      return { message: 'Settings updated successfully' };
     });
   }
 }
