@@ -11,6 +11,7 @@ import { ProductStockEntity } from '../product_stock/product_stock.entity';
 import { ProductUnitEntity } from '../product_unit/product_unit.entity';
 import { ProductPriceEntity } from '../product_price/product_price.entity';
 import { ProductShelveEntity } from '../product_shelve/product_shelve.entity';
+import { ProductCategoryEntity } from '../product_category/product_category.entity';
 
 @Entity('product')
 export class ProductEntity {
@@ -55,4 +56,7 @@ export class ProductEntity {
 
   @OneToMany(() => ProductShelveEntity, (shelve) => shelve.product)
   shelve: ProductShelveEntity[];
+
+  @OneToMany(() => ProductCategoryEntity, (category) => category.product)
+  category: ProductCategoryEntity[];
 }

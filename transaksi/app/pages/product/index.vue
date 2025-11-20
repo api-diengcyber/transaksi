@@ -5,6 +5,7 @@ import { useConfirm } from 'primevue/useconfirm';
 
 // Import Komponen List yang sudah dipisah
 import ProductList from '~/components/ProductList.vue';
+import CategoryList from '~/components/CategoryList.vue';
 import ShelveList from '~/components/ShelveList.vue';
 
 // Import Modal Form
@@ -16,6 +17,7 @@ const activeMainTab = ref('products'); // 'products' | 'shelves'
 
 // Refs ke Child Components (agar bisa panggil method refresh() mereka)
 const productListRef = ref(null);
+const categoryListRef = ref(null);
 const shelfListRef = ref(null);
 
 // State Modal Produk
@@ -69,51 +71,75 @@ definePageMeta({ layout: 'default' });
 
 <template>
     <div class="animate-fade-in p-4 min-h-screen bg-surface-50 dark:bg-surface-950">
-        <!-- Komponen Global PrimeVue -->
         <Toast />
         <ConfirmDialog />
 
         <!-- NAVIGATION TABS -->
         <div class="flex items-center gap-4 mb-6 border-b border-surface-200 dark:border-surface-700 pb-1">
+
+            <!-- Master Produk -->
             <button 
                 @click="activeMainTab = 'products'"
-                class="px-4 py-2 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 outline-none focus:outline-none"
-                :class="activeMainTab === 'products' ? 'border-primary-500 text-primary-600 bg-primary-50/50 rounded-t-lg' : 'border-transparent text-surface-500 hover:text-surface-700'"
+                class="px-4 py-2 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2"
+                :class="activeMainTab === 'products'
+                    ? 'border-primary-500 text-primary-600 bg-primary-50/50 rounded-t-lg'
+                    : 'border-transparent text-surface-500 hover:text-surface-700'"
             >
                 <i class="pi pi-box"></i> Master Produk
             </button>
-            
+
+            <!-- Kategori (NEW TAB) -->
+            <button 
+                @click="activeMainTab = 'categories'"
+                class="px-4 py-2 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2"
+                :class="activeMainTab === 'categories'
+                    ? 'border-primary-500 text-primary-600 bg-primary-50/50 rounded-t-lg'
+                    : 'border-transparent text-surface-500 hover:text-surface-700'"
+            >
+                <i class="pi pi-tags"></i> Kategori
+            </button>
+
+            <!-- Lokasi Rak -->
             <button 
                 @click="activeMainTab = 'shelves'"
-                class="px-4 py-2 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2 outline-none focus:outline-none"
-                :class="activeMainTab === 'shelves' ? 'border-primary-500 text-primary-600 bg-primary-50/50 rounded-t-lg' : 'border-transparent text-surface-500 hover:text-surface-700'"
+                class="px-4 py-2 text-sm font-bold border-b-2 transition-all duration-200 flex items-center gap-2"
+                :class="activeMainTab === 'shelves'
+                    ? 'border-primary-500 text-primary-600 bg-primary-50/50 rounded-t-lg'
+                    : 'border-transparent text-surface-500 hover:text-surface-700'"
             >
                 <i class="pi pi-th-large"></i> Lokasi Rak / Shelves
             </button>
+
         </div>
 
+
         <!-- CONTENT AREA -->
-        <!-- Menggunakan KeepAlive agar saat pindah tab, data tidak perlu diload ulang dari nol -->
         <div class="content-area">
             <KeepAlive>
+            
                 <ProductList 
                     v-if="activeMainTab === 'products'"
                     ref="productListRef"
                     @create="openCreateProduct" 
                     @edit="openEditProduct"
                 />
-            
+
+                <CategoryList
+                    v-else-if="activeMainTab === 'categories'"
+                    ref="categoryListRef"
+                />
+
                 <ShelveList 
                     v-else-if="activeMainTab === 'shelves'"
                     ref="shelfListRef"
                     @create="openCreateShelve" 
                     @edit="openEditShelve"
                 />
+
             </KeepAlive>
         </div>
 
-        <!-- GLOBAL MODALS -->
-        <!-- Modal Produk -->
+
         <ProductCreateModal 
             v-model:visible="showModal" 
             :productUuid="selectedProductUuid" 
@@ -121,12 +147,12 @@ definePageMeta({ layout: 'default' });
             @product-updated="onProductSaved" 
         />
 
-        <!-- Modal Rak -->
         <ShelveCreateModal 
             v-model:visible="showShelveModal" 
             :shelfData="selectedShelveData" 
             @saved="onShelveSaved" 
         />
+
     </div>
 </template>
 

@@ -462,8 +462,7 @@ definePageMeta({ layout: 'default' });
                 <div class="bg-surface-800/50 p-3 rounded-xl border border-surface-700/50">
                     <label class="text-[10px] text-surface-400 uppercase font-bold mb-2 block">Uang Diterima (Cash)</label>
                     <InputNumber v-model="payment.amount" mode="currency" currency="IDR" locale="id-ID" 
-                        class="w-full" placeholder="0" :min="0" autofocus
-                        inputClass="!bg-surface-800 !border-surface-600 !text-white !text-lg !font-bold !text-center !rounded-lg focus:!border-primary-500 focus:!ring-0" />
+                        class="w-full" placeholder="0" :min="0" autofocus inputClass="!text-base !py-2.5 !px-3 !font-mono !rounded-lg !bg-surface-800 !text-white !border-surface-700 focus:!border-primary-500 focus:!ring-1 !h-11" />
                     
                     <div class="grid grid-cols-2 gap-2 mt-2">
                          <button class="py-1.5 bg-surface-700 hover:bg-surface-600 rounded text-[10px] font-bold transition-colors border border-surface-600" @click="payment.amount = grandTotal">Uang Pas</button>
