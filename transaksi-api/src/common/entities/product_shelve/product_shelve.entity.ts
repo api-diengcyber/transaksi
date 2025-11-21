@@ -11,6 +11,7 @@ import {
 import { ProductEntity } from '../product/product.entity';
 import { ProductUnitEntity } from '../product_unit/product_unit.entity';
 import { ShelveEntity } from '../shelve/shelve.entity';
+import { UserEntity } from '../user/user.entity';
 
 @Entity('product_shelve')
 export class ProductShelveEntity {
@@ -31,12 +32,24 @@ export class ProductShelveEntity {
 
     @Column({ name: 'created_by', type: 'uuid', nullable: true })
     createdBy?: string;
+          
+    @ManyToOne(() => UserEntity)
+    @JoinColumn({ name: 'created_by' })
+    createdByUser?: UserEntity;
 
     @Column({ name: 'updated_by', type: 'uuid', nullable: true })
     updatedBy?: string;
+            
+    @ManyToOne(() => UserEntity)
+    @JoinColumn({ name: 'updated_by' })
+    updatedByUser?: UserEntity;
 
     @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
     deletedBy?: string;
+            
+    @ManyToOne(() => UserEntity)
+    @JoinColumn({ name: 'deleted_by' })
+    deletedByUser?: UserEntity;
     
     @ManyToOne(() => ShelveEntity, { onDelete: 'SET NULL' })
     @JoinColumn({ name: 'shelve_uuid' })

@@ -1,11 +1,11 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { DataSource, EntityManager, In, Repository } from 'typeorm'; // Import DataSource
+import { DataSource, EntityManager, In, Repository } from 'typeorm'; 
 import { ProductEntity } from 'src/common/entities/product/product.entity';
 import { ProductStockEntity } from 'src/common/entities/product_stock/product_stock.entity';
 import { ProductUnitEntity, ProductUnitEnum } from 'src/common/entities/product_unit/product_unit.entity';
 import { ProductPriceEntity } from 'src/common/entities/product_price/product_price.entity';
-import { CreateProductDto } from './dto/product.dto';
 import { ProductShelveEntity } from 'src/common/entities/product_shelve/product_shelve.entity';
+import { ProductCategoryEntity } from 'src/common/entities/product_category/product_category.entity'; // Pastikan import ini ada
 
 @Injectable()
 export class ProductService {
@@ -22,13 +22,32 @@ export class ProductService {
     private readonly dataSource: DataSource, 
   ) {}
   
+  // ==========================================================
+  // CREATE PRODUCT (With Multi Category & Shelves)
+  // ==========================================================
   async create(payload: any) {
-    const { name, userId, units, prices, stocks } = payload;
+    const { name, userId, units, prices, stocks, categoryUuids, storeUuid } = payload;
 
     return await this.dataSource.transaction(async (manager) => {
       // 1. Create Product
-      const newProduct = manager.create(ProductEntity, { name, createdBy: userId });
+      const newProduct = manager.create(ProductEntity, { 
+        name, 
+        createdBy: userId,
+        storeUuid: storeUuid 
+      });
       const savedProduct = await manager.save(newProduct);
+
+      // [BARU] 1.1. Process Categories (Multi Category)
+      if (categoryUuids && Array.isArray(categoryUuids) && categoryUuids.length > 0) {
+        for (const catUuid of categoryUuids) {
+            const prodCat = manager.create(ProductCategoryEntity, {
+                productUuid: savedProduct.uuid,
+                categoryUuid: catUuid,
+                createdBy: userId
+            });
+            await manager.save(prodCat);
+        }
+      }
 
       let defaultUnitUuid: string | null = null;
       let defaultPriceUuid: string | null = null;
@@ -85,16 +104,9 @@ export class ProductService {
           }
 
           // B. Simpan Alokasi Rak (Allocations)
-          // Frontend mengirim structure: { unitTempId, qty, allocations: [{ shelfUuid, qty }] }
           if (realUnitUuid && s.allocations && s.allocations.length > 0) {
              for (const alloc of s.allocations) {
                 if (alloc.shelfUuid && alloc.qty > 0) {
-                  console.log('Creating shelf allocation:', {
-                    productUuid: savedProduct.uuid,
-                    unitUuid: realUnitUuid,
-                    shelveUuid: alloc.shelfUuid,
-                    qty: alloc.qty
-                  });
                     const newShelfAlloc = manager.create(ProductShelveEntity, {
                         productUuid: savedProduct.uuid,
                         unitUuid: realUnitUuid,
@@ -118,9 +130,11 @@ export class ProductService {
     });
   }
 
-  // --- FULL UPDATE (Fitur Edit Produk) ---
-  async update(uuid: string, payload: any, userId: string) {
-    const { name, units, prices } = payload;
+  // ==========================================================
+  // UPDATE PRODUCT (Fix: Category & Shelves)
+  // ==========================================================
+  async update(uuid: string, payload: any, userId: string, storeUuid?: string) {
+    const { name, units, prices, stocks, categoryUuids } = payload;
 
     return await this.dataSource.transaction(async (manager) => {
         const product = await manager.findOne(ProductEntity, { where: { uuid } });
@@ -131,24 +145,42 @@ export class ProductService {
         product.updatedBy = userId;
         await manager.save(product);
 
-        // 2. Sinkronisasi Satuan (Units)
-        // Kita butuh Map untuk Harga nanti
-        const unitMap = new Map<any, string>(); // key: uuid lama ATAU tempId baru -> value: uuid asli
+        // [BARU] 1.1 Update Categories (Full Sync: Delete All -> Insert New)
+        if (categoryUuids !== undefined) { // Hanya jika field dikirim
+            // Hapus mapping kategori lama
+            await manager.delete(ProductCategoryEntity, { productUuid: uuid });
+            
+            // Insert baru
+            if (Array.isArray(categoryUuids) && categoryUuids.length > 0) {
+                for (const catUuid of categoryUuids) {
+                    const prodCat = manager.create(ProductCategoryEntity, {
+                        productUuid: uuid,
+                        categoryUuid: catUuid,
+                        createdBy: userId // Sebaiknya updatedBy, tapi tabel join biasanya immutable, jadi recreate ok
+                    });
+                    await manager.save(prodCat);
+                }
+            }
+        }
 
-        // Ambil unit yang ada di DB
+        // 2. Sinkronisasi Satuan (Units)
+        const unitMap = new Map<any, string>(); 
+
         const existingUnits = await manager.find(ProductUnitEntity, { where: { productUuid: uuid } });
         const payloadUnitIds = units.filter(u => u.uuid).map(u => u.uuid);
 
-        // A. Hapus Unit yang tidak ada di payload (Hard delete jika tidak ada stok, atau Soft delete)
-        // Untuk aman, kita pakai Soft Delete atau throw error jika ada stok (disini saya pakai delete simpel)
+        // A. Delete Units
         const unitsToDelete = existingUnits.filter(u => !payloadUnitIds.includes(u.uuid));
         if (unitsToDelete.length > 0) {
-            // Cek ketergantungan dulu jika perlu, atau langsung delete
-            await manager.delete(ProductPriceEntity, { unitUuid: In(unitsToDelete.map(u => u.uuid)) }); // Hapus harga terkait
-            await manager.delete(ProductUnitEntity, { uuid: In(unitsToDelete.map(u => u.uuid)) });
+            const idsToDelete = unitsToDelete.map(u => u.uuid);
+            // Hapus dependensi anak dulu
+            await manager.delete(ProductPriceEntity, { unitUuid: In(idsToDelete) }); 
+            await manager.delete(ProductStockEntity, { unitUuid: In(idsToDelete) });
+            await manager.delete(ProductShelveEntity, { unitUuid: In(idsToDelete) });
+            await manager.delete(ProductUnitEntity, { uuid: In(idsToDelete) });
         }
 
-        // B. Upsert (Update or Insert) Unit
+        // B. Upsert Units
         for (const u of units) {
             let unitUuid = u.uuid;
             
@@ -173,35 +205,29 @@ export class ProductService {
                 unitUuid = saved.uuid;
             }
             
-            // Simpan mapping untuk referensi harga (baik pake uuid lama atau tempId dari frontend)
+            // Mapping untuk harga & rak
             if (u.tempId) unitMap.set(u.tempId, unitUuid);
             if (u.uuid) unitMap.set(u.uuid, unitUuid);
 
-            // Set Default
-            if (u.isDefault) {
-                product.defaultUnitUuid = unitUuid;
-            }
+            if (u.isDefault) product.defaultUnitUuid = unitUuid;
         }
 
         // 3. Sinkronisasi Harga (Prices)
         const existingPrices = await manager.find(ProductPriceEntity, { where: { productUuid: uuid } });
         const payloadPriceIds = prices.filter(p => p.uuid).map(p => p.uuid);
 
-        // A. Hapus Harga yang hilang
+        // A. Delete Prices
         const pricesToDelete = existingPrices.filter(p => !payloadPriceIds.includes(p.uuid));
         if (pricesToDelete.length > 0) {
             await manager.delete(ProductPriceEntity, { uuid: In(pricesToDelete.map(p => p.uuid)) });
         }
 
-        // B. Upsert Harga
+        // B. Upsert Prices
         for (const p of prices) {
-            // Cari unitUuid yang benar (karena unit mungkin baru dibuat)
-            // Frontend mungkin kirim unitTempId (untuk baru) atau unitUuid (untuk lama)
-            const targetUnitUuid = unitMap.get(p.unitTempId) || unitMap.get(p.unitUuid);
+            const targetUnitUuid = unitMap.get(p.unitTempId) || unitMap.get(p.unitUuid); // Handle tempId atau uuid lama
 
             if (targetUnitUuid) {
                 if (p.uuid) {
-                    // Update
                     await manager.update(ProductPriceEntity, { uuid: p.uuid }, {
                         name: p.name,
                         price: p.price,
@@ -209,7 +235,6 @@ export class ProductService {
                         updatedBy: userId
                     });
                 } else {
-                    // Create
                     const newPrice = manager.create(ProductPriceEntity, {
                         productUuid: uuid,
                         unitUuid: targetUnitUuid,
@@ -223,35 +248,106 @@ export class ProductService {
             }
         }
 
-        await manager.save(product); // Save default flags
+        // [PERBAIKAN ERROR] 4. Sinkronisasi Rak (Shelves Allocation)
+        // Kita update konfigurasi penempatan rak. 
+        // (Catatan: Stok Qty biasanya tidak diupdate disini, tapi alokasi rak iya)
+        if (stocks && stocks.length > 0) {
+            for (const s of stocks) {
+                // Cari Unit UUID yang valid (bisa jadi unit baru dibuat di loop atas)
+                // Frontend kirim unitTempId (untuk baru) atau unitUuid (untuk lama, biasanya kita map juga)
+                // Asumsi frontend konsisten mengirim key pengenal unit di `unitTempId` meskipun itu uuid lama
+                const realUnitUuid = unitMap.get(s.unitTempId);
+
+                if (realUnitUuid && s.allocations) {
+                    // Strategi: Hapus semua alokasi rak lama untuk unit ini, lalu insert baru.
+                    // Ini paling aman untuk menghindari kerumitan diffing.
+                    await manager.delete(ProductShelveEntity, { 
+                        productUuid: uuid, 
+                        unitUuid: realUnitUuid 
+                    });
+
+                    // Insert alokasi baru
+                    for (const alloc of s.allocations) {
+                        if (alloc.shelfUuid && alloc.qty > 0) {
+                            const newShelfAlloc = manager.create(ProductShelveEntity, {
+                                productUuid: uuid,
+                                unitUuid: realUnitUuid,
+                                shelveUuid: alloc.shelfUuid,
+                                qty: alloc.qty,
+                                createdBy: userId // atau updatedBy logic
+                            });
+                            await manager.save(newShelfAlloc);
+                        }
+                    }
+                }
+            }
+        }
+
+        await manager.save(product); 
         
-        return await this.findOne(uuid);
+        return await this.findOne(uuid, storeUuid); 
     });
   }
 
-  async findAll() {
+  async findAll(storeUuid?: string) {
     return await this.productRepo.find({
+      where: { storeUuid: storeUuid },
       order: { createdAt: 'DESC' },
-      relations: ['units', 'stock', 'price', 'shelve', 'shelve.shelve'], // Include data rak
+      relations: ['units', 'stock', 'price', 'shelve', 'shelve.shelve', 'productCategory', 'productCategory.category'], 
     });
   }
 
-  async findOne(uuid: string) {
-    return await this.productRepo.findOne({
-      where: { uuid },
-      relations: ['units', 'stock', 'price', 'shelve', 'shelve.shelve'],
+  async findOne(uuid: string, storeUuid?: string) {
+    return await this.productRepo.findOne({where: { 
+        uuid: uuid,
+        storeUuid: storeUuid
+      },
+      relations: ['units', 'stock', 'price', 'shelve', 'shelve.shelve', 'productCategory', 'productCategory.category'],
     });
+  }
+  
+  // ... method helper lainnya
+  async softDelete(uuid: string, userId: string, storeUuid?: string) {
+    const data = await this.findOne(uuid, storeUuid);
+    if (!data) return null;
+    data.deletedBy = userId;
+    await this.productRepo.save(data);
+    return this.productRepo.softDelete(uuid);
+  }
+
+  async restore(uuid: string) {
+    return this.productRepo.restore(uuid);
+  }
+  
+  async removeUnit(unitUuid: string) {
+    const unit = await this.unitRepo.findOne({ 
+        where: { uuid: unitUuid },
+        relations: ['product'] 
+    });
+
+    if (!unit) throw new BadRequestException('Unit not found');
+    if (unit.product.defaultUnitUuid === unitUuid) {
+        throw new BadRequestException('Tidak bisa menghapus Satuan Default. Ubah default terlebih dahulu.');
+    }
+    
+    await this.priceRepo.delete({ unitUuid: unitUuid });
+    await this.stokRepo.delete({ unitUuid: unitUuid });
+    // Hapus data rak terkait unit ini
+    await this.dataSource.getRepository(ProductShelveEntity).delete({ unitUuid: unitUuid });
+    
+    return await this.unitRepo.remove(unit);
   }
 
   async addUnit(
-      productUuid: string, 
-      unitName: ProductUnitEnum, 
-      unitMultiplier: number, 
-      barcode: string,
-      setAsDefault = false, 
-      userId?: string
+    productUuid: string, 
+    unitName: ProductUnitEnum, 
+    unitMultiplier: number, 
+    barcode: string,
+    setAsDefault = false, 
+    userId: string,
+    storeUuid?: string
   ) {
-    const product = await this.findOne(productUuid);
+    const product = await this.findOne(productUuid, storeUuid);
     if (!product) throw new BadRequestException('Product not found');
     
     const newUnit = this.unitRepo.create({ 
@@ -270,20 +366,16 @@ export class ProductService {
     return savedUnit;
   }
 
-  async softDelete(uuid: string, userId?: string) {
-    const data = await this.findOne(uuid);
-    if (!data) return null;
-    data.deletedBy = userId;
-    await this.productRepo.save(data);
-    return this.productRepo.softDelete(uuid);
-  }
-
-  async restore(uuid: string) {
-    return this.productRepo.restore(uuid);
-  }
-
-  async addPrice(productUuid: string, price: number, unitUuid: string, name = 'Umum', setAsDefault = false, userId?: string) {
-    const product = await this.findOne(productUuid);
+  async addPrice(
+    productUuid: string, 
+    price: number, 
+    unitUuid: string, 
+    name = 'Umum', 
+    setAsDefault = false, 
+    userId: string, 
+    storeUuid?: string
+  ) {
+    const product = await this.findOne(productUuid, storeUuid);
     if (!product) throw new BadRequestException('Product not found');
 
     const newPrice = this.priceRepo.create({ productUuid, price, unitUuid, name, createdBy: userId });
@@ -297,13 +389,17 @@ export class ProductService {
   }
 
   async addStock(productUuid: string, qty: number, userId?: string) {
-     // Logic stok sederhana (tanpa unit specific di endpoint ini, bisa dikembangkan)
     const stok = this.stokRepo.create({ productUuid, qty, createdBy: userId });
     return await this.stokRepo.save(stok);
   }
 
-  async reduceStock(productUuid: string, qty: number, userId?: string) {
-    const product = await this.findOne(productUuid);
+  async reduceStock(
+    productUuid: string, 
+    qty: number, 
+    userId: string, 
+    storeUuid?: string
+  ) {
+    const product = await this.findOne(productUuid, storeUuid);
     if (!product) throw new BadRequestException('Product not found');
     
     // Hitung total stok global produk
@@ -312,23 +408,6 @@ export class ProductService {
     
     const stok = this.stokRepo.create({ productUuid, qty: -Math.abs(qty), createdBy: userId });
     return await this.stokRepo.save(stok);
-  }
-
-  async removeUnit(unitUuid: string) {
-    const unit = await this.unitRepo.findOne({ 
-        where: { uuid: unitUuid },
-        relations: ['product'] 
-    });
-
-    if (!unit) throw new BadRequestException('Unit not found');
-    if (unit.product.defaultUnitUuid === unitUuid) {
-        throw new BadRequestException('Tidak bisa menghapus Satuan Default. Ubah default terlebih dahulu.');
-    }
-    
-    await this.priceRepo.delete({ unitUuid: unitUuid });
-    await this.stokRepo.delete({ unitUuid: unitUuid });
-    
-    return await this.unitRepo.remove(unit);
   }
   
   async processSaleStock(

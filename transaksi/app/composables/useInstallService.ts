@@ -1,8 +1,7 @@
 // composables/useInstallService.ts
 export const useInstallService = () => {
     const config = useRuntimeConfig();
-    // Ambil URL dari config atau fallback ke localhost
-    const API_BASE = config.public.apiBase || 'http://localhost:3000'; 
+    const API_BASE = config.public.apiBase; 
 
     /**
      * Mengirim data instalasi toko & user sekaligus.

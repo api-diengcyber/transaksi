@@ -3,7 +3,6 @@
 export const useProductService = () => {
     const config = useRuntimeConfig();
     const API_BASE = `${config.public.apiBase}/product`;
-    const DEFAULT_USER_ID = 'user-uuid-123-mock';
 
     const getAllProducts = async () => {
         return await useApi(`${API_BASE}/find-all`, { method: 'GET' });
@@ -16,21 +15,20 @@ export const useProductService = () => {
     const createProduct = async (payload: any) => {
         return await useApi(`${API_BASE}/create`, {
             method: 'POST',
-            body: { ...payload, userId: DEFAULT_USER_ID }
+            body: { ...payload }
         });
     };
 
-    const updateProduct = async (uuid: string, name: string) => {
+    const updateProduct = async (uuid: string, payload: any) => {
         return await useApi(`${API_BASE}/update/${uuid}`, {
             method: 'PUT',
-            body: { name, userId: DEFAULT_USER_ID }
+            body: { ...payload }
         });
     };
 
     const deleteProduct = async (uuid: string) => {
         return await useApi(`${API_BASE}/delete/${uuid}`, {
             method: 'DELETE',
-            body: { userId: DEFAULT_USER_ID }
         });
     };
 
@@ -39,35 +37,34 @@ export const useProductService = () => {
     const addStock = async (uuid: string, qty: number) => {
         return await useApi(`${API_BASE}/add-stok/${uuid}`, {
             method: 'POST',
-            body: { qty, userId: DEFAULT_USER_ID }
+            body: { qty }
         });
     };
 
     const reduceStock = async (uuid: string, qty: number) => {
         return await useApi(`${API_BASE}/reduce-stok/${uuid}`, {
             method: 'POST',
-            body: { qty, userId: DEFAULT_USER_ID }
+            body: { qty }
         });
     };
 
     const addPrice = async (uuid: string, payload: any) => {
         return await useApi(`${API_BASE}/add-price/${uuid}`, {
             method: 'POST',
-            body: { ...payload, userId: DEFAULT_USER_ID }
+            body: { ...payload }
         });
     };
     
     const addUnit = async (uuid: string, payload: any) => {
         return await useApi(`${API_BASE}/add-unit/${uuid}`, {
             method: 'POST',
-            body: { ...payload, userId: DEFAULT_USER_ID }
+            body: { ...payload }
         });
     };
     
     const deleteUnit = async (unitUuid: string) => {
         return await useApi(`${API_BASE}/delete-unit/${unitUuid}`, {
             method: 'DELETE',
-            body: { userId: DEFAULT_USER_ID }
         });
     };
 

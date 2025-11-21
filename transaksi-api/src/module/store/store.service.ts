@@ -7,6 +7,7 @@ import { StoreSettingEntity } from 'src/common/entities/store_setting/store_sett
 import { UserEntity } from 'src/common/entities/user/user.entity';
 import { AuthService } from 'src/module/auth/auth.service';
 import { SaveSettingDto } from './dto/save-setting.dto';
+import { RoleEntity, Role } from 'src/common/entities/role/role.entity';
 
 @Injectable()
 export class StoreService {
@@ -15,15 +16,26 @@ export class StoreService {
     private readonly authService: AuthService,
   ) {}
 
-  // ... installStore TETAP SAMA ...
   async installStore(dto: InstallStoreDto) {
     return await this.dataSource.transaction(async (manager) => {
+      // 0. PREPARE ROLE ADMIN
+      let adminRole = await manager.findOne(RoleEntity, {
+        where: { role: Role.ADMIN },
+      });
+      if (!adminRole) {
+        adminRole = manager.create(RoleEntity, {
+          role: Role.ADMIN,
+        });
+        await manager.save(adminRole);
+      }
+
       // 1. CREATE USER
       const hashedPassword = await bcrypt.hash(dto.password, 10);
       const newUser = manager.create(UserEntity, {
         username: dto.username,
         password: hashedPassword,
         email: dto.email,
+        roles: [adminRole]
       });
       const savedUser = await manager.save(newUser);
 

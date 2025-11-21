@@ -1,7 +1,8 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import ShelveCreateModal from '~/components/ShelveCreateModal.vue';
+// Pastikan path import ini benar sesuai struktur project Anda
+import ShelveCreateModal from '~/components/ShelveCreateModal.vue'; 
 
 const props = defineProps({
     visible: Boolean,
@@ -10,8 +11,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'product-created', 'product-updated']);
 
+// [BARU] Inject Service Category & Product
 const productService = useProductService();
-const shelveService = useShelveService(); // Service Rak ditambahkan
+const shelveService = useShelveService();
+const categoryService = useCategoryService(); 
 const toast = useToast();
 
 const submitted = ref(false);
@@ -19,33 +22,44 @@ const loading = ref(false);
 const isEditMode = computed(() => !!props.productUuid);
 
 // State Data Utama
-const product = reactive({ name: '' });
+// [BARU] Tambahkan categoryUuids ke state product
+const product = reactive({ 
+    name: '', 
+    categoryUuids: [] 
+});
+
 const configUnits = ref([]); 
 const configPrices = ref([]);
 const configStocks = ref([]); 
 
-// State Modal Rak
+// State Options
 const showShelfModal = ref(false);
 const shelfOptions = ref([]); 
-
+const categoryOptions = ref([]); // [BARU] Options untuk MultiSelect
 const unitOptions = ['PCS', 'BOX', 'KG', 'LITER', 'PACK', 'CARTON', 'DUS', 'LUSIN'];
 
 // --- FETCH DATA UTILS ---
 
 const fetchShelves = async () => {
     try {
-        // Mengambil data Rak Real dari API
-        const data = await shelveService.getAllShelves();
+        const data = await shelveService.getAllShelves(); 
         shelfOptions.value = data || [];
-    } catch (e) {
-        console.error("Gagal mengambil data rak", e);
-        // Fallback opsional jika API gagal, agar UI tidak crash
-        shelfOptions.value = [];
-    }
+    } catch (e) { console.error(e); }
+};
+
+// [BARU] Fetch Data Kategori
+const fetchCategories = async () => {
+    try {
+        const data = await categoryService.getAllCategorys(); 
+        // Map ke format label/value untuk PrimeVue
+        categoryOptions.value = (data || []).map(c => ({
+            label: c.name,
+            value: c.uuid
+        }));
+    } catch (e) { console.error(e); }
 };
 
 const onShelveCreated = () => {
-    // Refresh dropdown rak setelah rak baru dibuat
     fetchShelves(); 
 };
 
@@ -53,16 +67,22 @@ const onShelveCreated = () => {
 const loadProductData = async (uuid) => {
     loading.value = true;
     try {
-        // 1. Ambil data dari Backend
-        // Pastikan method ini ada di productService (biasanya findOne atau getProduct)
         const data = await productService.getProduct(uuid); 
         
         if (!data) throw new Error("Data produk tidak ditemukan");
 
-        // 2. Isi Nama
+        // 1. Isi Nama
         product.name = data.name;
 
-        // 3. Mapping Units (Backend UUID -> Frontend)
+        // [BARU] 2. Isi Kategori
+        // Backend mengirim array 'productCategorys', kita ambil uuid kategorinya saja
+        if (data.productCategorys && Array.isArray(data.productCategorys)) {
+            product.categoryUuids = data.productCategorys.map(pc => pc.category?.uuid).filter(Boolean);
+        } else {
+            product.categoryUuids = [];
+        }
+
+        // 3. Mapping Units
         configUnits.value = data.units.map(u => ({
             uuid: u.uuid, 
             tempId: u.uuid, 
@@ -73,7 +93,9 @@ const loadProductData = async (uuid) => {
         }));
 
         // 4. Mapping Prices
-        configPrices.value = (data.price || []).map(p => ({
+        // Handle kemungkinan nama properti 'prices' atau 'price' dari backend
+        const pricesData = data.prices || data.price || [];
+        configPrices.value = pricesData.map(p => ({
             uuid: p.uuid,
             tempId: Date.now() + Math.random(),
             unitTempId: p.unitUuid,
@@ -85,19 +107,15 @@ const loadProductData = async (uuid) => {
         // 5. Mapping Stocks & Shelves
         syncStocks(); 
 
-        // Isi nilai stok dan alokasi rak
         configStocks.value.forEach(stockItem => {
+            // Cari stok di backend yg cocok dengan unit ini
             const backendStock = (data.stock || []).find(s => s.unitUuid === stockItem.unitTempId);
-            
             if (backendStock) {
                 stockItem.totalQty = Number(backendStock.qty);
             }
 
-            // Backend mengembalikan array product_shelve, filter berdasarkan unit
-            // Perhatikan structure response dari backend untuk 'shelve'
-            // Asumsi: data.shelve adalah array ProductShelveEntity yang di-join
+            // Cari alokasi rak di backend yg cocok dengan unit ini
             const backendShelves = (data.shelve || []).filter(s => s.unitUuid === stockItem.unitTempId);
-            
             if (backendShelves.length > 0) {
                 stockItem.allocations = backendShelves.map(bs => ({
                     shelfUuid: bs.shelveUuid,
@@ -118,6 +136,7 @@ const loadProductData = async (uuid) => {
 // --- HELPER INIT FORM (RESET) ---
 const initForm = () => {
     product.name = '';
+    product.categoryUuids = []; // [BARU] Reset kategori
     const tempId = Date.now();
     configUnits.value = [{ tempId, unitName: 'PCS', multiplier: 1, barcode: '', isDefault: true }];
     configPrices.value = [{ tempId: tempId + 1, unitTempId: tempId, name: 'Umum', price: 0, isDefault: true }];
@@ -128,7 +147,6 @@ const initForm = () => {
 const syncStocks = () => {
     const newStocks = configUnits.value.map(u => {
         const existing = configStocks.value.find(s => s.unitTempId === u.tempId);
-        
         return {
             unitTempId: u.tempId,
             unitName: u.unitName,
@@ -142,8 +160,8 @@ const syncStocks = () => {
 // --- WATCHERS ---
 watch(() => props.visible, async (val) => {
     if (val) {
-        // Selalu fetch rak terbaru saat modal dibuka
         fetchShelves();
+        fetchCategories(); // [BARU] Load master kategori
         
         submitted.value = false;
         if (isEditMode.value && props.productUuid) {
@@ -156,7 +174,7 @@ watch(() => props.visible, async (val) => {
 
 watch(configUnits, () => syncStocks(), { deep: true });
 
-// --- ACTION HANDLERS (Row Management) ---
+// --- ACTION HANDLERS ---
 const addUnitRow = () => {
     const newId = Date.now();
     configUnits.value.push({ tempId: newId, unitName: 'PCS', multiplier: 1, barcode: '', isDefault: configUnits.value.length === 0 });
@@ -181,7 +199,6 @@ const addPriceRow = () => {
 const removePriceRow = (index) => { configPrices.value.splice(index, 1); };
 const setPriceDefault = (index) => { configPrices.value.forEach((p, i) => p.isDefault = (i === index)); };
 
-// --- STOCK ALLOCATION HANDLERS ---
 const addStockAllocation = (stockIndex) => {
     configStocks.value[stockIndex].allocations.push({ shelfUuid: null, qty: 0 });
 };
@@ -198,6 +215,7 @@ const saveProduct = async () => {
     try {
         const payload = {
             name: product.name,
+            categoryUuids: product.categoryUuids, // [BARU] Kirim array kategori
             units: configUnits.value.map(u => ({
                 uuid: u.uuid, 
                 tempId: u.tempId, 
@@ -216,6 +234,7 @@ const saveProduct = async () => {
             stocks: configStocks.value.map(s => ({
                 unitTempId: s.unitTempId,
                 qty: s.totalQty,
+                // Filter alokasi yang kosong
                 allocations: s.allocations
                     .filter(a => a.qty > 0 && a.shelfUuid)
                     .map(a => ({
@@ -226,7 +245,7 @@ const saveProduct = async () => {
         };
 
         if (isEditMode.value) {
-            // Pastikan method updateProduct di service mensupport payload ini
+            // [FIX] Method updateProduct sudah diperbaiki untuk menerima payload lengkap
             await productService.updateProduct(props.productUuid, payload);
             toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil diperbarui', life: 3000 });
             emit('product-updated');
@@ -254,10 +273,27 @@ const closeDialog = () => emit('update:visible', false);
             class="p-fluid" :pt="{ content: { class: '!py-2' } }">
         
         <div class="bg-surface-50 dark:bg-surface-900 p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6">
-            <div class="field mb-0">
-                <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Nama Produk <span class="text-red-500">*</span></label>
-                <InputText v-model="product.name" placeholder="Contoh: Kopi Kapal Api" class="w-full !h-9 text-sm" :class="{'p-invalid': submitted && !product.name}" />
-                <small class="text-red-500 text-[10px] mt-1" v-if="submitted && !product.name">Wajib diisi.</small>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="field mb-0">
+                    <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Nama Produk <span class="text-red-500">*</span></label>
+                    <InputText v-model="product.name" placeholder="Contoh: Kopi Kapal Api" class="w-full !h-9 text-sm" :class="{'p-invalid': submitted && !product.name}" />
+                    <small class="text-red-500 text-[10px] mt-1" v-if="submitted && !product.name">Wajib diisi.</small>
+                </div>
+
+                <div class="field mb-0">
+                    <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Kategori (Multi)</label>
+                    <MultiSelect 
+                        v-model="product.categoryUuids" 
+                        :options="categoryOptions" 
+                        optionLabel="label" 
+                        optionValue="value" 
+                        placeholder="Pilih Kategori" 
+                        display="chip" 
+                        filter
+                        class="w-full !min-h-[2.25rem] text-xs compact-multiselect"
+                        :pt="{ label: { class: '!py-1.5 !px-2' } }"
+                    />
+                </div>
             </div>
         </div>
 
@@ -395,13 +431,7 @@ const closeDialog = () => emit('update:visible', false);
                                     <td class="p-1.5">
                                         <Dropdown v-model="alloc.shelfUuid" :options="shelfOptions" optionLabel="name" optionValue="uuid" 
                                             placeholder="Pilih Rak..." class="w-full !h-8 text-xs compact-input" 
-                                            :pt="{ input: { class: '!py-1 !px-2' }, panel: { class: '!text-xs' } }">
-                                            <template #empty>
-                                                <div class="p-2 text-center">
-                                                    Data kosong. <span class="text-primary cursor-pointer font-bold" @click="showShelfModal = true">Buat Rak</span>
-                                                </div>
-                                            </template>
-                                        </Dropdown>
+                                            :pt="{ input: { class: '!py-1 !px-2' }, panel: { class: '!text-xs' } }" />
                                     </td>
                                     <td class="p-1.5">
                                         <InputNumber v-model="alloc.qty" :min="0" :max="s.totalQty" class="w-full !h-8" inputClass="!text-xs !text-center !p-1 font-bold" placeholder="0" />
@@ -441,10 +471,13 @@ const closeDialog = () => emit('update:visible', false);
 .table-container {
     @apply border-t border-surface-100 dark:border-surface-700;
 }
-/* Paksa styling input PrimeVue agar compact */
+/* Compact styling */
 :deep(.compact-input .p-dropdown-label) {
     padding: 4px 8px !important;
     font-size: 0.75rem !important; 
+}
+:deep(.compact-multiselect .p-multiselect-label) {
+    padding: 4px 8px !important;
 }
 :deep(.p-inputnumber-input) {
     padding: 4px 8px !important;

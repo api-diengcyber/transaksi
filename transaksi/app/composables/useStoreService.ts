@@ -1,6 +1,6 @@
 export const useStoreService = () => {
     const config = useRuntimeConfig();
-    const API_BASE = config.public.apiBase || 'http://localhost:3000'; 
+    const API_BASE = config.public.apiBase; 
 
     const getMyStore = async () => {
         return await useApi('/store/my-store', {

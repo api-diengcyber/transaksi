@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { ProductEntity } from '../product/product.entity';
 import { CategoryEntity } from '../category/category.entity';
+import { UserEntity } from '../user/user.entity';
 
 @Entity('product_category')
 export class ProductCategoryEntity {
@@ -27,12 +28,24 @@ export class ProductCategoryEntity {
 
     @Column({ name: 'created_by', type: 'uuid', nullable: true })
     createdBy?: string;
+    
+    @ManyToOne(() => UserEntity)
+    @JoinColumn({ name: 'created_by' })
+    createdByUser?: UserEntity;
 
     @Column({ name: 'updated_by', type: 'uuid', nullable: true })
     updatedBy?: string;
+      
+    @ManyToOne(() => UserEntity)
+    @JoinColumn({ name: 'updated_by' })
+    updatedByUser?: UserEntity;
 
     @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
     deletedBy?: string;
+      
+    @ManyToOne(() => UserEntity)
+    @JoinColumn({ name: 'deleted_by' })
+    deletedByUser?: UserEntity;
 
     @ManyToOne(() => CategoryEntity, { onDelete: 'SET NULL' })
     @JoinColumn({ name: 'category_uuid' })
@@ -41,7 +54,7 @@ export class ProductCategoryEntity {
     @Column({ name: 'category_uuid', type: 'uuid', nullable: true })
     categoryUuid?: string;
 
-    @ManyToOne(() => ProductEntity, (product) => product.category, { // Pastikan relasi di ProductEntity bernama 'category'
+    @ManyToOne(() => ProductEntity, (product) => product.productCategory, {
         onDelete: 'CASCADE',
     })
     @JoinColumn({ name: 'product_uuid' })

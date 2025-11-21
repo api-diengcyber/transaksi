@@ -1,7 +1,7 @@
 // composables/useApi.ts
 export const useApi = async (url: string, options: any = {}) => {
     const config = useRuntimeConfig();
-    const API_BASE = config.public.apiBase || 'http://localhost:3000';
+    const API_BASE = config.public.apiBase;
     
     const accessToken = useCookie('accessToken');
     const refreshToken = useCookie('refreshToken');

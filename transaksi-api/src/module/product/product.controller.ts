@@ -24,24 +24,31 @@ export class ProductController {
 
   @Get('find-all')
   @ApiOperation({ summary: 'Get all products' })
-  async findAll() {
-    return this.productService.findAll();
+  async findAll(@GetUser('storeUuid') storeUuid: string) {
+    return this.productService.findAll(storeUuid);
   }
 
   @Get(':uuid')
   @ApiOperation({ summary: 'Get product detail' })
-  async findOne(@Param('uuid') uuid: string) {
-    return this.productService.findOne(uuid);
+  async findOne(
+    @Param('uuid') uuid: string,
+    @GetUser('storeUuid') storeUuid: string
+  ) {
+    return this.productService.findOne(uuid, storeUuid);
   }
 
   @Post('create')
   @ApiOperation({ summary: 'Create product with units, prices, and stocks' })
   @ApiBody({
-    // Hapus userId dari contoh Swagger agar frontend tidak bingung
     schema: {
       type: 'object',
       properties: {
         name: { type: 'string', example: 'Kopi Kapal Api' },
+        categoryUuids: { // Tambahkan ke Swagger Documentation
+            type: 'array',
+            items: { type: 'string', format: 'uuid' },
+            example: ['cat-uuid-1', 'cat-uuid-2']
+        },
         units: {
           type: 'array',
           items: {
@@ -83,20 +90,21 @@ export class ProductController {
   })
   async create(
     @Body() body: any,
-    @GetUser('sub') userId: string 
+    @GetUser('sub') userId: string,
+    @GetUser('storeUuid') storeUuid: string
   ) {
-    // Inject userId ke dalam payload service
-    return this.productService.create({ ...body, userId });
+    return this.productService.create({ ...body, userId, storeUuid });
   }
 
   @Put('update/:uuid')
   @ApiOperation({ summary: 'Update product name only' })
   async update(
     @Param('uuid') uuid: string,
-    @Body() body: { name: string }, 
-    @GetUser('sub') userId: string 
+    @Body() body: any, 
+    @GetUser('sub') userId: string ,
+    @GetUser('storeUuid') storeUuid: string
   ) {
-    return this.productService.update(uuid, body.name, userId);
+    return this.productService.update(uuid, body, userId, storeUuid);
   }
 
   @Post('add-unit/:productUuid')
@@ -109,7 +117,8 @@ export class ProductController {
         barcode: string; 
         setAsDefault?: boolean; 
     },
-    @GetUser('sub') userId: string
+    @GetUser('sub') userId: string,
+    @GetUser('storeUuid') storeUuid: string
   ) {
     return this.productService.addUnit(
       productUuid,
@@ -118,6 +127,7 @@ export class ProductController {
       body.barcode,
       body.setAsDefault,
       userId,
+      storeUuid,
     );
   }
 
@@ -126,15 +136,17 @@ export class ProductController {
   async addPrice(
     @Param('productUuid') productUuid: string, 
     @Body() body: { price: number; name: string; unitUuid: string; setAsDefault?: boolean },
-    @GetUser('sub') userId: string
+    @GetUser('sub') userId: string,
+    @GetUser('storeUuid') storeUuid: string
   ) {
     return this.productService.addPrice(
       productUuid,
       body.price,
       body.unitUuid,
-      body.name, // Nama harga (Umum, Grosir)
+      body.name,
       body.setAsDefault ?? false,
       userId,
+      storeUuid,
     );
   }
   
@@ -151,10 +163,10 @@ export class ProductController {
   @Delete('delete/:uuid')
   async delete(
     @Param('uuid') uuid: string, 
-    @GetUser('sub') userId: string
+    @GetUser('sub') userId: string,
+    @GetUser('storeUuid') storeUuid: string
   ) {
-    // Kirim userId untuk mencatat "deletedBy" (Soft Delete)
-    return this.productService.softDelete(uuid, userId);
+    return this.productService.softDelete(uuid, userId, storeUuid);
   }
 
   @Post('restore/:uuid')

@@ -6,6 +6,7 @@ import { userProvider } from 'src/common/entities/user/user.provider';
 import { AtStrategy } from 'src/common/strategies/at.strategy';
 import { RtStrategy } from 'src/common/strategies/rt.strategy';
 import { AuthService } from './auth.service';
+import { roleProvider } from 'src/common/entities/role/role.provider';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AuthService } from './auth.service';
     AtStrategy, 
     RtStrategy,
     ...userProvider,
+    ...roleProvider,
   ],
   exports: [AuthService],
 })

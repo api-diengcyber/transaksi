@@ -53,57 +53,7 @@ Dokumentasi interaktif untuk seluruh endpoint Master Data, Produk, Kategori, Tra
   // ============================
   //     CUSTOM SWAGGER UI
   // ============================
-  SwaggerModule.setup('docs', app, document, {
-    customSiteTitle: 'Transaksi API Docs',
-    customfavIcon:
-      'https://cdn-icons-png.flaticon.com/512/3144/3144456.png',
-
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'none', // collapse all endpoints
-      displayRequestDuration: true,
-      filter: true, // add search bar
-      tryItOutEnabled: true,
-      syntaxHighlight: {
-        activate: true,
-        theme: 'monokai',
-      },
-      tagsSorter: 'alpha',
-      operationsSorter: 'method',
-    },
-
-    customCss: `
-      body {
-      }
-      .swagger-ui .topbar {
-      }
-      .swagger-ui .topbar-wrapper img {
-        content: url('https://cdn-icons-png.flaticon.com/512/3144/3144456.png');
-        width: 40px;
-        height: 40px;
-      }
-      .swagger-ui .topbar-wrapper {
-        color: #e2e8f0 !important;
-        font-weight: bold;
-      }
-      .swagger-ui .info {
-        padding: 20px;
-        border-radius: 10px;
-      }
-      .swagger-ui .info h1 {
-        color: #38bdf8 !important;
-      }
-      .swagger-ui .model-box {
-      }
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #475569;
-        border-radius: 10px;
-      }
-    `,
-  });
+  SwaggerModule.setup('docs', app, document);
 
   await app.listen(process.env.PORT ?? 3000);
 }

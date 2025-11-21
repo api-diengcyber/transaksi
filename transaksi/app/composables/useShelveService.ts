@@ -1,7 +1,7 @@
 export const useShelveService = () => {
     const config = useRuntimeConfig();
     // Sesuaikan BASE_URL dengan alamat backend NestJS kamu (misal: http://localhost:3000)
-    const API_URL = config.public.apiBaseUrl || 'http://localhost:3000'; 
+    const API_URL = config.public.apiBaseUrl; 
 
     const getAllShelves = async () => {
         return await useApi('/shelve/find-all');

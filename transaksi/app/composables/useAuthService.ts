@@ -3,7 +3,7 @@ import { useAuthStore } from '~/stores/auth.store';
 
 export const useAuthService = () => {
     const config = useRuntimeConfig();
-    const API_BASE = config.public.apiBase || 'http://localhost:3000';
+    const API_BASE = config.public.apiBase;
     
     const authStore = useAuthStore();
     const router = useRouter();

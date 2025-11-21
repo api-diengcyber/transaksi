@@ -1,91 +1,153 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
-const emit = defineEmits(['create', 'edit']);
-
+// Service (Pastikan composable useCategoryService sudah dibuat sesuai instruksi sebelumnya)
 const categoryService = useCategoryService();
 const toast = useToast();
 const confirm = useConfirm();
 
-// --- STATE ---
-const categorys = ref([]);
+// --- STATE DATA ---
+const categories = ref([]);
 const loading = ref(false);
 
-// --- STATE MODAL DETAIL ---
+// --- STATE MODAL FORM (CREATE/EDIT) ---
+const showFormModal = ref(false);
+const formLoading = ref(false);
+const isEditMode = ref(false);
+const selectedCategoryUuid = ref(null);
+
+const form = ref({
+    name: '',
+    parentUuid: null
+});
+
+// --- STATE MODAL DETAIL (VIEW) ---
 const showDetailModal = ref(false);
-const selectedShelf = ref(null);
+const selectedCategory = ref(null);
 const detailLoading = ref(false);
 
-// --- ACTIONS ---
+// --- COMPUTED ---
+// Opsi Parent untuk Dropdown: Filter agar kategori tidak bisa menjadi parent bagi dirinya sendiri
+const parentOptions = computed(() => {
+    if (!isEditMode.value) return categories.value.map(c => ({ label: c.name, value: c.uuid }));
+    
+    return categories.value
+        .filter(c => c.uuid !== selectedCategoryUuid.value)
+        .map(c => ({
+            label: c.name,
+            value: c.uuid
+        }));
+});
 
-const fetchCategorys = async () => {
+// --- ACTIONS: FETCH ---
+const fetchCategories = async () => {
     loading.value = true;
     try {
         const data = await categoryService.getAllCategorys();
-        categorys.value = data || [];
+        categories.value = data || [];
     } catch (err) {
         console.error(err);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data rak', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data kategori', life: 3000 });
     } finally {
         loading.value = false;
     }
 };
 
-// Fungsi Buka Modal Detail
-const openDetail = async (shelf) => {
-    showDetailModal.value = true;
-    // Set data awal (nama/desc) agar UI tidak kosong saat loading
-    selectedShelf.value = { ...shelf, productCategorys: [] }; 
-    detailLoading.value = true;
+// --- ACTIONS: CREATE & EDIT ---
+const openCreateModal = () => {
+    isEditMode.value = false;
+    selectedCategoryUuid.value = null;
+    form.value = { name: '', parentUuid: null };
+    showFormModal.value = true;
+};
 
+const openEditModal = (event, category) => {
+    event.stopPropagation(); // Stop agar tidak membuka detail modal
+    isEditMode.value = true;
+    selectedCategoryUuid.value = category.uuid;
+    
+    // Pre-fill form
+    form.value = {
+        name: category.name,
+        parentUuid: category.parent ? category.parent.uuid : null
+    };
+    showFormModal.value = true;
+};
+
+const saveCategory = async () => {
+    if (!form.value.name) {
+        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Nama kategori wajib diisi', life: 3000 });
+        return;
+    }
+
+    formLoading.value = true;
     try {
-        // Fetch detail lengkap (termasuk list produk) by UUID
-        const detailData = await categoryService.getCategory(shelf.uuid);
-        selectedShelf.value = detailData;
+        if (isEditMode.value) {
+            await categoryService.updateCategory(selectedCategoryUuid.value, form.value);
+            toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Kategori diperbarui', life: 3000 });
+        } else {
+            await categoryService.createCategory(form.value);
+            toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Kategori baru dibuat', life: 3000 });
+        }
+        showFormModal.value = false;
+        fetchCategories(); // Refresh grid
     } catch (err) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat isi rak', life: 3000 });
+        const msg = err.response?._data?.message || 'Terjadi kesalahan';
+        toast.add({ severity: 'error', summary: 'Gagal', detail: msg, life: 3000 });
     } finally {
-        detailLoading.value = false;
+        formLoading.value = false;
     }
 };
 
-const confirmDeleteShelf = (event, shelf) => {
-    event.stopPropagation(); // Mencegah modal terbuka saat tombol hapus diklik
+// --- ACTIONS: DELETE ---
+const confirmDelete = (event, category) => {
+    event.stopPropagation();
     confirm.require({
-        message: `Hapus Kategori ${shelf.name}?`,
-        header: 'Konfirmasi Hapus Kategori',
+        message: `Hapus Kategori "${category.name}"?`,
+        header: 'Konfirmasi Hapus',
         icon: 'pi pi-trash',
         acceptClass: 'p-button-danger',
         accept: async () => {
             try {
-                await categoryService.deleteCategory(shelf.uuid);
+                await categoryService.deleteCategory(category.uuid);
                 toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Kategori berhasil dihapus', life: 3000 });
-                fetchCategorys();
+                fetchCategories();
             } catch (err) {
-                toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus rak', life: 3000 });
+                toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus kategori', life: 3000 });
             }
         }
     });
 };
 
-const onEditClick = (event, shelf) => {
-    event.stopPropagation(); // Mencegah modal terbuka saat tombol edit diklik
-    emit('edit', shelf);
+// --- ACTIONS: DETAIL ---
+const openDetail = async (category) => {
+    showDetailModal.value = true;
+    selectedCategory.value = { ...category, productCategorys: [] }; 
+    detailLoading.value = true;
+
+    try {
+        const detailData = await categoryService.getCategory(category.uuid);
+        selectedCategory.value = detailData;
+    } catch (err) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat detail kategori', life: 3000 });
+    } finally {
+        detailLoading.value = false;
+    }
 };
 
 onMounted(() => {
-    fetchCategorys();
+    fetchCategories();
 });
 
-defineExpose({ refresh: fetchCategorys });
+defineExpose({ refresh: fetchCategories });
 </script>
 
 <template>
     <div class="animate-fade-in">
         <div class="flex justify-between items-center mb-4">
-             <h2 class="font-bold text-lg text-surface-700 dark:text-surface-100">Manajemen Kategori</h2>
+             <h2 class="font-bold text-lg text-surface-700 dark:text-surface-100">Manajemen Kategori Produk</h2>
         </div>
 
         <div v-if="loading" class="flex justify-center py-10">
@@ -93,106 +155,143 @@ defineExpose({ refresh: fetchCategorys });
         </div>
 
         <div v-else class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            <div @click="emit('create')" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 flex flex-col items-center justify-center text-center h-56 border-dashed border-2 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors group">
+            
+            <div @click="openCreateModal" class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 flex flex-col items-center justify-center text-center h-56 border-dashed border-2 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors group">
                 <div class="w-12 h-12 rounded-full bg-surface-100 dark:bg-surface-800 group-hover:bg-primary-50 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
                     <i class="pi pi-plus text-xl"></i>
                 </div>
                 <span class="font-bold text-surface-600 dark:text-surface-400 group-hover:text-primary-600">Buat Kategori Baru</span>
             </div>
 
-            <div v-for="shelf in categorys" :key="shelf.uuid" 
-                @click="openDetail(shelf)"
+            <div v-for="cat in categories" :key="cat.uuid" 
+                @click="openDetail(cat)"
                 class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden group hover:shadow-md hover:border-primary-300 transition-all relative cursor-pointer h-56 flex flex-col"
             >
                 <div class="h-1.5 bg-gradient-to-r from-blue-400 to-blue-600 w-full"></div>
+                
                 <div class="p-5 flex flex-col flex-1">
                     <div class="flex justify-between items-start mb-2">
-                        <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100 line-clamp-1">{{ shelf.name }}</h3>
+                        <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100 line-clamp-1">{{ cat.name }}</h3>
                         <div class="flex -mr-2 -mt-1">
-                            <Button icon="pi pi-pencil" text rounded size="small" severity="info" @click="(e) => onEditClick(e, shelf)" />
-                            <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="(e) => confirmDeleteShelf(e, shelf)" />
+                            <Button icon="pi pi-pencil" text rounded size="small" severity="info" @click="(e) => openEditModal(e, cat)" />
+                            <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="(e) => confirmDelete(e, cat)" />
                         </div>
                     </div>
 
-                    <p class="text-xs text-surface-500 dark:text-surface-400 mb-4 flex items-start gap-1 line-clamp-2 h-8">
-                        <i class="pi pi-align-left text-[10px] mt-0.5 shrink-0"></i>
-                        {{ shelf.description || 'Tidak ada deskripsi' }}
+                    <p class="text-xs text-surface-500 dark:text-surface-400 mb-4 flex items-start gap-1 h-8">
+                        <span v-if="cat.parent" class="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-md border border-blue-100">
+                            <i class="pi pi-arrow-up text-[9px]"></i>
+                            Induk: {{ cat.parent.name }}
+                        </span>
+                        <span v-else class="flex items-center gap-1 bg-surface-100 text-surface-500 px-2 py-1 rounded-md">
+                            <i class="pi pi-folder text-[9px]"></i> Root Kategori
+                        </span>
                     </p>
 
                     <div class="mt-auto space-y-2">
                         <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-800 p-2 rounded border border-surface-100 dark:border-surface-700">
                              <div class="flex items-center gap-2">
-                                <i class="pi pi-box text-blue-500"></i>
-                                <span class="text-xs font-medium">Kapasitas</span>
+                                <i class="pi pi-calendar text-blue-500"></i>
+                                <span class="text-xs font-medium">Dibuat</span>
                             </div>
-                            <span class="font-bold">{{ shelf.capacity || '∞' }}</span>
+                            <span class="font-bold text-xs">{{ new Date(cat.createdAt).toLocaleDateString('id-ID') }}</span>
                         </div>
 
                         <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-800 p-2 rounded border border-surface-100 dark:border-surface-700">
                             <div class="flex items-center gap-2">
                                 <i class="pi pi-tags text-emerald-500"></i>
-                                <span class="text-xs font-medium">Total Item</span>
+                                <span class="text-xs font-medium">Total Produk</span>
                             </div>
-                            <span class="font-bold text-emerald-600">{{ shelf.totalItems || 0 }} Jenis</span>
+                            <span class="font-bold text-emerald-600">{{ cat.totalItems || 0 }} Item</span>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <div v-if="categorys.length === 0" class="col-span-full text-center py-10 text-surface-400 italic">
-                Belum ada data rak.
+            <div v-if="categories.length === 0" class="col-span-full text-center py-10 text-surface-400 italic">
+                Belum ada data kategori.
             </div>
         </div>
 
-        <Dialog v-model:visible="showDetailModal" modal :header="selectedShelf ? `Detail Kategori: ${selectedShelf.name}` : 'Detail Kategori'" :style="{ width: '600px' }" class="p-fluid">
+        <Dialog v-model:visible="showFormModal" modal :header="isEditMode ? 'Edit Kategori' : 'Kategori Baru'" :style="{ width: '450px' }" class="p-fluid">
+            <div class="mt-2 space-y-4">
+                <div class="field">
+                    <label for="name" class="block text-sm font-medium mb-1">Nama Kategori</label>
+                    <InputText id="name" v-model="form.name" required autofocus placeholder="Contoh: Makanan Ringan" class="w-full" />
+                </div>
+
+                <div class="field">
+                    <label for="parent" class="block text-sm font-medium mb-1">Induk Kategori (Parent)</label>
+                    <Dropdown 
+                        id="parent" 
+                        v-model="form.parentUuid" 
+                        :options="parentOptions" 
+                        optionLabel="label" 
+                        optionValue="value" 
+                        placeholder="Pilih Parent (Opsional)" 
+                        showClear
+                        filter
+                        class="w-full"
+                    >
+                        <template #option="slotProps">
+                            <div class="flex align-items-center">
+                                <i class="pi pi-folder mr-2 text-yellow-500"></i>
+                                <div>{{ slotProps.option.label }}</div>
+                            </div>
+                        </template>
+                    </Dropdown>
+                    <small class="text-surface-500 block mt-1">Kosongkan jika ini adalah kategori utama.</small>
+                </div>
+            </div>
+
+            <template #footer>
+                <Button label="Batal" icon="pi pi-times" text @click="showFormModal = false" />
+                <Button label="Simpan" icon="pi pi-check" :loading="formLoading" @click="saveCategory" />
+            </template>
+        </Dialog>
+
+        <Dialog v-model:visible="showDetailModal" modal :header="selectedCategory ? `Detail: ${selectedCategory.name}` : 'Detail Kategori'" :style="{ width: '600px' }" class="p-fluid">
             
             <div v-if="detailLoading" class="flex justify-center py-10">
                 <ProgressSpinner style="width: 40px; height: 40px" />
             </div>
 
-            <div v-else-if="selectedShelf" class="space-y-4">
+            <div v-else-if="selectedCategory" class="space-y-4">
                 <div class="grid grid-cols-2 gap-4 bg-surface-50 dark:bg-surface-800 p-4 rounded-lg border border-surface-100 dark:border-surface-700">
                     <div>
-                        <label class="text-xs text-surface-500 block mb-1">Kapasitas Max</label>
-                        <span class="font-bold text-lg">{{ selectedShelf.capacity || 'Tidak Terbatas' }}</span>
+                        <label class="text-xs text-surface-500 block mb-1">Induk Kategori</label>
+                        <span class="font-bold text-lg text-blue-600">{{ selectedCategory.parent ? selectedCategory.parent.name : 'Root (Utama)' }}</span>
                     </div>
                     <div>
-                        <label class="text-xs text-surface-500 block mb-1">Jenis Produk Disimpan</label>
-                        <span class="font-bold text-lg text-primary-600">{{ selectedShelf.productCategorys?.length || 0 }}</span>
-                    </div>
-                    <div class="col-span-2 border-t border-surface-200 dark:border-surface-600 pt-2 mt-1">
-                         <p class="text-sm text-surface-600 dark:text-surface-300 italic">"{{ selectedShelf.description || 'Tidak ada deskripsi' }}"</p>
+                        <label class="text-xs text-surface-500 block mb-1">Jumlah Produk</label>
+                        <span class="font-bold text-lg text-emerald-600">{{ selectedCategory.productCategorys?.length || 0 }}</span>
                     </div>
                 </div>
 
                 <div>
-                    <h4 class="font-bold text-sm text-surface-700 dark:text-surface-200 mb-2 mt-4">Isi Kategori Saat Ini</h4>
+                    <h4 class="font-bold text-sm text-surface-700 dark:text-surface-200 mb-2 mt-4">Daftar Produk</h4>
                     
                     <div class="border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
                         <div class="max-h-64 overflow-y-auto scrollbar-thin">
                             <table class="w-full text-sm text-left">
                                 <thead class="bg-surface-50 dark:bg-surface-800 text-xs uppercase text-surface-500 sticky top-0 z-10">
                                     <tr>
-                                        <th class="px-4 py-2">Produk</th>
-                                        <th class="px-4 py-2">Satuan</th>
-                                        <th class="px-4 py-2 text-right">Jumlah (Qty)</th>
+                                        <th class="px-4 py-2">Nama Produk</th>
+                                        <th class="px-4 py-2 text-right">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-surface-100 dark:divide-surface-700 bg-white dark:bg-surface-900">
-                                    <tr v-for="item in selectedShelf.productCategorys" :key="item.uuid" class="hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
+                                    <tr v-for="item in selectedCategory.productCategorys" :key="item.uuid" class="hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
                                         <td class="px-4 py-2 font-medium text-surface-700 dark:text-surface-100">
                                             {{ item.product?.name || 'Produk Terhapus' }}
                                         </td>
-                                        <td class="px-4 py-2 text-surface-500">
-                                            {{ item.unit?.unitName || '-' }}
-                                        </td>
-                                        <td class="px-4 py-2 text-right font-bold text-primary-600">
-                                            {{ item.qty }}
+                                        <td class="px-4 py-2 text-right">
+                                            <Tag value="Aktif" severity="success" class="text-[10px]" />
                                         </td>
                                     </tr>
-                                    <tr v-if="!selectedShelf.productCategorys?.length">
-                                        <td colspan="3" class="px-4 py-8 text-center text-surface-400 italic">
-                                            Kategori ini masih kosong.
+                                    <tr v-if="!selectedCategory.productCategorys?.length">
+                                        <td colspan="2" class="px-4 py-8 text-center text-surface-400 italic">
+                                            Kategori ini belum memiliki produk.
                                         </td>
                                     </tr>
                                 </tbody>

@@ -1,7 +1,8 @@
+// composables/useCategoryService.ts
 export const useCategoryService = () => {
+    // Pastikan global config sudah benar, atau hardcode URL untuk test
     const config = useRuntimeConfig();
-    // Sesuaikan BASE_URL dengan alamat backend NestJS kamu (misal: http://localhost:3000)
-    const API_URL = config.public.apiBaseUrl || 'http://localhost:3000';
+    const API_URL = config.public.apiBaseUrl || 'http://localhost:3000'; 
 
     const getAllCategorys = async () => {
         return await useApi('/category/find-all');
@@ -11,14 +12,14 @@ export const useCategoryService = () => {
         return await useApi(`/category/${uuid}`);
     };
 
-    const createCategory = async (payload: any) => {
+    const createCategory = async (payload: { name: string; parentUuid?: string | null }) => {
         return await useApi('/category/create', {
             method: 'POST',
             body: payload
         });
     };
 
-    const updateCategory = async (uuid: string, payload: any) => {
+    const updateCategory = async (uuid: string, payload: { name: string; parentUuid?: string | null }) => {
         return await useApi(`/category/update/${uuid}`, {
             method: 'PUT',
             body: payload

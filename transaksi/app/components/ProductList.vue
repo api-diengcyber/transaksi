@@ -5,7 +5,6 @@ import { useConfirm } from 'primevue/useconfirm';
 
 const emit = defineEmits(['create', 'edit']);
 
-// Pastikan useProductService tersedia (auto-import Nuxt atau import manual)
 const productService = useProductService();
 const toast = useToast();
 const confirm = useConfirm();
@@ -25,8 +24,9 @@ const fetchProducts = async () => {
             prices: p.prices || p.price || [],
             stock: p.stock || [],
             units: p.units || [],
-            // Pastikan field shelve ada (relasi dari backend)
-            shelve: p.shelve || [] 
+            shelve: p.shelve || [],
+            // [BARU] Mapping Kategori dari relasi productCategory
+            categories: (p.productCategory || []).map(pc => pc.category?.name).filter(Boolean)
         }));
     } catch (err) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data produk', life: 3000 });
@@ -58,22 +58,18 @@ const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currenc
 const getPricesForUnit = (all, uid) => all.filter(p => p.unitUuid === uid);
 const getStockForUnit = (all, uid) => all.find(s => s.unitUuid === uid)?.qty || 0;
 
-// Helper baru untuk mengambil nama rak unik
 const getUniqueShelves = (product) => {
     if (!product.shelve || !Array.isArray(product.shelve)) return [];
-    // Mapping: product -> product_shelve[] -> shelve (entity) -> name
     const names = product.shelve
-        .map(ps => ps.shelve?.name) // Ambil nama rak
-        .filter(name => !!name);    // Hapus null/undefined
-    
-    return [...new Set(names)]; // Return unique values only
+        .map(ps => ps.shelve?.name)
+        .filter(name => !!name);    
+    return [...new Set(names)];
 };
 
 onMounted(() => {
     fetchProducts();
 });
 
-// Expose refresh method agar bisa dipanggil parent
 defineExpose({ refresh: fetchProducts });
 </script>
 
@@ -99,7 +95,6 @@ defineExpose({ refresh: fetchProducts });
                     </div>
                 </template>
                 
-                <!-- Kolom Nama Produk -->
                 <Column field="name" header="Informasi Produk" sortable style="width: 20%" class="align-top">
                     <template #body="slotProps">
                         <div class="flex gap-3 py-2">
@@ -114,7 +109,23 @@ defineExpose({ refresh: fetchProducts });
                     </template>
                 </Column>
 
-                <!-- Kolom Lokasi Rak (BARU) -->
+                <Column header="Kategori" style="width: 12%" class="align-top">
+                    <template #body="slotProps">
+                        <div class="flex flex-wrap gap-1.5 py-2">
+                            <template v-if="slotProps.data.categories && slotProps.data.categories.length > 0">
+                                <span v-for="cat in slotProps.data.categories" :key="cat" 
+                                      class="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-100 dark:border-orange-800 rounded text-[11px] font-medium">
+                                    <i class="pi pi-tag text-[9px]"></i>
+                                    {{ cat }}
+                                </span>
+                            </template>
+                            <span v-else class="text-xs text-surface-400 italic flex items-center gap-1 mt-1">
+                                <i class="pi pi-minus text-[10px]"></i> Non-Kategori
+                            </span>
+                        </div>
+                    </template>
+                </Column>
+
                 <Column header="Lokasi Rak" style="width: 15%" class="align-top">
                     <template #body="slotProps">
                         <div class="flex flex-wrap gap-1.5 py-2">
@@ -132,8 +143,7 @@ defineExpose({ refresh: fetchProducts });
                     </template>
                 </Column>
 
-                <!-- Kolom Detail Varian -->
-                <Column header="Detail Varian (Satuan, Harga, Stok)" style="width: 55%" class="align-top">
+                <Column header="Detail Varian (Satuan, Harga, Stok)" style="width: 53%" class="align-top">
                     <template #body="slotProps">
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 py-2">
                             <div v-for="u in slotProps.data.units" :key="u.uuid" class="relative bg-surface-50 dark:bg-surface-800/50 border rounded-lg p-3 flex flex-col gap-2 hover:shadow-md transition-all" :class="u.uuid === slotProps.data.defaultUnitUuid ? 'border-blue-300 ring-1 ring-blue-100' : 'border-surface-200 dark:border-surface-700'">

@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive, watch } from 'vue'; // Tambah watch
 import { useToast } from 'primevue/usetoast';
 import ProductCreateModal from '~/components/ProductCreateModal.vue';
-import { useAuthStore } from '~/stores/auth.store'; // Import Store
+import { useAuthStore } from '~/stores/auth.store';
 
 const productService = useProductService();
 const journalService = useJournalService();
-const authStore = useAuthStore(); // Init Store
+const categoryService = useCategoryService(); // [BARU] Inject Service Kategori
+const authStore = useAuthStore();
 const toast = useToast();
 
 // --- STATE ---
@@ -18,64 +19,34 @@ const loading = ref(true);
 const processing = ref(false);
 const showCreateModal = ref(false);
 
+// [BARU] State Kategori
+const categories = ref([]); 
+const selectedCategoryUuids = ref([]); // Model untuk MultiSelect
+
 const payment = reactive({
     amount: null,
 });
 
-// --- COMPUTED: SETTINGS (Dari AuthStore) ---
+// --- COMPUTED SETTINGS ... (Tetap sama)
 const taxEnabled = computed(() => authStore.getSetting('sale_tax_enabled', false));
 const taxRate = computed(() => Number(authStore.getSetting('sale_tax_percentage', 0)));
-const taxMethod = computed(() => authStore.getSetting('sale_tax_method', 'exclusive')); // 'exclusive' atau 'inclusive'
+const taxMethod = computed(() => authStore.getSetting('sale_tax_method', 'exclusive'));
 
-// --- COMPUTED: TRANSACTION LOGIC ---
-
-// 1. Total Item (Qty)
+// --- COMPUTED TRANSACTION LOGIC ... (Tetap sama)
 const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
-
-// 2. Subtotal Murni (Harga Barang x Qty)
-const cartSubtotal = computed(() => {
-    return cart.value.reduce((total, item) => {
-        return total + (item.price * item.qty);
-    }, 0);
-});
-
-// 3. Hitung Nilai Pajak
+const cartSubtotal = computed(() => cart.value.reduce((total, item) => total + (item.price * item.qty), 0));
 const taxAmount = computed(() => {
     if (!taxEnabled.value || taxRate.value <= 0) return 0;
-
-    if (taxMethod.value === 'exclusive') {
-        // Exclusive: Pajak ditambahkan di atas harga (Subtotal * %)
-        return cartSubtotal.value * (taxRate.value / 100);
-    } else {
-        // Inclusive: Pajak sudah termasuk di harga (Back-calculate)
-        // Rumus: Total - (Total / (1 + rate))
-        return cartSubtotal.value - (cartSubtotal.value / (1 + (taxRate.value / 100)));
-    }
+    return taxMethod.value === 'exclusive' 
+        ? cartSubtotal.value * (taxRate.value / 100)
+        : cartSubtotal.value - (cartSubtotal.value / (1 + (taxRate.value / 100)));
 });
-
-// 4. Grand Total (Yang harus dibayar user)
 const grandTotal = computed(() => {
     if (!taxEnabled.value) return cartSubtotal.value;
-
-    if (taxMethod.value === 'exclusive') {
-        // Exclusive: Subtotal + Pajak
-        return cartSubtotal.value + taxAmount.value;
-    } else {
-        // Inclusive: Harga barang sudah final, jadi Grand Total = Subtotal
-        return cartSubtotal.value;
-    }
+    return taxMethod.value === 'exclusive' ? cartSubtotal.value + taxAmount.value : cartSubtotal.value;
 });
-
-// 5. Kembalian
-const changeAmount = computed(() => {
-    if (!payment.amount) return 0;
-    return payment.amount - grandTotal.value;
-});
-
-// 6. Validasi Checkout
-const canCheckout = computed(() => {
-    return cart.value.length > 0 && payment.amount >= grandTotal.value;
-});
+const changeAmount = computed(() => (payment.amount || 0) - grandTotal.value);
+const canCheckout = computed(() => cart.value.length > 0 && payment.amount >= grandTotal.value);
 
 // --- ACTIONS ---
 
@@ -83,6 +54,15 @@ const onSearchKeydown = (event) => {
     if (event.key === 'Enter') handleSearch();
 };
 
+// [BARU] Fetch Categories
+const fetchCategories = async () => {
+    try {
+        const data = await categoryService.getAllCategorys();
+        categories.value = data || [];
+    } catch (e) { console.error(e); }
+};
+
+// [UPDATED] Load Products dengan Mapping Kategori
 const loadProducts = async () => {
     loading.value = true;
     try {
@@ -91,9 +71,11 @@ const loadProducts = async () => {
             ...p,
             prices: p.prices || p.price || [],
             stock: p.stock || [],
-            units: p.units || []
+            units: p.units || [],
+            // [PENTING] Simpan UUID Kategori produk ini dalam array datar untuk filtering
+            categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean)
         }));
-        filteredProducts.value = products.value;
+        handleSearch(); // Panggil filter awal
     } catch (error) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat produk', life: 3000 });
     } finally {
@@ -101,43 +83,62 @@ const loadProducts = async () => {
     }
 };
 
+// [UPDATED] Handle Search & Filter (Text + Category)
 const handleSearch = () => {
     const query = searchQuery.value.toLowerCase().trim();
-    if (!query) {
-        filteredProducts.value = products.value;
-        return;
+    const selectedCats = selectedCategoryUuids.value;
+
+    // 1. Filter Awal (Semua Data)
+    let result = products.value;
+
+    // 2. Filter Kategori (Jika ada yang dipilih)
+    if (selectedCats.length > 0) {
+        result = result.filter(p => {
+            // Cek apakah produk ini memiliki SALAH SATU dari kategori yang dipilih
+            return p.categoryUuids.some(catUuid => selectedCats.includes(catUuid));
+        });
     }
 
-    // 1. Cari Barcode Exact Match
-    const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
+    // 3. Filter Text (Barcode / Nama)
+    if (query) {
+        // Cek Barcode Exact Match (Prioritas)
+        const exactProduct = result.find(p => p.units.some(u => u.barcode === query));
+        if (exactProduct) {
+            // Jika scan barcode ketemu, langsung masukkan cart dan reset search
+            const matchedUnit = exactProduct.units.find(u => u.barcode === query);
+            addToCart(exactProduct, matchedUnit);
+            searchQuery.value = ''; 
+            toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
+            // Reset list ke hasil filter kategori (tanpa query text karena sudah di-reset)
+            // Recurse call handleSearch() with empty query
+            return handleSearch(); 
+        }
 
-    if (exactProduct) {
-        const matchedUnit = exactProduct.units.find(u => u.barcode === query);
-        addToCart(exactProduct, matchedUnit);
-        
-        searchQuery.value = ''; 
-        filteredProducts.value = products.value; 
-        toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
-    } else {
-        // 2. Filter Nama
-        filteredProducts.value = products.value.filter(p => 
+        // Fuzzy Search Nama / Barcode Parsial
+        result = result.filter(p => 
             p.name.toLowerCase().includes(query) || 
             p.units.some(u => u.barcode?.includes(query))
         );
     }
+
+    filteredProducts.value = result;
 };
 
+// [BARU] Watcher untuk filter otomatis saat kategori berubah
+watch(selectedCategoryUuids, () => {
+    handleSearch();
+});
+
+// ... (Sisa function addToCart, changeCartItemUnit, dll TETAP SAMA) ...
 const addToCart = (product, specificUnit = null) => {
     let selectedUnit = specificUnit;
     if (!selectedUnit) {
         selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
     }
-
     if (!selectedUnit) {
         toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk error (tanpa satuan)', life: 3000 });
         return;
     }
-
     const unitPrices = product.prices.filter(p => p.unitUuid === selectedUnit.uuid);
     const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
     const finalPrice = defaultPriceObj ? defaultPriceObj.price : 0;
@@ -159,8 +160,6 @@ const addToCart = (product, specificUnit = null) => {
             allPrices: product.prices 
         });
     }
-    
-    // Scroll ke bawah cart otomatis
     setTimeout(() => {
         const cartEl = document.getElementById('cart-items-container');
         if(cartEl) cartEl.scrollTop = cartEl.scrollHeight;
@@ -170,13 +169,10 @@ const addToCart = (product, specificUnit = null) => {
 const changeCartItemUnit = (item, newUnitUuid) => {
     const newUnit = item.availableUnits.find(u => u.uuid === newUnitUuid);
     if (!newUnit) return;
-
     item.unitUuid = newUnit.uuid;
     item.unitName = newUnit.unitName;
-    
     const unitPrices = item.allPrices.filter(p => p.unitUuid === newUnit.uuid);
     const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
-    
     item.selectedPriceObj = defaultPriceObj;
     item.price = defaultPriceObj ? defaultPriceObj.price : 0;
 };
@@ -193,14 +189,11 @@ const removeFromCart = (index) => {
 const onProductCreated = async (newProduct) => {
     await loadProducts();
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
-    if (fullProduct) {
-        addToCart(fullProduct);
-    }
+    if (fullProduct) addToCart(fullProduct);
 };
 
 const processCheckout = async () => {
     if (!canCheckout.value) return;
-
     processing.value = true;
     try {
         const payload = {
@@ -210,8 +203,6 @@ const processCheckout = async () => {
                 payment_received: payment.amount,
                 change: changeAmount.value,
                 total_items_count: cart.value.length,
-                
-                // Data Pajak Lengkap untuk Backend
                 subtotal_amount: cartSubtotal.value,
                 tax_amount: taxAmount.value,
                 tax_percentage: taxEnabled.value ? taxRate.value : 0,
@@ -219,7 +210,6 @@ const processCheckout = async () => {
                 grand_total: grandTotal.value
             }
         };
-
         cart.value.forEach((item, index) => {
             payload.details[`product_uuid#${index}`] = item.productUuid;
             payload.details[`unit_uuid#${index}`] = item.unitUuid;
@@ -227,15 +217,11 @@ const processCheckout = async () => {
             payload.details[`price#${index}`] = item.price;
             payload.details[`subtotal#${index}`] = item.qty * item.price;
         });
-
         await journalService.createSaleTransaction(payload);
-        
         toast.add({ severity: 'success', summary: 'Transaksi Sukses', detail: 'Kembalian: ' + formatCurrency(changeAmount.value), life: 5000 });
-        
         cart.value = [];
         payment.amount = null;
         await loadProducts(); 
-
     } catch (e) {
         console.error(e);
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Terjadi kesalahan saat memproses', life: 3000 });
@@ -244,9 +230,7 @@ const processCheckout = async () => {
     }
 };
 
-const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
-};
+const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 
 const getStockColor = (qty) => {
     if (qty <= 0) return 'bg-red-100 text-red-600 border-red-200';
@@ -255,14 +239,10 @@ const getStockColor = (qty) => {
 };
 
 onMounted(async () => {
-    // Pastikan data toko & settings dimuat agar setting pajak terbaca
-    if (!authStore.activeStore) {
-        await authStore.fetchUserStores();
-    }
-
-    loadProducts();
+    if (!authStore.activeStore) await authStore.fetchUserStores();
+    await fetchCategories(); // Load kategori dulu
+    await loadProducts();
     
-    // Shortcut F2 untuk Search
     window.addEventListener('keydown', (e) => {
         if (e.key === 'F2') document.getElementById('search-input')?.focus();
     });
@@ -276,7 +256,29 @@ definePageMeta({ layout: 'default' });
         <Toast />
 
         <div class="flex-1 flex flex-col bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex gap-2 bg-surface-50/50">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-50/50">
+                
+                <div class="w-full md:w-48">
+                    <MultiSelect 
+                        v-model="selectedCategoryUuids" 
+                        :options="categories" 
+                        optionLabel="name" 
+                        optionValue="uuid" 
+                        placeholder="Filter Kategori" 
+                        display="chip" 
+                        :maxSelectedLabels="1" 
+                        class="w-full !h-10 !text-sm"
+                        :pt="{ label: { class: '!py-2 !px-3' } }"
+                    >
+                        <template #option="slotProps">
+                            <div class="flex align-items-center">
+                                <i class="pi pi-tag mr-2 text-orange-500 text-xs"></i>
+                                <span class="text-sm">{{ slotProps.option.name }}</span>
+                            </div>
+                        </template>
+                    </MultiSelect>
+                </div>
+
                 <div class="relative flex-1">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm"></i>
                     <input 
@@ -284,7 +286,7 @@ definePageMeta({ layout: 'default' });
                         v-model="searchQuery" 
                         type="text"
                         placeholder="Cari Produk / Scan Barcode... (F2)" 
-                        class="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm"
+                        class="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm h-10"
                         @keydown="onSearchKeydown" 
                         @input="handleSearch"
                         autocomplete="off"
@@ -318,7 +320,9 @@ definePageMeta({ layout: 'default' });
                         </div>
                         
                         <div class="flex justify-between items-end mt-2">
-                            <span class="text-[10px] text-surface-400">Umum</span>
+                            <span class="text-[9px] text-surface-400 truncate max-w-[50%]">
+                                {{ prod.categoryUuids.length > 0 ? (categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Kategori') : 'Umum' }}
+                            </span>
                             <span class="text-sm font-black text-surface-800 dark:text-white">
                                 {{ (() => {
                                     const defUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];

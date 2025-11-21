@@ -11,6 +11,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { StoreEntity } from '../store/store.entity';
+import { RoleEntity } from '../role/role.entity';
 
 @Entity('user')
 export class UserEntity {
@@ -50,13 +51,27 @@ export class UserEntity {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
 
+  @ManyToMany(() => RoleEntity, (role) => role.users)
+  @JoinTable({
+    name: 'user_roles_pivot',
+    joinColumn: {
+      name: 'user_uuid',
+      referencedColumnName: 'uuid',
+    },
+    inverseJoinColumn: {
+      name: 'role_uuid',
+      referencedColumnName: 'uuid',
+    },
+  })
+  roles: RoleEntity[];
+
   @ManyToOne(() => StoreEntity, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'default_store_uuid' })
   defaultStore: StoreEntity;
 
   @ManyToMany(() => StoreEntity, (store) => store.users)
   @JoinTable({
-    name: 'user_stores', // Nama tabel pivot
+    name: 'user_stores_pivot',
     joinColumn: {
       name: 'user_uuid',
       referencedColumnName: 'uuid',
