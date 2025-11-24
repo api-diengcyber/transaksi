@@ -5,6 +5,8 @@ import { StoreModule } from '../store/store.module';
 import { AuthModule } from '../auth/auth.module';
 import { ShelveModule } from '../shelve/shelve.module';
 import { CategoryModule } from '../category/category.module';
+import { TableModule } from '../table/table.module';
+import { RecipeModule } from '../recipe/recipe.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { CategoryModule } from '../category/category.module';
     ProductModule,
     ShelveModule,
     CategoryModule,
+    TableModule,
+    RecipeModule,
   ],
   controllers: [],
   providers: [],

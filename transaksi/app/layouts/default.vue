@@ -66,6 +66,7 @@ const items = ref([
         key: 'manajemen',
         items: [
             { label: 'Produk', icon: 'pi pi-box', route: '/product' },
+            { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' },
         ]
     },
     { 
@@ -102,6 +103,14 @@ const items = ref([
                 route: '/report/transaction',
                 command: (event) => {
                     router.push('/report/transaction');
+                }
+            },
+             { 
+                label: 'Piutang / Hutang', 
+                icon: 'pi pi-chart-line', 
+                route: '/report/arap',
+                command: (event) => {
+                    router.push('/report/arap');
                 }
             },
         ]

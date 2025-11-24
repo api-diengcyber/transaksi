@@ -65,7 +65,7 @@ const onShelveCreated = () => {
 const loadProductData = async (uuid) => {
     loading.value = true;
     try {
-        // NOTE: product.stock tidak lagi digunakan/di-load di backend
+        // Data yang dikembalikan oleh API (ProductService.findOne) sudah menyertakan units[].currentStock
         const data = await productService.getProduct(uuid); 
         
         if (!data) throw new Error("Data produk tidak ditemukan");
@@ -82,10 +82,8 @@ const loadProductData = async (uuid) => {
 
         // 3. Mapping Units (ADD STOCK FIELDS)
         configUnits.value = data.units.map(u => {
-             // NOTE PENTING: Karena API kalkulasi stok dari Journal belum dibuat, 
-             // kita asumsikan stok lama (oldQty) adalah 0 untuk simulasi/placeholder.
-             // DI MASA DEPAN: currentQty harus diambil dari API /journal/stock?productUuid=...
-            const currentQty = 0; 
+             // [FIX KRITIS] Mengambil stok aktual dari properti currentStock yang diinjeksi oleh backend ProductService
+            const currentQty = Number(u.currentStock || 0); 
 
             return {
                 uuid: u.uuid, 
@@ -95,7 +93,7 @@ const loadProductData = async (uuid) => {
                 barcode: u.barcode,
                 isDefault: data.defaultUnitUuid === u.uuid,
                 allocations: [],
-                // [BARU] Field untuk pelaporan Adjustment
+                // [FIX] Menggunakan stok aktual untuk inisialisasi oldQty dan newQty
                 oldQty: currentQty,
                 newQty: currentQty, // Awalnya, newQty sama dengan oldQty
             };
