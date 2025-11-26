@@ -17,6 +17,9 @@ export class ProductCategoryEntity {
 
     @Column({ length: 500 })
     name: string;
+    
+    @Column({ name: 'is_restaurant', type: 'boolean', default: false })
+    isRestaurant: boolean;
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
     createdAt: Date;

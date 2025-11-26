@@ -1,6 +1,6 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from "@nestjs/common";
 import { ProductCategoryEntity } from "src/common/entities/product_category/product_category.entity";
-import { Repository, DataSource, Like } from "typeorm";
+import { Repository, DataSource, Like, EntityManager } from "typeorm";
 import { CreateCategoryDto, UpdateCategoryDto } from "./dto/create-category.dto";
 
 // [BARU] Helper untuk menghasilkan pengenal lokal
@@ -16,6 +16,30 @@ export class CategoryService {
     @Inject('DATA_SOURCE')
     private readonly dataSource: DataSource,
   ) { }
+
+  // ============================
+  // [BARU] INITIALIZE RESTAURANT CATEGORIES
+  // ============================
+  async initializeRestaurantCategories(userId: string, storeUuid: string, manager: EntityManager) {
+    const defaultCategories = [
+        { name: 'Makanan', isRestaurant: true },
+        { name: 'Minuman', isRestaurant: true },
+        { name: 'Bahan', isRestaurant: true },
+    ];
+    
+    const categoryEntities = defaultCategories.map(cat => {
+        const customCategoryUuid = generateCategoryUuid(storeUuid);
+        return manager.create(ProductCategoryEntity, {
+            uuid: customCategoryUuid,
+            name: cat.name,
+            isRestaurant: cat.isRestaurant, // Set true
+            createdBy: userId,
+        });
+    });
+    
+    await manager.save(categoryEntities);
+    return categoryEntities;
+  }
 
   // ============================
   // CREATE CATEGORY
@@ -66,6 +90,7 @@ export class CategoryService {
       .leftJoinAndSelect('category.parent', 'parent')
       .loadRelationCountAndMap('category.totalItems', 'category.productCategorys')
       .orderBy('category.createdAt', 'DESC')
+      .addSelect('category.isRestaurant')
       .getMany();
 
     return categorys;

@@ -16,9 +16,13 @@ const toast = useToast();
 const loading = ref(false);
 const formLoading = ref(false);
 const allProducts = ref([]);
+
+// [UPDATE] Filter Ingredient Options: Hanya tampilkan produk yang dikategorikan sebagai Bahan Baku
 const ingredientOptions = computed(() => {
-    // Filter produk yang sama (Produk jadi tidak bisa jadi bahan baku dirinya sendiri)
     return allProducts.value
+        // Filter 1: Hanya produk dengan kategori isRestaurant: true
+        .filter(p => (p.productCategory || []).some(pc => pc.category?.isRestaurant))
+        // Filter 2: Produk jadi (menu) tidak bisa jadi bahan baku dirinya sendiri
         .filter(p => p.uuid !== props.productData?.uuid)
         .map(p => ({
             label: p.name,
@@ -37,6 +41,7 @@ const recipe = reactive({
 const fetchIngredientOptions = async () => {
     loading.value = true;
     try {
+        // Mendapatkan SEMUA produk (akan difilter di computed property)
         const data = await productService.getAllProducts();
         allProducts.value = data || [];
     } catch (e) {
@@ -49,6 +54,7 @@ const fetchIngredientOptions = async () => {
 const loadRecipe = async (productUuid) => {
     loading.value = true;
     try {
+        // Asumsi: getRecipeByProduct mengembalikan objek dengan array ingredients
         const data = await recipeService.getRecipeByProduct(productUuid);
         if (data && data.ingredients) {
              recipe.ingredients = data.ingredients.map(i => ({
@@ -61,7 +67,8 @@ const loadRecipe = async (productUuid) => {
         }
     } catch (e) {
         recipe.ingredients = [];
-        toast.add({ severity: 'info', summary: 'Info', detail: 'Belum ada resep, silakan tambahkan.', life: 3000 });
+        // Asumsi: jika error, berarti resep belum ada
+        // toast.add({ severity: 'info', summary: 'Info', detail: 'Belum ada resep, silakan tambahkan.', life: 3000 });
     } finally {
         loading.value = false;
     }
@@ -87,6 +94,7 @@ const saveRecipe = async () => {
 
     formLoading.value = true;
     try {
+        // Asumsi: saveRecipe menerima productUuid dan body dengan array ingredients
         await recipeService.saveRecipe(props.productData.uuid, { ingredients: recipe.ingredients });
         
         toast.add({ severity: 'success', summary: 'Sukses', detail: `Resep untuk ${props.productData.name} berhasil disimpan!`, life: 3000 });
@@ -120,15 +128,17 @@ watch(() => props.visible, async (val) => {
         :modal="true" 
         :style="{ width: '800px' }" 
         maximizable
-        class="p-fluid"
-    >
+        class="p-fluid" :pt="{ content: { class: '!py-2 dark:bg-surface-900' } }">
+        
         <div v-if="loading" class="text-center py-10">
             <ProgressSpinner />
         </div>
         
         <div v-else class="space-y-4">
             <div class="p-3 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
-                <p class="text-sm font-semibold text-surface-700 dark:text-surface-200">Definisi: 1 Unit Produk Jadi ({{ productData?.units.find(u => u.uuid === productData.defaultUnitUuid)?.unitName || 'PCS' }}) terdiri dari...</p>
+                <p class="text-sm font-semibold text-surface-700 dark:text-surface-200">
+                    Definisi: 1 Unit Produk Jadi ({{ productData?.units.find(u => u.uuid === productData.defaultUnitUuid)?.unitName || 'PCS' }}) terdiri dari...
+                </p>
             </div>
 
             <div class="flex justify-between items-center mb-4">
@@ -193,4 +203,5 @@ watch(() => props.visible, async (val) => {
             <Button label="Simpan Resep" icon="pi pi-check" @click="saveRecipe" :loading="formLoading" :disabled="!recipe.ingredients.length" />
         </template>
     </Dialog>
+
 </template>

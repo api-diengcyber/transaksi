@@ -127,7 +127,6 @@ defineExpose({
                     }"
                 />
             </div>
-
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5">
                 

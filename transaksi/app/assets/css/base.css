@@ -3,18 +3,33 @@
 @tailwind utilities;
 
 :root {
-    /* Override PrimeVue Primary Color to Blue (Tailwind Blue-500 based) */
-    --p-primary-50: #eff6ff;
-    --p-primary-100: #dbeafe;
-    --p-primary-200: #bfdbfe;
-    --p-primary-300: #93c5fd;
-    --p-primary-400: #60a5fa;
-    --p-primary-500: #3b82f6;
-    --p-primary-600: #2563eb;
-    --p-primary-700: #1d4ed8;
-    --p-primary-800: #1e40af;
-    --p-primary-900: #1e3a8a;
-    --p-primary-950: #172554;
+    --app-primary-color: #2563eb;
+    /* Override PrimeVue Primary Color to use the custom variable */
+    /* NOTE: Anda harus menggenerate palet warna dari --app-primary-color 
+       atau secara manual mendefinisikan turunan warnanya di sini (Tingkat Lanjut).
+       Untuk kemudahan dan kepatuhan pada PrimeVue/Aura, kita akan menimpanya di level 600
+       dan elemen-elemen yang menggunakan Primary-600 akan berubah.
+       Namun, untuk header, kita bisa menggunakan --app-primary-color secara langsung.
+    */
+    --p-primary-50: color-mix(in srgb, var(--app-primary-color), white 95%);
+    --p-primary-100: color-mix(in srgb, var(--app-primary-color), white 80%);
+    --p-primary-200: color-mix(in srgb, var(--app-primary-color), white 75%);
+    --p-primary-300: color-mix(in srgb, var(--app-primary-color), white 60%);
+    --p-primary-400: color-mix(in srgb, var(--app-primary-color), white 50%);
+    --p-primary-500: color-mix(in srgb, var(--app-primary-color), white 20%);
+    --p-primary-600: var(--app-primary-color);
+    --p-primary-700: color-mix(in srgb, var(--app-primary-color), black 15%);
+    --p-primary-800: color-mix(in srgb, var(--app-primary-color), black 40%);
+    --p-primary-900: color-mix(in srgb, var(--app-primary-color), black 70%);
+    --p-primary-950: color-mix(in srgb, var(--app-primary-color), black 95%);
+    /* ... (lanjutkan penyesuaian jika diperlukan untuk palet penuh) ...
+       Karena TailWind CSS Anda sudah me-map ke variabel PrimeVue, penyesuaian ini
+       seharusnya sudah mempengaruhi hampir semua komponen.
+    */
+    
+    /* [UPDATE KRITIS] Timpa Primary-500 dan Primary-600 dengan warna kustom */
+    --p-primary-500: var(--app-primary-color); 
+    --p-primary-600: var(--app-primary-color);
 
     /* PrimeVue Surface Colors (Light Mode) */
     --p-surface-0: #ffffff;

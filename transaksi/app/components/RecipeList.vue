@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
 const emit = defineEmits(['edit']);
@@ -19,7 +19,13 @@ const fetchProducts = async () => {
     loading.value = true;
     try {
         const data = await productService.getAllProducts();
-        products.value = (data || []).map(p => ({
+        
+        // Asumsi: Produk adalah 'Menu' jika memiliki kategori isRestaurant: true
+        const menuProducts = (data || []).filter(p => 
+            (p.productCategory || []).some(pc => pc.category?.isRestaurant)
+        );
+        
+        products.value = menuProducts.map(p => ({ // [UPDATE] Filter hanya menu
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],

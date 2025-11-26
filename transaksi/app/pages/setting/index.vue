@@ -18,6 +18,7 @@ const logoLoading = ref(false); // [BARU] State untuk upload logo
 
 const menuItems = [
     { id: 'general', label: 'Identitas Toko', icon: 'pi pi-building', desc: 'Nama, alamat, dan kontak' },
+    { id: 'display', label: 'Tampilan & Warna', icon: 'pi pi-palette', desc: 'Warna utama aplikasi' },
     { id: 'sales', label: 'Transaksi Penjualan', icon: 'pi pi-shopping-cart', desc: 'Pajak, struk, dan stok' },
     { id: 'purchase', label: 'Pembelian (Stok)', icon: 'pi pi-truck', desc: 'Supplier dan persetujuan' },
     { id: 'device', label: 'Perangkat & Printer', icon: 'pi pi-print', desc: 'Konfigurasi hardware' },
@@ -30,6 +31,7 @@ const settings = reactive({
     store_address: '',
     store_footer_msg: '',
     store_logo_url: null, // [BARU] URL logo (tersimpan di DB settings)
+    theme_primary_color: '#2563eb',
     
     // 2. Sales
     sale_tax_enabled: false,        
@@ -370,6 +372,24 @@ definePageMeta({ layout: 'default' });
                                         <InputText v-model="settings.store_footer_msg" class="w-full" placeholder="Contoh: Terimakasih telah berbelanja!" />
                                         <small class="text-surface-500">Teks ini akan muncul di bagian paling bawah struk belanja.</small>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB: DISPLAY -->
+                        <div v-else-if="activeTab === 'display'" class="animate-fade-in space-y-6">
+                            <div class="card-section">
+                                <h3 class="section-title">Warna Utama Aplikasi</h3>
+                                <div class="field">
+                                    <label>Pilih Warna Utama (Hex Code)</label>
+                                    <div class="flex gap-4 items-center">
+                                        <ColorPicker v-model="settings.theme_primary_color" format="hex" class="!w-10 !h-10" />
+                                        <InputText v-model="settings.theme_primary_color" placeholder="#2563eb" class="w-40 !py-2.5 !text-sm font-mono" />
+                                        <span class="text-sm text-surface-500">Warna ini akan mempengaruhi tombol dan elemen highlight.</span>
+                                    </div>
+                                    <small class="text-surface-500 mt-2 block">
+                                        *Catatan: Perubahan warna mungkin memerlukan *hard refresh* (Ctrl/Cmd + Shift + R) di browser untuk melihat efek penuh di seluruh UI.
+                                    </small>
                                 </div>
                             </div>
                         </div>

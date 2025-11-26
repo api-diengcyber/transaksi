@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
 const journalService = useJournalService();
@@ -32,7 +32,7 @@ const piutangList = computed(() => {
         // Cari semua pembayaran Piutang (PAY_AR) yang merujuk pada nota ini
         const paid = debts.value
             .filter(p => p.type === 'PAY_AR' && p.refCode === debt.code)
-            .reduce((sum, p) => sum + p.amount, 0);
+            .reduce((sum, p) => sum + p.total, 0);
             
         const remaining = debt.total - paid;
         return {
@@ -54,7 +54,7 @@ const hutangList = computed(() => {
         // Cari semua pembayaran Hutang (PAY_AP) yang merujuk pada nota ini
         const paid = debts.value
             .filter(p => p.type === 'PAY_AP' && p.refCode === debt.code)
-            .reduce((sum, p) => sum + p.amount, 0);
+            .reduce((sum, p) => sum + p.total, 0);
             
         const remaining = debt.total - paid;
         return {
@@ -80,8 +80,8 @@ const loadData = async () => {
         const [sales, buys, arGlobal, apGlobal, paymentsAr, paymentsAp] = await Promise.all([
              journalService.findAllByType('SALE').catch(() => []),
              journalService.findAllByType('BUY').catch(() => []),
-             journalService.findAllByType('AR').catch(() => []), // [BARU] AR Global
-             journalService.findAllByType('AP').catch(() => []), // [BARU] AP Global
+             journalService.findAllByType('AR').catch(() => []), // AR Global
+             journalService.findAllByType('AP').catch(() => []), // AP Global
              journalService.findAllByType('PAY_AR').catch(() => []),
              journalService.findAllByType('PAY_AP').catch(() => []),
         ]);
@@ -103,25 +103,28 @@ const loadData = async () => {
             const type = journal.code.split('-')[0];
 
             let amount = 0;
+
             // Tentukan jumlah total
             if (isCredit) {
                 // Untuk SALE/BUY Kredit
-                amount = Number(detailsMap['grand_total'] || 0); 
-            } else if (type === 'AR' || type === 'AP') {
-                 // Untuk AR/AP Global
-                 amount = Number(detailsMap['amount'] || 0); 
+                amount = Number(detailsMap['grand_total'] || 0);
+            } 
+            
+            if (type === 'AR' || type === 'AP') {
+                // Untuk AR/AP Global
+                amount = Number(detailsMap['amount'] || 0); 
             } else if (type === 'PAY_AR') {
                 amount = Number(detailsMap['nominal_ar_paid'] || 0); 
             } else if (type === 'PAY_AP') {
-                amount = Number(detailsMap['nominal_ap_paid'] || 0); 
+                amount = Number(detailsMap['nominal_ap_paid'] || 0);
             }
 
-            return {
+            var dt = {
                 code: journal.code,
                 type: type, 
                 date: journal.createdAt,
                 total: amount,
-                isCredit: isCredit || type === 'AR' || type === 'AP', // Piutang/Hutang Global juga dianggap kredit/tagihan
+                isCredit: isCredit || type === 'AR' || type === 'AP', 
                 customer: detailsMap['customer_name'] || '-',
                 supplier: detailsMap['supplier'] || '-',
                 dueDate: detailsMap['due_date'] || null,
@@ -129,6 +132,8 @@ const loadData = async () => {
                 method: detailsMap['payment_method'] || '-',
                 notes: detailsMap['notes'] || '',
             };
+
+            return dt;
         }).filter(d => d.total > 0 || d.refCode); // Filter data yang tidak relevan (misalnya journal kosong)
 
     } catch (e) {

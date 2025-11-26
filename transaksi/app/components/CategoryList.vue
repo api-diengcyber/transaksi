@@ -20,7 +20,9 @@ const selectedCategoryUuid = ref(null);
 
 const form = ref({
     name: '',
-    parentUuid: null
+    parentUuid: null,
+    // [BARU] Tambahkan isRestaurant ke form
+    isRestaurant: false
 });
 
 // --- STATE MODAL DETAIL (VIEW) ---
@@ -59,7 +61,8 @@ const fetchCategories = async () => {
 const openCreateModal = () => {
     isEditMode.value = false;
     selectedCategoryUuid.value = null;
-    form.value = { name: '', parentUuid: null };
+    // [UPDATE] Reset isRestaurant default ke false
+    form.value = { name: '', parentUuid: null, isRestaurant: false };
     showFormModal.value = true;
 };
 
@@ -71,7 +74,9 @@ const openEditModal = (event, category) => {
     // Pre-fill form
     form.value = {
         name: category.name,
-        parentUuid: category.parent ? category.parent.uuid : null
+        parentUuid: category.parent ? category.parent.uuid : null,
+        // [UPDATE] Set nilai isRestaurant dari data
+        isRestaurant: category.isRestaurant 
     };
     showFormModal.value = true;
 };
@@ -84,11 +89,18 @@ const saveCategory = async () => {
 
     formLoading.value = true;
     try {
+        // [UPDATE] Kirim field isRestaurant
+        const payload = { 
+            name: form.value.name,
+            parentUuid: form.value.parentUuid,
+            isRestaurant: form.value.isRestaurant // Kirim state isRestaurant
+        };
+
         if (isEditMode.value) {
-            await categoryService.updateCategory(selectedCategoryUuid.value, form.value);
+            await categoryService.updateCategory(selectedCategoryUuid.value, payload);
             toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Kategori diperbarui', life: 3000 });
         } else {
-            await categoryService.createCategory(form.value);
+            await categoryService.createCategory(payload);
             toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Kategori baru dibuat', life: 3000 });
         }
         showFormModal.value = false;
@@ -103,6 +115,7 @@ const saveCategory = async () => {
 
 // --- ACTIONS: DELETE ---
 const confirmDelete = (event, category) => {
+// ... existing confirmDelete function
     event.stopPropagation();
     confirm.require({
         message: `Hapus Kategori "${category.name}"?`,
@@ -123,6 +136,7 @@ const confirmDelete = (event, category) => {
 
 // --- ACTIONS: DETAIL ---
 const openDetail = async (category) => {
+// ... existing openDetail function
     showDetailModal.value = true;
     selectedCategory.value = { ...category, productCategorys: [] }; 
     detailLoading.value = true;
@@ -187,6 +201,9 @@ defineExpose({ refresh: fetchCategories });
                             <i class="pi pi-folder text-[9px]"></i> Root Kategori
                         </span>
                     </p>
+                    
+                    <Tag v-if="cat.isRestaurant" value="Restaurant" severity="help" class="!text-[10px] !font-extrabold !px-2 w-fit mb-3"/>
+
 
                     <div class="mt-auto space-y-2">
                         <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-800 p-2 rounded border border-surface-100 dark:border-surface-700">
@@ -242,6 +259,15 @@ defineExpose({ refresh: fetchCategories });
                     </Dropdown>
                     <small class="text-surface-500 block mt-1">Kosongkan jika ini adalah kategori utama.</small>
                 </div>
+                
+                <div class="field flex items-center justify-between p-3 border border-surface-200 dark:border-surface-700 rounded-lg">
+                    <div>
+                        <label for="isRestaurant" class="block text-sm font-bold text-surface-800 dark:text-surface-100">Kategori Restoran / Resep</label>
+                        <small class="text-surface-500 block">Menandai ini sebagai bahan baku/menu untuk keperluan Resep (BOM).</small>
+                    </div>
+                    <InputSwitch id="isRestaurant" v-model="form.isRestaurant" class="shrink-0" />
+                </div>
+
             </div>
 
             <template #footer>
@@ -261,6 +287,13 @@ defineExpose({ refresh: fetchCategories });
                     <div>
                         <label class="text-xs text-surface-500 block mb-1">Induk Kategori</label>
                         <span class="font-bold text-lg text-blue-600">{{ selectedCategory.parent ? selectedCategory.parent.name : 'Root (Utama)' }}</span>
+                    </div>
+                    <div>
+                        <label class="text-xs text-surface-500 block mb-1">Jenis Kategori</label>
+                        <span v-if="selectedCategory.isRestaurant" class="font-bold text-lg text-purple-600 flex items-center gap-1">
+                            <i class="pi pi-utensils text-sm"></i> Restoran
+                        </span>
+                        <span v-else class="font-bold text-lg text-surface-800 dark:text-surface-100">Retail Umum</span>
                     </div>
                     <div>
                         <label class="text-xs text-surface-500 block mb-1">Jumlah Produk</label>

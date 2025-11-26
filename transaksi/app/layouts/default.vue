@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'; 
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '~/stores/auth.store';
-// [BARU] Import useRuntimeConfig untuk mengkonstruksi URL logo
+
 const config = useRuntimeConfig();
 
 const router = useRouter();
@@ -12,6 +12,9 @@ const authStore = useAuthStore();
 
 // Menggunakan computed untuk nama toko
 const storeName = computed(() => authStore.activeStore?.name || 'RetailApp');
+
+// [BARU] Computed untuk mengambil warna primer dari Store
+const primaryColorSetting = computed(() => authStore.getSetting('theme_primary_color', '#2563eb'));
 
 // [BARU] Computed untuk menghasilkan URL Logo yang lengkap dan dapat diakses
 const currentLogoUrl = computed(() => {
@@ -28,7 +31,7 @@ const currentLogoUrl = computed(() => {
     return urlPath.startsWith('http') ? urlPath : `${baseUrl}${urlPath}`;
 });
 
-// --- DARK MODE STATE & LOGIC ---
+// --- THEME LOGIC ---
 const isDark = ref(false);
 
 const toggleDarkMode = () => {
@@ -39,6 +42,24 @@ const toggleDarkMode = () => {
         localStorage.setItem('theme', isDark.value ? 'dark' : 'light');
     }
 };
+
+// [BARU] FUNGSI MENERAPKAN WARNA PRIMER KE CSS GLOBAL
+const applyPrimaryColor = (hexColor) => {
+    if (process.client) {
+        // Menerapkan warna HEX ke variabel CSS kustom
+        document.documentElement.style.setProperty('--app-primary-color', "#" + hexColor);
+        
+        // Catatan: Karena PrimeVue/Tailwind menggunakan palet angka (50, 600, dll),
+        // pendekatan ini hanya akan mengubah warna pada elemen yang menggunakan variabel
+        // --app-primary-color (lihat di base.css) atau mengubah semua palet warna PrimeVue.
+        // Untuk demo ini, kita hanya mengubah satu variabel untuk elemen kustom.
+    }
+}
+
+// Watcher untuk mendeteksi perubahan warna di store
+watch(primaryColorSetting, (newColor) => {
+    applyPrimaryColor(newColor);
+}, { immediate: true }); // [UPDATE] Jalankan segera saat komponen dimuat
 
 onMounted(() => {
     // Inisialisasi tema saat mounting
@@ -67,6 +88,9 @@ const items = ref([
         items: [
             { label: 'Produk', icon: 'pi pi-box', route: '/product' },
             { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' },
+            { label: 'Produksi', icon: 'pi pi-building', route: '/production' },
+            { label: 'Stok/Gudang', icon: 'pi pi-warehouse', route: '/inventory' },
+            { label: 'User/Pegawai', icon: 'pi pi-users', route: '/user' },
         ]
     },
     { 
@@ -90,6 +114,14 @@ const items = ref([
                     router.push('/arap');
                 }
             },
+            {
+                label: 'Jurnal', 
+                icon: 'pi pi-book',
+                route: '/arap', 
+                command: (event) => {
+                    router.push('/arap');
+                }
+            },
         ]
     },
     { 
@@ -105,8 +137,24 @@ const items = ref([
                     router.push('/report/transaction');
                 }
             },
-             { 
+            { 
                 label: 'Piutang / Hutang', 
+                icon: 'pi pi-chart-line', 
+                route: '/report/arap',
+                command: (event) => {
+                    router.push('/report/arap');
+                }
+            },
+            { 
+                label: 'Produk / Stok', 
+                icon: 'pi pi-chart-line', 
+                route: '/report/arap',
+                command: (event) => {
+                    router.push('/report/arap');
+                }
+            },
+            { 
+                label: 'Produksi',
                 icon: 'pi pi-chart-line', 
                 route: '/report/arap',
                 command: (event) => {
@@ -199,8 +247,8 @@ const isRouteActive = (item) => {
         
         <!-- HEADER / NAVBAR -->
         <header class="sticky top-0 z-50 shadow-xl dark:shadow-black/50 bg-primary-600 dark:bg-primary-950/90 border-b border-primary-700 dark:border-primary-800 px-2 md:px-4 backdrop-blur-md bg-opacity-95">
-            <div class="flex items-center h-16 w-full max-w-screen-2xl mx-auto">
-                
+            <div class="flex items-center h-16 w-full max-w-screen-2xl mx-auto" :style="`background-color: var(--app-primary-color); border-color: color-mix(in srgb, var(--app-primary-color) 90%, black);`">
+
                 <NuxtLink to="/" class="flex items-center gap-3 group pl-2 shrink-0">
                     <!-- LOGO DINAMIS -->
                     <div class="w-9 h-9 rounded-lg flex items-center justify-center font-black text-xl shadow-md group-hover:scale-105 transition-transform overflow-hidden shrink-0">

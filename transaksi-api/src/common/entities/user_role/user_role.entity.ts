@@ -1,7 +1,7 @@
 import {
   Entity,
   Column,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
@@ -14,11 +14,12 @@ export enum UserRole {
   MANAGER = 'MANAGER',
   CASHIER = 'CASHIER',
   INVENTORY = 'INVENTORY',
+  STAFF = 'STAFF',
 }
 
 @Entity('user_role')
 export class UserRoleEntity {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('varchar', { length: 60 })
   uuid: string;
 
   @Column({

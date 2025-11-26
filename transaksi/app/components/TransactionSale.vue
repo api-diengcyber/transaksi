@@ -496,7 +496,7 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-[320px] flex flex-col rounded-xl shadow-lg overflow-hidden shrink-0 relative">
+        <div class="w-[320px] flex flex-col rounded-xl shadow-lg border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 relative">
              <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
              
              <div class="p-4 flex-1 flex flex-col gap-5 relative z-10 overflow-y-auto scrollbar-thin">

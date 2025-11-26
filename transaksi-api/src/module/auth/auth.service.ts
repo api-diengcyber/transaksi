@@ -2,7 +2,6 @@ import {
   Injectable,
   Inject,
   ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';

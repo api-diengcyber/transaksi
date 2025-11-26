@@ -12,14 +12,14 @@ export const useCategoryService = () => {
         return await useApi(`/category/${uuid}`);
     };
 
-    const createCategory = async (payload: { name: string; parentUuid?: string | null }) => {
+    const createCategory = async (payload: { name: string; parentUuid?: string | null; isRestaurant?: boolean }) => {
         return await useApi('/category/create', {
             method: 'POST',
             body: payload
         });
     };
 
-    const updateCategory = async (uuid: string, payload: { name: string; parentUuid?: string | null }) => {
+    const updateCategory = async (uuid: string, payload: { name: string; parentUuid?: string | null; isRestaurant?: boolean }) => {
         return await useApi(`/category/update/${uuid}`, {
             method: 'PUT',
             body: payload

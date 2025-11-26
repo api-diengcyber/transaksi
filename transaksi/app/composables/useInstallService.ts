@@ -7,7 +7,7 @@ export const useInstallService = () => {
      * Mengirim data instalasi toko & user sekaligus.
      * Endpoint ini bersifat PUBLIC (tidak butuh token).
      */
-    const installSystem = async (payload: any, logoFile: File | null = null) => {
+    const installStore = async (payload: any, logoFile: File | null = null) => {
         const formData = new FormData();
         
         // 1. Append JSON fields ke FormData
@@ -28,6 +28,6 @@ export const useInstallService = () => {
     };
 
     return {
-        installSystem
+        installStore
     };
 };

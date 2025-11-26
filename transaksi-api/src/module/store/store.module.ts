@@ -7,11 +7,13 @@ import { StoreService } from './store.service';
 import { storeSettingProvider } from 'src/common/entities/store_setting/store_setting.provider';
 import { AuthModule } from '../auth/auth.module';
 import { MulterModule } from '@nestjs/platform-express';
+import { CategoryModule } from '../category/category.module';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
+    CategoryModule,
     MulterModule.register({
       dest: './uploads', 
     }),

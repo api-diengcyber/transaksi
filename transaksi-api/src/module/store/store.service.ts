@@ -8,6 +8,7 @@ import { UserEntity } from 'src/common/entities/user/user.entity';
 import { AuthService } from 'src/module/auth/auth.service';
 import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
+import { CategoryService } from '../category/category.service';
 
 // [BARU] Helper untuk menghasilkan pengenal lokal
 const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -17,6 +18,7 @@ const generateStoreUuid = () => `STR-${generateLocalUuid()}`;
 const generateUserUuid = (storeUuid: string) => `${storeUuid}-USR-${generateLocalUuid()}`;
 // [BARU] Helper untuk menghasilkan Store Setting UUID (prefix dengan Store UUID)
 const generateStoreSettingUuid = (storeUuid: string) => `${storeUuid}-STG-${generateLocalUuid()}`;
+const generateUserRoleUuid = (storeUuid: string) => `${storeUuid}-ROLE-${generateLocalUuid()}`;
 
 @Injectable()
 export class StoreService {
@@ -25,6 +27,7 @@ export class StoreService {
     private settingRepository: Repository<StoreSettingEntity>,
     @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly authService: AuthService,
+    private readonly categoryService: CategoryService,
   ) { }
 
   async installStore(dto: InstallStoreDto, logoPath: string | null = null, originalName: string | null = null) {
@@ -32,15 +35,32 @@ export class StoreService {
     const customUserUuid = generateUserUuid(customStoreUuid);
 
     return await this.dataSource.transaction(async (manager) => {
-      // 0. PREPARE ROLE ADMIN
-      let adminUserRole = await manager.findOne(UserRoleEntity, {
-        where: { role: UserRole.ADMIN },
-      });
+      // 0. PREPARE ALL ROLES (Menjamin semua role di enum ada di database)
+      
+      const allRoles = Object.values(UserRole);
+      let adminUserRole: UserRoleEntity | null = null;
+      
+      for (const roleValue of allRoles) {
+          let roleEntity = await manager.findOne(UserRoleEntity, {
+            where: { role: roleValue },
+          });
+
+          if (!roleEntity) {
+            roleEntity = manager.create(UserRoleEntity, {
+              uuid: generateUserRoleUuid(customStoreUuid),
+              role: roleValue,
+            });
+            await manager.save(roleEntity);
+          }
+          
+          if (roleValue === UserRole.ADMIN) {
+            adminUserRole = roleEntity; // Simpan role ADMIN untuk user pertama
+          }
+      }
+
+      // Pastikan role admin ditemukan/terbuat
       if (!adminUserRole) {
-        adminUserRole = manager.create(UserRoleEntity, {
-          role: UserRole.ADMIN,
-        });
-        await manager.save(adminUserRole);
+        throw new Error('Admin role preparation failed.');
       }
 
       // 1. CREATE USER
@@ -69,7 +89,10 @@ export class StoreService {
       savedUser.stores = [savedStore];
       await manager.save(savedUser);
 
-      // 4. SETTINGS
+      // 4. INITIALIZE RESTAURANT CATEGORIES
+      await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedStore.uuid, manager);
+
+      // 5. SETTINGS
       if (dto.settings && dto.settings.length > 0) {
         const settingEntities = dto.settings.map((s) =>
           manager.create(StoreSettingEntity, {
@@ -98,11 +121,18 @@ export class StoreService {
               key: 'store_logo_filename',
               value: originalName ?? '',
           }));
+          initialSettings.push(manager.create(StoreSettingEntity, {
+              uuid: generateStoreSettingUuid(customStoreUuid),
+              storeUuid: savedStore.uuid,
+              key: 'theme_primary_color',
+              value: '#2563eb',
+              createdBy: savedUser.uuid,
+          }));
       }
 
       await manager.save(initialSettings);
 
-      // 5. TOKEN (Bawa storeUuid)
+      // 6. TOKEN (Bawa storeUuid)
       const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username, savedStore.uuid);
       const rtHash = await bcrypt.hash(tokens.refreshToken, 10);
       savedUser.refreshToken = rtHash;

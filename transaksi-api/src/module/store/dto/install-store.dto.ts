@@ -19,10 +19,11 @@ export class InstallStoreDto {
   @IsString() 
   phone?: string;
 
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => StoreSettingDto)
-  settings: StoreSettingDto[];
+  settings?: StoreSettingDto[];
 
   @IsString()
   username: string;

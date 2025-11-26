@@ -7,7 +7,6 @@ definePageMeta({ layout: 'blank' });
 
 const router = useRouter();
 const toast = useToast();
-// Pastikan composables/useInstallService.ts sudah dibuat
 const installService = useInstallService();
 
 // --- STATE ---
@@ -25,7 +24,7 @@ const steps = ref([
 
 const form = reactive({
     // Store
-    storeName: '',
+    name: '',
     storeAddress: '',
     storePhone: '',
     // User
@@ -69,7 +68,7 @@ const handleRemoveLogo = () => {
 const nextStep = () => {
     // Step 0: Validasi Toko
     if (activeStep.value === 0) {
-        if (!form.storeName) {
+        if (!form.name) {
             toast.add({ severity: 'error', summary: 'Error', detail: 'Nama Toko wajib diisi', life: 3000 });
             return;
         }
@@ -97,14 +96,14 @@ const handleInstall = async () => {
         // Construct Payload GABUNGAN
         const payload = {
             // Data Toko
-            storeName: form.storeName,
+            name: form.name,
             address: form.storeAddress,
             phone: form.storePhone,
             
             // Data User
             username: form.username,
             password: form.password,
-            email: form.email
+            email: form.email,
         };
 
         // Panggil SINGLE ENDPOINT (dengan file logo)
@@ -200,7 +199,7 @@ const goToLogin = () => {
                         <!-- Nama Toko -->
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Nama Toko <span class="text-red-500">*</span></label>
-                            <InputText v-model="form.storeName" class="w-full" placeholder="Contoh: Toko Maju Jaya" autofocus />
+                            <InputText v-model="form.name" class="w-full" placeholder="Contoh: Toko Maju Jaya" autofocus />
                         </div>
                         
                         <!-- Alamat & Telepon -->
@@ -254,7 +253,7 @@ const goToLogin = () => {
                     </div>
                     <h2 class="text-3xl font-bold text-surface-900 dark:text-surface-0 mb-3">Instalasi Berhasil!</h2>
                     <p class="text-surface-500 mb-8 max-w-md leading-relaxed">
-                        Toko <strong>{{ form.storeName }}</strong> telah dibuat.<br>
+                        Toko <strong>{{ form.name }}</strong> telah dibuat.<br>
                         Silakan login menggunakan akun <strong>{{ form.username }}</strong> yang telah dibuat.
                     </p>
                     <Button label="Masuk Halaman Login" icon="pi pi-sign-in" size="large" @click="goToLogin" class="px-8 py-3 shadow-lg shadow-primary-500/30" />
