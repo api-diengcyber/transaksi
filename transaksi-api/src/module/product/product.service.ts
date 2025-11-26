@@ -312,10 +312,93 @@ export class ProductService {
     });
   }
 
+
   // ==========================================================
   // FIND ALL (Inject Stock Calculation)
   // ==========================================================
-  async findAll(storeUuid?: string) {
+  async findAllPage(
+    storeUuid?: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ) {// Mengembalikan objek data dan metadata
+    const skip = (page - 1) * limit;
+
+    let queryBuilder = this.productRepo.createQueryBuilder('product')
+      .leftJoinAndSelect('product.units', 'units')
+      .leftJoinAndSelect('product.price', 'price')
+      .leftJoinAndSelect('product.shelve', 'shelve')
+      .leftJoinAndSelect('shelve.shelve', 'shelveEntity')
+      .leftJoinAndSelect('product.productCategory', 'productCategory')
+      .leftJoinAndSelect('productCategory.category', 'category')
+      .where('product.deletedAt IS NULL'); // Asumsi menggunakan soft delete
+
+    if (storeUuid) {
+      // Filter berdasarkan prefix storeUuid pada kolom uuid produk (Primary Key)
+      queryBuilder = queryBuilder.andWhere("product.uuid LIKE :storePrefix", { storePrefix: `${storeUuid}%` });
+    }
+
+    if (search) {
+      // Pencarian berdasarkan nama produk (case-insensitive search)
+      queryBuilder = queryBuilder.andWhere("product.name LIKE :searchQuery", { searchQuery: `%${search}%` });
+    }
+
+    // Tambahkan pengurutan dan pagination
+    queryBuilder = queryBuilder
+      .orderBy('product.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    // Dapatkan data produk dan total
+    const [products, total] = await queryBuilder.getManyAndCount();
+
+    if (products.length === 0 && total === 0) {
+      return {
+        data: [],
+        meta: {
+          total: 0,
+          page: page,
+          limit: limit,
+          totalPage: 0
+        }
+      };
+    }
+
+    // --- Inject Stock Calculation Logic (Logika stok tetap sama) ---
+    const allUnits: ProductUnitEntity[] = [];
+    products.forEach(p => {
+      if (p.units) allUnits.push(...p.units);
+    });
+
+    if (allUnits.length > 0) {
+      const manager = this.dataSource.manager;
+      const stockMap = await this.calculateStockForUnits(allUnits, manager);
+
+      products.forEach(product => {
+        product.units = product.units.map(unit => ({
+          ...unit,
+          currentStock: stockMap.get(unit.uuid) || 0
+        } as ProductUnitEntity & { currentStock: number; }));
+      });
+    }
+    // -------------------------------------
+
+    const totalPage = Math.ceil(total / limit);
+
+    return {
+      data: products,
+      meta: {
+        total: total,
+        page: page,
+        limit: limit,
+        totalPage: totalPage
+      }
+    };
+  }
+
+  async findAll(
+    storeUuid?: string,
+  ) {
     const whereCondition: { uuid?: any } = {};
 
     // Filtering menggunakan LIKE pada kolom uuid (Primary Key)

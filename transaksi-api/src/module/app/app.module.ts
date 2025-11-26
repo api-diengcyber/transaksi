@@ -8,6 +8,7 @@ import { CategoryModule } from '../category/category.module';
 import { TableModule } from '../table/table.module';
 import { RecipeModule } from '../recipe/recipe.module';
 import { UserModule } from '../user/user.module';
+import { ProductionModule } from '../production/production.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserModule } from '../user/user.module';
     TableModule,
     RecipeModule,
     UserModule,
+    ProductionModule,
   ],
   controllers: [],
   providers: [],

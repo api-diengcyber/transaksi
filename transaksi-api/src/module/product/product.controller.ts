@@ -6,7 +6,8 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards
+  UseGuards,
+  Query
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { ApiOperation, ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -23,9 +24,16 @@ export class ProductController {
   constructor(private readonly productService: ProductService) { }
 
   @Get('find-all')
-  @ApiOperation({ summary: 'Get all products' })
-  async findAll(@GetUser('storeUuid') storeUuid: string) {
-    return this.productService.findAll(storeUuid);
+  @ApiOperation({ summary: 'Get all products with pagination and search' })
+  async findAll(
+    @GetUser('storeUuid') storeUuid: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string
+  ) {
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    return this.productService.findAllPage(storeUuid, pageNum, limitNum, search);
   }
 
   @Get(':uuid')

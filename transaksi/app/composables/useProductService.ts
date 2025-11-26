@@ -4,8 +4,22 @@ export const useProductService = () => {
     const config = useRuntimeConfig();
     const API_BASE = `${config.public.apiBase}/product`;
 
-    const getAllProducts = async () => {
-        return await useApi(`${API_BASE}/find-all`, { method: 'GET' });
+    // PERBAIKAN: Tambahkan parameter page, limit, dan search untuk pagination/pencarian
+    const getAllProducts = async (page: number = 1, limit: number = 10, search: string = '') => {
+        const params: any = {
+            page: page,
+            limit: limit,
+        };
+
+        if (search) {
+            params.search = search;
+        }
+
+        // useApi akan otomatis mengonversi params menjadi query string (?page=...&limit=...&search=...)
+        return await useApi(`${API_BASE}/find-all`, {
+            method: 'GET',
+            params: params,
+        });
     };
 
     const getProduct = async (uuid: string) => {

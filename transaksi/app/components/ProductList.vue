@@ -1,27 +1,43 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue'; // Pastikan 'computed' di-import
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 const emit = defineEmits(['create', 'edit']);
 
+// Pastikan useProductService, useToast, dan useConfirm tersedia di konteks ini
 const productService = useProductService();
 const toast = useToast();
 const confirm = useConfirm();
 
-// State
+// --- STATE UNTUK LAZY LOADING & SEARCH ---
 const products = ref([]);
 const loading = ref(true);
-const filters = ref({ global: { value: null, matchMode: 'contains' } });
+const totalRecords = ref(0);
+const searchInput = ref(''); // Input teks pencarian
+
+// Parameter state untuk API call (page, limit, search term)
+const lazyParams = ref({
+    page: 1,
+    limit: 10, 
+    search: null,
+});
+// --- END STATE ---
+
+// HITUNG OFFSET (INDEX BARIS PERTAMA)
+// Ini adalah properti PENTING yang memberitahu PrimeVue di halaman mana kita berada.
+const firstRow = computed(() => (lazyParams.value.page - 1) * lazyParams.value.limit);
 
 // --- ACTIONS ---
 const fetchProducts = async () => {
     loading.value = true;
     try {
-        // Backend (ProductService.findAll) kini mengembalikan data units yang sudah diinjeksi 
-        // dengan properti virtual 'currentStock' (dihitung dari Journal)
-        const data = await productService.getAllProducts();
-        products.value = (data || []).map(p => ({
+        const { page, limit, search } = lazyParams.value;
+
+        // Memanggil API dengan parameter pagination dan search
+        const response = await productService.getAllProducts(page, limit, search);
+        
+        products.value = (response.data || []).map(p => ({
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],
@@ -29,6 +45,14 @@ const fetchProducts = async () => {
             // Mapping Kategori dari relasi productCategory
             categories: (p.productCategory || []).map(pc => pc.category?.name).filter(Boolean)
         }));
+
+        console.log('Fetched Products:', products.value);
+
+        // Mengambil metadata dari respons backend
+        // *** PASTIKAN response.meta.total memiliki nilai > 10 agar paginasi muncul ***
+        totalRecords.value = response.meta.total;
+        lazyParams.value.page = response.meta.page; // Update halaman dari meta response
+
     } catch (err) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data produk', life: 3000 });
     } finally {
@@ -46,7 +70,8 @@ const confirmDelete = (prod) => {
             try {
                 await productService.deleteProduct(prod.uuid);
                 toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Produk dihapus', life: 3000 });
-                fetchProducts();
+                // Setelah delete, panggil ulang data
+                refresh(); 
             } catch (err) {
                 toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus', life: 3000 });
             }
@@ -54,23 +79,33 @@ const confirmDelete = (prod) => {
     });
 };
 
+// --- HANDLER PAGINASI (DIPANGGIL OLEH DATATABLE) ---
+const onPage = (event) => {
+    // event.first adalah offset (index baris pertama), event.rows adalah limit
+    const newPage = (event.first / event.rows) + 1; 
+    const newLimit = event.rows;
+    
+    if (newPage !== lazyParams.value.page || newLimit !== lazyParams.value.limit) {
+        lazyParams.value.page = newPage;
+        lazyParams.value.limit = newLimit;
+        fetchProducts();
+    }
+};
+
+// --- HANDLER PENCARIAN (DIPANGGIL OLEH TOMBOL/ENTER) ---
+const onSearch = () => {
+    // Reset halaman ke 1 ketika melakukan pencarian baru
+    lazyParams.value.page = 1;
+    lazyParams.value.search = searchInput.value;
+    fetchProducts();
+}
+
 // --- HELPERS ---
 const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 const getPricesForUnit = (all, uid) => all.filter(p => p.unitUuid === uid);
-
-// Helper untuk mendapatkan total stok unit (currentStock)
 const getCurrentStock = (unit) => {
     return unit.currentStock || 0; 
 };
-
-// Helper untuk menentukan warna Stok berdasarkan Qty (Memanfaatkan currentStock)
-const getStockColor = (qty) => {
-    // Memastikan kelas warna latar belakang dan teks adaptif
-    if (qty <= 0) return 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-    if (qty < 10) return 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
-    return 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800';
-};
-
 const getUniqueShelves = (product) => {
     if (!product.shelve || !Array.isArray(product.shelve)) return [];
     const names = product.shelve
@@ -83,15 +118,37 @@ onMounted(() => {
     fetchProducts();
 });
 
-defineExpose({ refresh: fetchProducts });
+const refresh = () => {
+    // Reset semua state saat refresh dipanggil dari luar
+    searchInput.value = '';
+    lazyParams.value.page = 1;
+    lazyParams.value.search = null;
+    lazyParams.value.limit = 10;
+    fetchProducts();
+};
+
+defineExpose({ refresh });
 </script>
+
+---
 
 <template>
     <div class="animate-fade-in">
         <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-            <div class="relative w-full md:w-96">
-                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500"></i>
-                <InputText v-model="filters['global'].value" placeholder="Cari Nama Produk / Barcode..." class="w-full pl-10 !rounded-full shadow-sm" />
+            <div class="relative flex gap-2 w-full md:w-96">
+                <InputText 
+                    v-model="searchInput" 
+                    placeholder="Cari Nama Produk / Barcode..." 
+                    class="w-full pl-3 !rounded-full shadow-sm"
+                    @keydown.enter="onSearch"
+                />
+                <Button 
+                    icon="pi pi-search" 
+                    @click="onSearch" 
+                    severity="secondary" 
+                    rounded
+                    aria-label="Cari"
+                />
             </div>
             <div class="flex gap-2">
                 <Button label="Export" icon="pi pi-file-excel" severity="success" text />
@@ -101,8 +158,22 @@ defineExpose({ refresh: fetchProducts });
 
         <div class="card bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden">
              
-             <DataTable :value="products" :loading="loading" paginator :rows="10" dataKey="uuid" :filters="filters" stripedRows tableStyle="min-width: 90rem" class="text-sm datatable-dark-safe dark:text-surface-100" :globalFilterFields="['name', 'units.barcode']">
-                
+             <DataTable 
+                :value="products" 
+                :loading="loading" 
+                :lazy="true"  
+                paginator 
+                :rows="lazyParams.limit"
+                :totalRecords="totalRecords" 
+                :first="firstRow" @page="onPage" 
+                dataKey="uuid" 
+                stripedRows 
+                tableStyle="min-width: 90rem" 
+                class="text-sm datatable-dark-safe dark:text-surface-100" 
+                :rowsPerPageOptions="[10, 25, 50]"
+                currentPageReportTemplate="Menampilkan {first} hingga {last} dari {totalRecords} produk"
+                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-12 text-surface-400 dark:text-surface-600">
                         <i class="pi pi-inbox text-5xl mb-3 opacity-30"></i>
@@ -221,9 +292,11 @@ defineExpose({ refresh: fetchProducts });
                     </template>
                 </Column>
             </DataTable>
-        </div>
+             </div>
     </div>
 </template>
+
+---
 
 <style scoped>
 /* Mengatasi latar belakang tabel utama */
