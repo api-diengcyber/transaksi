@@ -47,7 +47,7 @@ const toggleDarkMode = () => {
 const applyPrimaryColor = (hexColor) => {
     if (process.client) {
         // Menerapkan warna HEX ke variabel CSS kustom
-        document.documentElement.style.setProperty('--app-primary-color', "#" + hexColor);
+        document.documentElement.style.setProperty('--app-primary-color', "#" + hexColor.replace('#', ''));
         
         // Catatan: Karena PrimeVue/Tailwind menggunakan palet angka (50, 600, dll),
         // pendekatan ini hanya akan mengubah warna pada elemen yang menggunakan variabel

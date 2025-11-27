@@ -69,15 +69,15 @@ const onShelveSaved = () => {
 // --- UTILS ---
 const getTabClass = (tabName) => {
     return activeMainTab.value === tabName
-        ? 'global-tab-active' // Menggunakan class global baru
-        : 'global-tab-inactive'; // Menggunakan class global baru
+        ? 'global-tab-active' 
+        : 'global-tab-inactive'; 
 };
 
 definePageMeta({ layout: 'default' });
 </script>
 
 <template>
-    <div class="h-[calc(100vh-5rem)]">
+    <div class="">
         <Toast />
         <ConfirmDialog />
 

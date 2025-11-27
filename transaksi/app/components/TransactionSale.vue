@@ -12,9 +12,9 @@ const categoryService = useCategoryService();
 const authStore = useAuthStore();
 const toast = useToast();
 
-// --- STATE ---
-const products = ref([]);
-const filteredProducts = ref([]);
+// --- STATE PAGINATION & PRODUCT ---
+const products = ref([]); // Data produk yang telah dimuat (akumulasi dari Load More)
+const filteredProducts = ref([]); // Produk yang ditampilkan setelah filter kategori lokal/search
 const cart = ref([]);
 const searchQuery = ref('');
 const loading = ref(true);
@@ -23,6 +23,13 @@ const showCreateModal = ref(false);
 
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]); 
+
+// [BARU] State Paginasi
+const currentPage = ref(1);
+const limit = 30; // Batas item per halaman (dapat disesuaikan)
+const totalPages = ref(1);
+const totalProducts = ref(0);
+const moreLoading = ref(false);
 
 const payment = reactive({
     method: 'CASH', // [BARU] Tambah metode pembayaran
@@ -71,7 +78,11 @@ const canCheckout = computed(() => {
 // --- ACTIONS ---
 
 const onSearchKeydown = (event) => {
-    if (event.key === 'Enter') handleSearch();
+    if (event.key === 'Enter') {
+        // [UPDATE PAGINASI] Tekan Enter untuk memicu pencarian ke API (reset halaman)
+        currentPage.value = 1;
+        loadProducts(); 
+    }
 };
 
 const fetchCategories = async () => {
@@ -81,46 +92,84 @@ const fetchCategories = async () => {
     } catch (e) { console.error(e); }
 };
 
-const loadProducts = async () => {
-    loading.value = true;
+const loadProducts = async (isLoadMore = false) => {
+    if (!isLoadMore) {
+        loading.value = true;
+        // Kosongkan produk hanya jika halaman baru (bukan load more)
+        if (currentPage.value === 1) products.value = []; 
+    } else {
+        moreLoading.value = true;
+    }
+
     try {
-        const data = await productService.getAllProducts();
-        products.value = (data || []).map(p => ({
+        // [PERBAIKAN PAGINASI] Panggil API dengan paginasi dan query pencarian
+        const currentQuery = searchQuery.value.toLowerCase().trim();
+        const response = await productService.getAllProducts(currentPage.value, limit, currentQuery);
+        
+        // Asumsi response API: { data: Product[], meta: { total_page: number, total: number } }
+        const productsArray = response?.data || [];
+        
+        const newProducts = productsArray.map(p => ({
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],
             categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean)
         }));
-        handleSearch();
+        
+        if (isLoadMore) {
+            products.value.push(...newProducts); // Tambahkan untuk Load More
+        } else {
+            products.value = newProducts; // Ganti dengan data halaman baru
+        }
+
+        // Update metadata paginasi
+        totalPages.value = response?.meta?.total_page || 1;
+        totalProducts.value = response?.meta?.total || 0;
+        
+        handleLocalFiltering(); // Filter kategori setelah data dimuat (jika ada)
+
     } catch (error) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat produk', life: 3000 });
     } finally {
         loading.value = false;
+        moreLoading.value = false;
     }
 };
 
-const handleSearch = () => {
-    const query = searchQuery.value.toLowerCase().trim();
-    const selectedCats = selectedCategoryUuids.value;
+const loadMoreProducts = () => {
+    if (currentPage.value < totalPages.value) {
+        currentPage.value++;
+        loadProducts(true);
+    }
+};
 
+
+const handleLocalFiltering = () => {
+    const selectedCats = selectedCategoryUuids.value;
     let result = products.value;
 
+    // 1. FILTER KATEGORI LOKAL (HANYA DARI PRODUK YANG SUDAH DIMUAT)
     if (selectedCats.length > 0) {
         result = result.filter(p => {
             return p.categoryUuids.some(catUuid => selectedCats.includes(catUuid));
         });
     }
 
+    // 2. SCAN BARCODE INSTANT & LOCAL TEXT FILTERING
+    const query = searchQuery.value.toLowerCase().trim();
     if (query) {
-        const exactProduct = result.find(p => p.units.some(u => u.barcode === query));
+        // Pengecekan Barcode untuk Add to Cart Instan
+        const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
         if (exactProduct) {
             const matchedUnit = exactProduct.units.find(u => u.barcode === query);
             addToCart(exactProduct, matchedUnit);
             searchQuery.value = ''; 
             toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
-            return handleSearch(); 
+            return; 
         }
-
+        
+        // Filter Teks Lokal untuk efek mengetik sebelum user menekan Enter (kecuali jika ada filter kategori, yang harus didahulukan)
+        // Jika user mengetik, kita hanya memfilter produk yang sudah ada di memori/layar.
         result = result.filter(p => 
             p.name.toLowerCase().includes(query) || 
             p.units.some(u => u.barcode?.includes(query))
@@ -130,9 +179,19 @@ const handleSearch = () => {
     filteredProducts.value = result;
 };
 
+
+// [UPDATE] Ketika kategori berubah, reset halaman dan muat ulang produk dari API
 watch(selectedCategoryUuids, () => {
-    handleSearch();
+    currentPage.value = 1;
+    loadProducts();
 });
+
+// [UPDATE] Ketika input pencarian berubah, lakukan filter lokal untuk efek instan/barcode.
+// Pencarian ke DB hanya dilakukan saat Enter ditekan (di onSearchKeydown).
+watch(searchQuery, () => {
+    handleLocalFiltering();
+});
+
 
 const addToCart = (product, specificUnit = null) => {
     let selectedUnit = specificUnit;
@@ -191,6 +250,7 @@ const removeFromCart = (index) => {
 };
 
 const onProductCreated = async (newProduct) => {
+    currentPage.value = 1; // [UPDATE] Reset page saat produk baru dibuat
     await loadProducts();
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
     if (fullProduct) addToCart(fullProduct);
@@ -248,6 +308,7 @@ const processCheckout = async () => {
         payment.method = 'CASH'; // [UPDATE] Reset metode pembayaran
         payment.customerName = ''; // [UPDATE] Reset field kredit
         payment.dueDate = null; // [UPDATE] Reset field kredit
+        currentPage.value = 1; // [UPDATE] Reset page
         await loadProducts(); 
     } catch (e) {
         console.error(e);
@@ -287,6 +348,7 @@ onMounted(async () => {
 
 // [BARU] Expose fungsi refresh agar bisa dipanggil dari parent (TransactionIndex.vue)
 const refreshData = async () => {
+    currentPage.value = 1; // [UPDATE] Reset page saat refresh
     await loadProducts();
 }
 defineExpose({ refreshData });
@@ -325,10 +387,10 @@ defineExpose({ refreshData });
                         id="search-input-sale"
                         v-model="searchQuery" 
                         type="text"
-                        placeholder="Cari Produk / Scan Barcode... (F2)" 
+                        placeholder="Cari Produk / Scan Barcode... (Enter untuk cari di database F2)" 
                         class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm h-10"
                         @keydown="onSearchKeydown" 
-                        @input="handleSearch"
+                        @input="handleLocalFiltering"
                         autocomplete="off"
                     />
                 </div>
@@ -378,7 +440,19 @@ defineExpose({ refreshData });
                     <i class="pi pi-box text-4xl"></i>
                     <span class="text-xs">Produk tidak ditemukan</span>
                 </div>
-            </div>
+
+                <div v-if="currentPage < totalPages && filteredProducts.length > 0" class="mt-4 text-center">
+                    <Button 
+                        :label="moreLoading ? 'Memuat...' : `Tampilkan Lebih Banyak (${products.length}/${totalProducts})`" 
+                        icon="pi pi-arrow-down" 
+                        size="small"
+                        outlined
+                        :loading="moreLoading"
+                        @click="loadMoreProducts"
+                        class="!text-xs !py-2 !px-4"
+                    />
+                </div>
+                </div>
         </div>
 
         <div class="w-[380px] flex flex-col dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
