@@ -1,7 +1,5 @@
-// api-diengcyber/transaksi/transaksi-8c061ef45e91bf8e12e1b9338353de87878e544c/transaksi/app/components/TransactionReturn.vue
-
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
 const productService = useProductService();
@@ -17,6 +15,12 @@ const products = ref([]);
 const filteredProducts = ref([]);
 const searchQuery = ref('');
 
+// [PAGINASI] State Baru
+const currentPage = ref(1);
+const limit = 16; 
+const totalPages = ref(1);
+const totalProducts = ref(0);
+
 const cart = ref([]);
 
 // State Dokumen Retur
@@ -30,17 +34,15 @@ const returnDoc = reactive({
 // --- COMPUTED ---
 const grandTotal = computed(() => {
     // Total selalu NEGATIF (pengurangan omset/pengeluaran)
-    // Walaupun di cart ditampilkan positif, grandTotal adalah nominal untuk Journal
     return cart.value.reduce((total, item) => total + (item.refundPrice * item.qty), 0) * -1; 
 });
 
 const totalRefund = computed(() => grandTotal.value * -1);
 
 const canProcessReturn = computed(() => {
-    // Validasi dasar
     if (cart.value.length === 0 || totalRefund.value <= 0) return false;
     
-    // Validasi spesifik (misal: referensi wajib)
+    // Validasi spesifik (referensi wajib)
     if (returnType.value === 'sale' && !returnDoc.customerName) return false;
     if (returnType.value === 'buy' && !returnDoc.supplier) return false;
 
@@ -49,40 +51,107 @@ const canProcessReturn = computed(() => {
 
 // --- ACTIONS ---
 
+// [BARU] Search Keydown untuk memicu API search dengan paginasi
+const onSearchKeydown = (event) => {
+    if (event.key === 'Enter') {
+        currentPage.value = 1; // Reset halaman ke 1 saat pencarian
+        loadProducts(); 
+    }
+};
+
+// [UPDATED] Load Products dengan Paginasi dan Perbaikan Error
 const loadProducts = async () => {
     loading.value = true;
+    products.value = []; 
+
     try {
-        const data = await productService.getAllProducts();
-        products.value = (data || []).map(p => ({
+        const currentQuery = searchQuery.value.toLowerCase().trim();
+
+        // Panggil API dengan parameter page & limit (Asumsi getAllProducts mendukung ini)
+        const response = await productService.getAllProducts(currentPage.value, limit, currentQuery);
+        
+        const data = response?.data || response || [];
+
+        if (!Array.isArray(data)) {
+            throw new Error("Format data produk dari server tidak valid (bukan Array).");
+        }
+        
+        // Ambil data paginasi dari meta
+        totalPages.value = response?.meta?.totalPage || response?.meta?.total_page || 1;
+        totalProducts.value = response?.meta?.total || 0;
+
+        products.value = data.map(p => ({
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],
         }));
-        handleSearch();
+        
+        // Panggil handleSearch untuk memfilter data lokal (jika ada instant search)
+        handleSearch(true); 
     } catch (error) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat produk', life: 3000 });
+        console.error("Gagal memuat produk dari API:", error); 
+        const errorDetail = error.message || 'Terjadi kesalahan jaringan atau server.';
+        
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Error', 
+            detail: `Gagal memuat produk: ${errorDetail}`, 
+            life: 5000 
+        });
+        
+        products.value = []; 
+        filteredProducts.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-const handleSearch = () => {
+// [BARU] Fungsi Navigasi Halaman
+const changePage = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages.value) {
+        currentPage.value = newPage;
+        loadProducts();
+    }
+};
+
+// [UPDATED] handleSearch hanya untuk filter instant dan scan barcode
+const handleSearch = (isApiLoad = false) => {
+    let result = products.value;
     const query = searchQuery.value.toLowerCase().trim();
 
-    let result = products.value;
-
     if (query) {
-        result = result.filter(p => 
-            p.name.toLowerCase().includes(query) || 
-            p.units.some(u => u.barcode?.includes(query))
-        );
+        // Cek Barcode Persis (Scan)
+        const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
+        if (exactProduct) {
+            addToCart(exactProduct);
+            searchQuery.value = ''; 
+            toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name} ditambahkan`, life: 1500 });
+            // Tampilkan kembali list produk yang dimuat API
+            filteredProducts.value = products.value; 
+            return; 
+        }
+
+        // Filter Teks Lokal (Hanya di data yang sudah dimuat)
+        // Jika isApiLoad=false (berarti dipanggil dari @input)
+        if (!isApiLoad) {
+            result = result.filter(p => 
+                p.name.toLowerCase().includes(query) || 
+                p.units.some(u => u.barcode?.includes(query))
+            );
+        }
     }
 
     filteredProducts.value = result;
 };
 
+
 const addToCart = (product) => {
     const selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
+    if (!selectedUnit) {
+        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk tanpa satuan tidak bisa diretur.', life: 3000 });
+        return;
+    }
+
     const unitPrices = product.prices.filter(p => p.unitUuid === selectedUnit.uuid);
     const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
     const initialRefundPrice = defaultPriceObj ? defaultPriceObj.price : 0; 
@@ -103,6 +172,10 @@ const addToCart = (product) => {
             allPrices: product.prices 
         });
     }
+    setTimeout(() => {
+        const cartEl = document.getElementById('cart-items-container-return');
+        if(cartEl) cartEl.scrollTop = cartEl.scrollHeight;
+    }, 50);
 };
 
 const removeFromCart = (index) => {
@@ -147,6 +220,7 @@ const processReturn = async () => {
         // Reset state
         cart.value = [];
         Object.assign(returnDoc, { referenceNo: '', notes: '', customerName: '', supplier: '' });
+        currentPage.value = 1; // Reset halaman
         await loadProducts(); 
     } catch (e) {
         console.error(e);
@@ -166,11 +240,19 @@ const getDefaultUnitName = (prod) => {
     return defaultUnit?.unitName;
 };
 
+// --- Watchers ---
+watch(returnType, () => {
+    // Reset dokumen saat jenis retur berubah
+    returnDoc.customerName = '';
+    returnDoc.supplier = '';
+});
+
 onMounted(() => {
     loadProducts();
 });
 
 const refreshData = async () => {
+    currentPage.value = 1;
     await loadProducts();
 }
 defineExpose({ refreshData });
@@ -180,10 +262,10 @@ defineExpose({ refreshData });
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-950 font-sans">
         
         <div class="w-[320px] flex flex-col dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
-             <div class="p-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50/30">
-                 <h2 class="font-bold text-sm text-surface-700 flex items-center gap-2">
-                     <div class="w-6 h-6 rounded-md bg-red-100 flex items-center justify-center">
-                        <i class="pi pi-refresh text-red-600 text-xs"></i>
+             <div class="p-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50/30 dark:bg-surface-950/50">
+                 <h2 class="font-bold text-sm text-surface-700 dark:text-surface-200 flex items-center gap-2">
+                     <div class="w-6 h-6 rounded-md bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                        <i class="pi pi-refresh text-red-600 dark:text-red-400 text-xs"></i>
                      </div>
                      Jenis Retur
                  </h2>
@@ -196,36 +278,46 @@ defineExpose({ refreshData });
                         :options="[{label: 'Retur Penjualan', value: 'sale'}, {label: 'Retur Pembelian', value: 'buy'}]"
                         optionLabel="label" optionValue="value"
                         class="w-full"
-                        :pt="{ button: { class: '!text-xs !py-2' } }"
+                        :pt="{ 
+                            button: ({ context }) => ({ 
+                                class: [
+                                    '!text-xs !py-2', 
+                                    context.instance.value === 'sale' 
+                                        ? '!bg-red-500/10 !text-red-500 !border-red-500/50' 
+                                        : '!bg-blue-500/10 !text-blue-500 !border-blue-500/50',
+                                    'dark:!bg-surface-800 dark:!border-surface-700 dark:!text-surface-200'
+                                ] 
+                            }) 
+                        }"
                     />
                  </div>
                  
                  <div class="space-y-1">
                      <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">No. Referensi (Opsional)</label>
                      <InputText v-model="returnDoc.referenceNo" placeholder="No. Nota/Faktur" 
-                        class="w-full !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors" />
+                        class="w-full !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!transition-colors" />
                  </div>
 
                  <div v-if="returnType === 'sale'" class="space-y-1">
                      <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Nama Pelanggan <span class="text-red-400">*</span></label>
                      <InputText v-model="returnDoc.customerName" placeholder="Nama Pelanggan" 
-                        class="w-full !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors" />
+                        class="w-full !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!transition-colors" />
                  </div>
                  
                  <div v-if="returnType === 'buy'" class="space-y-1">
                      <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Nama Supplier <span class="text-red-400">*</span></label>
                      <InputText v-model="returnDoc.supplier" placeholder="Nama Supplier" 
-                        class="w-full !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors" />
+                        class="w-full !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!transition-colors" />
                  </div>
 
                  <div class="space-y-1 flex-1 flex flex-col">
                      <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Catatan Retur</label>
                      <Textarea v-model="returnDoc.notes" placeholder="Alasan retur..." 
-                        class="w-full !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors !p-3 resize-none flex-1 border-surface-200" />
+                        class="w-full !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!transition-colors !p-3 resize-none flex-1 border-surface-200" />
                  </div>
              </div>
 
-             <div class="p-4 bg-surface-150 relative z-10">
+             <div class="p-4 bg-surface-150 dark:bg-surface-950/50 relative z-10 border-t border-surface-200 dark:border-surface-700">
                  <div class="flex justify-between items-end mb-2">
                     <span class="text-xs text-surface-500 uppercase font-bold tracking-wider mb-1">Total Pengembalian</span>
                     <span class="text-xl font-black text-red-600 dark:text-red-400 tracking-tight">{{ formatCurrency(totalRefund) }}</span>
@@ -242,7 +334,6 @@ defineExpose({ refreshData });
              </div>
         </div>
 
-
         <div class="flex-1 flex flex-col dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
             <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-50/50 dark:bg-surface-950/50">
                 <div class="w-full">
@@ -251,8 +342,9 @@ defineExpose({ refreshData });
                         <input 
                             v-model="searchQuery" 
                             type="text"
-                            placeholder="Cari Produk yang dikembalikan..." 
-                            class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm h-10"
+                            placeholder="Cari Produk yang dikembalikan... (Enter untuk cari di database)" 
+                            class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-all shadow-sm h-10"
+                            @keydown="onSearchKeydown"
                             @input="handleSearch"
                             autocomplete="off"
                         />
@@ -260,12 +352,12 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950 scrollbar-thin">
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950 scrollbar-thin flex flex-col">
                  <div v-if="loading" class="flex justify-center py-20">
                     <ProgressSpinner style="width: 40px; height: 40px" />
                 </div>
 
-                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 flex-1">
                     <div v-for="prod in filteredProducts" :key="prod.uuid"
                         @click="addToCart(prod)"
                         class="group relative dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-3 cursor-pointer hover:border-red-400 hover:shadow-md transition-all active:scale-95 select-none flex flex-col justify-between h-28"
@@ -287,9 +379,37 @@ defineExpose({ refreshData });
                     </div>
                 </div>
 
-                <div v-else class="flex flex-col items-center justify-center h-full text-surface-400 dark:text-surface-600 gap-2 opacity-60">
+                <div v-else class="flex flex-col items-center justify-center h-full text-surface-400 dark:text-surface-600 gap-2 opacity-60 flex-1">
                     <i class="pi pi-box text-4xl"></i>
                     <span class="text-xs">Produk tidak ditemukan</span>
+                </div>
+                
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-950">
+                    <Button 
+                        icon="pi pi-chevron-left" 
+                        label="Sebelumnya"
+                        size="small" 
+                        text 
+                        :disabled="currentPage === 1"
+                        @click="changePage(currentPage - 1)"
+                        class="!text-xs"
+                    />
+                    
+                    <span class="text-xs font-medium text-surface-600 dark:text-surface-400">
+                        Halaman <span class="font-bold text-red-600">{{ currentPage }}</span> dari {{ totalPages }}
+                        <span class="text-[10px] ml-1">({{ totalProducts }} total)</span>
+                    </span>
+
+                    <Button 
+                        label="Selanjutnya"
+                        icon="pi pi-chevron-right" 
+                        iconPos="right"
+                        size="small" 
+                        text 
+                        :disabled="currentPage === totalPages"
+                        @click="changePage(currentPage + 1)"
+                        class="!text-xs"
+                    />
                 </div>
             </div>
         </div>
@@ -373,8 +493,23 @@ defineExpose({ refreshData });
 
 <style scoped>
 /* Custom Scrollbar Halus */
-.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { 
+    background: #e5e7eb; 
+    border-radius: 4px; 
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb { 
+    background: #374151; 
+}
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* Override PrimeVue Dropdown agar rapih */
+:deep(.custom-tiny-dropdown .p-dropdown-label) {
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
 </style>

@@ -15,7 +15,9 @@ const chartOptions = ref(null);
 const summary = ref({
     totalSale: 0,
     totalBuy: 0,
-    profit: 0
+    totalReturnSale: 0,   // [UPDATE] Retur Penjualan
+    totalReturnBuy: 0,    // [BARU] Retur Pembelian
+    profitAdjusted: 0 
 });
 
 // --- LOGIC TANGGAL & FILTER ---
@@ -45,29 +47,42 @@ const loadChartData = async () => {
         const startStr = dayjs(dates.value[0]).format('YYYY-MM-DD');
         const endStr = dayjs(dates.value[1]).format('YYYY-MM-DD');
 
+        // ASUMSI: journalService.getChartData sekarang menyertakan total_rt_sale dan total_rt_buy
         const rawData = await journalService.getChartData(startStr, endStr);
         
         // 1. Mapping Data untuk Chart
         const labels = rawData.map(item => dayjs(item.date).format('DD MMM'));
-        const dataSale = rawData.map(item => Number(item.total_sale));
-        const dataBuy = rawData.map(item => Number(item.total_buy));
-
+        
+        const dataSale = rawData.map(item => Number(item.total_sale || 0));
+        const dataBuy = rawData.map(item => Number(item.total_buy || 0));
+        
+        const dataReturnSale = rawData.map(item => Number(item.total_rt_sale || 0)); 
+        const dataReturnBuy = rawData.map(item => Number(item.total_rt_buy || 0)); // [BARU]
+        
         // 2. Hitung Total untuk Summary Cards
         const totalSale = dataSale.reduce((a, b) => a + b, 0);
         const totalBuy = dataBuy.reduce((a, b) => a + b, 0);
         
+        const totalReturnSale = dataReturnSale.reduce((a, b) => a + b, 0); 
+        const totalReturnBuy = dataReturnBuy.reduce((a, b) => a + b, 0); // [BARU]
+        
         summary.value = {
             totalSale,
             totalBuy,
-            profit: totalSale - totalBuy
+            totalReturnSale, 
+            totalReturnBuy, // [BARU]
+            // Profit dihitung: Pemasukan - (Pengeluaran - RT_BUY) - RT_SALE
+            // Equivalent: Pemasukan + RT_BUY - Pengeluaran - RT_SALE
+            profitAdjusted: totalSale + totalReturnBuy - totalBuy - totalReturnSale 
         };
 
         // 3. Setup Dataset Chart
         chartData.value = {
             labels: labels,
             datasets: [
+                // Dataset 1: Pemasukan
                 {
-                    label: 'Pemasukan (Omset)',
+                    label: 'Pemasukan (Omset Kotor)',
                     data: dataSale,
                     fill: true,
                     borderColor: '#10b981', // Emerald 500
@@ -85,8 +100,9 @@ const loadChartData = async () => {
                     pointRadius: 4,
                     pointHoverRadius: 6
                 },
+                // Dataset 2: Pengeluaran
                 {
-                    label: 'Pengeluaran (Belanja)',
+                    label: 'Pengeluaran (Belanja Kotor)',
                     data: dataBuy,
                     fill: true,
                     borderColor: '#f97316', // Orange 500
@@ -103,11 +119,41 @@ const loadChartData = async () => {
                     pointBorderWidth: 2,
                     pointRadius: 4,
                     pointHoverRadius: 6
+                },
+                // Dataset 3: Retur Penjualan (Pengurang Omset/Profit)
+                {
+                    label: 'Retur Penjualan',
+                    data: dataReturnSale,
+                    fill: false,
+                    borderColor: '#ef4444', // Red (Negative)
+                    backgroundColor: '#ef4444',
+                    borderDash: [5, 5], 
+                    tension: 0.4,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#ef4444',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                },
+                // [BARU] Dataset 4: Retur Pembelian (Pengurang Pengeluaran/Positif Profit)
+                {
+                    label: 'Retur Pembelian',
+                    data: dataReturnBuy,
+                    fill: false,
+                    borderColor: '#3b82f6', // Blue (Positive effect)
+                    backgroundColor: '#3b82f6',
+                    borderDash: [5, 5], 
+                    tension: 0.4,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#3b82f6',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
                 }
             ]
         };
     } catch (e) {
-        console.error(e);
+        console.error("Gagal memuat data chart:", e);
     } finally {
         loading.value = false;
     }
@@ -223,7 +269,7 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             
             <div class="p-5 rounded-2xl shadow-lg border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
                 <div class="relative z-10">
@@ -231,7 +277,7 @@ defineExpose({ refreshData });
                         <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl text-emerald-600 dark:text-emerald-400">
                             <i class="pi pi-arrow-up-right text-lg font-bold"></i>
                         </div>
-                        <span class="text-sm font-bold text-surface-500 uppercase tracking-wide">Pemasukan</span>
+                        <span class="text-sm font-bold text-surface-500 uppercase tracking-wide">Pemasukan Kotor</span>
                     </div>
                     <div class="text-3xl font-black text-surface-800 dark:text-surface-100 tracking-tight">
                         {{ formatCurrency(summary.totalSale) }}
@@ -247,7 +293,7 @@ defineExpose({ refreshData });
                         <div class="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-xl text-orange-600 dark:text-orange-400">
                             <i class="pi pi-arrow-down-left text-lg font-bold"></i>
                         </div>
-                        <span class="text-sm font-bold text-surface-500 uppercase tracking-wide">Pengeluaran</span>
+                        <span class="text-sm font-bold text-surface-500 uppercase tracking-wide">Pengeluaran Kotor</span>
                     </div>
                     <div class="text-3xl font-black text-surface-800 dark:text-surface-100 tracking-tight">
                         {{ formatCurrency(summary.totalBuy) }}
@@ -256,19 +302,51 @@ defineExpose({ refreshData });
                 </div>
                 <i class="pi pi-shopping-bag absolute -right-4 -bottom-6 text-[7rem] text-orange-500 opacity-10 group-hover:scale-110 transition-transform"></i>
             </div>
+            
+            <div class="p-5 rounded-2xl shadow-lg border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
+                <div class="relative z-10">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="p-2 bg-red-100 dark:bg-red-900/30 rounded-xl text-red-600 dark:text-red-400">
+                            <i class="pi pi-undo text-lg font-bold"></i>
+                        </div>
+                        <span class="text-sm font-bold text-surface-500 uppercase tracking-wide">Retur Jual (Kurang Omset)</span>
+                    </div>
+                    <div class="text-3xl font-black text-surface-800 dark:text-surface-100 tracking-tight">
+                        {{ formatCurrency(summary.totalReturnSale) }}
+                    </div>
+                    <div class="text-xs text-surface-400 mt-1">Pengembalian dana ke customer</div>
+                </div>
+                <i class="pi pi-money-bill absolute -right-4 -bottom-6 text-[7rem] text-red-500 opacity-10 group-hover:scale-110 transition-transform"></i>
+            </div>
+            
+            <div class="p-5 rounded-2xl shadow-lg border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
+                <div class="relative z-10">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600 dark:text-blue-400">
+                            <i class="pi pi-arrow-right-arrow-left text-lg font-bold"></i>
+                        </div>
+                        <span class="text-sm font-bold text-surface-500 uppercase tracking-wide">Retur Beli (Kurang Belanja)</span>
+                    </div>
+                    <div class="text-3xl font-black text-surface-800 dark:text-surface-100 tracking-tight">
+                        {{ formatCurrency(summary.totalReturnBuy) }}
+                    </div>
+                    <div class="text-xs text-surface-400 mt-1">Uang kembali dari supplier</div>
+                </div>
+                <i class="pi pi-box absolute -right-4 -bottom-6 text-[7rem] text-blue-500 opacity-10 group-hover:scale-110 transition-transform"></i>
+            </div>
 
-            <div class="bg-gradient-to-br from-primary-600 to-indigo-700 p-5 rounded-2xl shadow-xl shadow-primary-500/30 relative overflow-hidden group text-white">
+            <div class="col-span-full bg-gradient-to-br from-primary-600 to-indigo-700 p-5 rounded-2xl shadow-xl shadow-primary-500/30 relative overflow-hidden group text-white">
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-2">
                         <div class="p-2 bg-white/20 backdrop-blur-sm rounded-xl text-white">
                             <i class="pi pi-chart-line text-lg font-bold"></i>
                         </div>
-                        <span class="text-sm font-bold text-white/90 uppercase tracking-wide">Surplus Bersih</span>
+                        <span class="text-sm font-bold text-white/90 uppercase tracking-wide">Profit Bersih</span>
                     </div>
-                    <div class="text-4xl font-black tracking-tight" :class="summary.profit < 0 ? 'text-red-300' : 'text-white'">
-                        {{ formatCurrency(summary.profit) }}
+                    <div class="text-4xl font-black tracking-tight" :class="summary.profitAdjusted < 0 ? 'text-red-300' : 'text-white'">
+                        {{ formatCurrency(summary.profitAdjusted) }}
                     </div>
-                    <div class="text-xs text-white/70 mt-1">Selisih Pemasukan & Pengeluaran</div>
+                    <div class="text-xs text-white/70 mt-1">Omset - Belanja + Retur Beli - Retur Jual</div>
                 </div>
                 <i class="pi pi-dollar absolute -right-4 -bottom-6 text-[7rem] text-white opacity-10 group-hover:rotate-12 transition-transform"></i>
             </div>
@@ -278,7 +356,7 @@ defineExpose({ refreshData });
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100">Tren Performa Periodik</h3>
-                    <p class="text-xs text-surface-500">Grafik perbandingan arus kas masuk vs. keluar</p>
+                    <p class="text-xs text-surface-500">Grafik perbandingan arus kas masuk, keluar, dan retur</p>
                 </div>
                 <Button icon="pi pi-download" severity="secondary" text rounded v-tooltip.top="'Download Image'" />
             </div>
@@ -291,6 +369,7 @@ defineExpose({ refreshData });
             </div>
             
             <div class="h-[400px] w-full">
+                
                 <Chart type="line" :data="chartData" :options="chartOptions" class="h-full" />
             </div>
         </div>

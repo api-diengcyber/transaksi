@@ -1,33 +1,38 @@
-// components/TransactionBuy.vue
-
 <script setup>
 import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import ProductCreateModal from '~/components/ProductCreateModal.vue';
+import ProductCreateModal from '~/components/ProductCreateModal.vue'; 
 
 const productService = useProductService();
 const journalService = useJournalService();
 const categoryService = useCategoryService(); 
 const toast = useToast();
 
-// --- STATE ---
+// --- STATE PAGINATION & PRODUCT ---
 const products = ref([]);
 const filteredProducts = ref([]);
 const cart = ref([]);
 const searchQuery = ref('');
 const loading = ref(true);
 const processing = ref(false);
+const showCreateModal = ref(false); 
 
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]); 
+
+// [PAGINASI] State
+const currentPage = ref(1);
+const limit = 16; // Jumlah produk per halaman
+const totalPages = ref(1);
+const totalProducts = ref(0);
 
 // State khusus Pembelian
 const purchaseInfo = reactive({
     supplier: '',
     referenceNo: '',
     notes: '',
-    paymentMethod: 'CASH', // [BARU] Metode pembayaran
-    dueDate: null, // [BARU] Tanggal jatuh tempo
+    paymentMethod: 'CASH', 
+    dueDate: null, 
 });
 
 // --- COMPUTED ---
@@ -38,13 +43,12 @@ const grandTotal = computed(() => {
     }, 0);
 });
 
-const isCreditBuy = computed(() => purchaseInfo.paymentMethod === 'CREDIT'); // [BARU] Check credit purchase
+const isCreditBuy = computed(() => purchaseInfo.paymentMethod === 'CREDIT'); 
 
 const canCheckout = computed(() => {
-    return cart.value.length > 0 
-           && grandTotal.value > 0
-           // [UPDATE] Jika kredit, wajib ada due date
-           && (!isCreditBuy.value || !!purchaseInfo.dueDate);
+    if (cart.value.length === 0 || grandTotal.value <= 0) return false;
+    if (isCreditBuy.value && !purchaseInfo.dueDate) return false;
+    return true;
 });
 
 const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
@@ -52,77 +56,137 @@ const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
 // --- ACTIONS ---
 
 const onSearchKeydown = (event) => {
-    if (event.key === 'Enter') handleSearch();
+    if (event.key === 'Enter') {
+        currentPage.value = 1; // Reset halaman ke 1 saat pencarian baru
+        loadProducts(); // Panggil API search
+    }
 };
 
 const fetchCategories = async () => {
     try {
         const data = await categoryService.getAllCategorys();
         categories.value = data || [];
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error("Gagal memuat kategori:", e);
+    }
 };
 
-// [UPDATED] Load Products dengan Mapping Kategori
+// [UPDATED] Load Products dengan Paginasi dan Filter Kategori/Search via API
 const loadProducts = async () => {
     loading.value = true;
+    products.value = []; // Reset tampilan saat loading
+
     try {
-        const data = await productService.getAllProducts();
-        products.value = (data || []).map(p => ({
+        const currentQuery = searchQuery.value.toLowerCase().trim();
+        const categoryUuids = selectedCategoryUuids.value.join(','); 
+        
+        // Panggil API dengan parameter page, limit, query, dan categoryUuids
+        // ASUMSI: productService.getAllProducts(page, limit, query, categoryUuids)
+        const response = await productService.getAllProducts(
+            currentPage.value, 
+            limit, 
+            currentQuery, 
+            categoryUuids 
+        ); 
+        
+        // Cek struktur respons untuk mendapatkan data dan meta
+        const data = response?.data || response || []; 
+        
+        // Ambil data paginasi dari meta
+        totalPages.value = response?.meta?.totalPage || response?.meta?.total_page || 1;
+        totalProducts.value = response?.meta?.total || 0;
+        
+        if (!Array.isArray(data)) {
+            throw new Error("Format data produk dari server tidak valid.");
+        }
+        
+        products.value = data.map(p => ({
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],
             categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean)
         }));
-        handleSearch(); 
+        
+        handleSearch(true); // Panggil handleSearch setelah API load
+        
     } catch (error) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat produk', life: 3000 });
+        console.error("Gagal memuat produk dari API:", error); 
+        const errorDetail = error.message || 'Terjadi kesalahan jaringan atau server.';
+        
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Error', 
+            detail: `Gagal memuat produk: ${errorDetail}`, 
+            life: 5000 
+        });
+        
+        products.value = []; 
+        filteredProducts.value = [];
+        
     } finally {
         loading.value = false;
     }
 };
 
-const handleSearch = () => {
-    const query = searchQuery.value.toLowerCase().trim();
-    const selectedCats = selectedCategoryUuids.value;
-
-    let result = products.value;
-
-    if (selectedCats.length > 0) {
-        result = result.filter(p => {
-            return p.categoryUuids.some(catUuid => selectedCats.includes(catUuid));
-        });
+// [BARU] Fungsi Navigasi Halaman
+const changePage = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages.value) {
+        currentPage.value = newPage;
+        loadProducts();
     }
+};
 
+
+// [UPDATED] handleSearch hanya untuk filter instant dan scan barcode
+const handleSearch = (isApiLoad = false) => {
+    let result = products.value;
+    const query = searchQuery.value.toLowerCase().trim();
+    
+    // Scan Barcode (Prioritas Tinggi)
     if (query) {
-        const exactProduct = result.find(p => p.units.some(u => u.barcode === query));
+        const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
         if (exactProduct) {
             const matchedUnit = exactProduct.units.find(u => u.barcode === query);
             addToCart(exactProduct, matchedUnit);
             searchQuery.value = ''; 
             toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name} ditambahkan`, life: 1500 });
-            return handleSearch(); 
+            // Tidak perlu memanggil loadProducts lagi, cukup reset filteredProducts
+            filteredProducts.value = products.value; 
+            return; 
         }
 
-        result = result.filter(p => 
-            p.name.toLowerCase().includes(query) || 
-            p.units.some(u => u.barcode?.includes(query))
-        );
+        // Filter Teks Lokal (Hanya untuk instant search di halaman yang sedang dimuat)
+        // Jika isApiLoad=true, pencarian teks sudah ditangani API (di onSearchKeydown)
+        if (!isApiLoad) { 
+            result = result.filter(p => 
+                p.name.toLowerCase().includes(query) || 
+                p.units.some(u => u.barcode?.includes(query))
+            );
+        }
     }
 
     filteredProducts.value = result;
 };
 
+// Watchers
 watch(selectedCategoryUuids, () => {
-    handleSearch();
+    currentPage.value = 1; // Reset ke halaman 1 saat kategori berubah
+    loadProducts();
 });
 
-// [BARU] Helper untuk mendapatkan Stok Unit Default
+watch(searchQuery, () => {
+    // Saat mengetik, lakukan filtering instan lokal, bukan memanggil API (kecuali Enter)
+    handleSearch(false);
+});
+
+
+// Helper untuk mendapatkan Stok Unit Default
 const getDefaultUnitStock = (prod) => {
     const defaultUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
     return defaultUnit?.currentStock || 0; 
 };
 
-// [BARU] Helper untuk mendapatkan Nama Unit Default
+// Helper untuk mendapatkan Nama Unit Default
 const getDefaultUnitName = (prod) => {
     const defaultUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
     return defaultUnit?.unitName;
@@ -173,6 +237,7 @@ const removeFromCart = (index) => {
 };
 
 const onProductCreated = async (newProduct) => {
+    currentPage.value = 1; // Muat ulang halaman pertama
     await loadProducts();
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
     if (fullProduct) {
@@ -192,12 +257,11 @@ const processPurchase = async () => {
                 supplier: purchaseInfo.supplier || 'Umum',
                 reference_no: purchaseInfo.referenceNo || '-',
                 notes: purchaseInfo.notes,
-                payment_method: purchaseInfo.paymentMethod, // [BARU]
+                payment_method: purchaseInfo.paymentMethod, 
                 total_items_count: cart.value.length,
                 
-                 // [UPDATE] Conditional fields untuk Kredit/Hutang
                 ...(isCreditBuy.value && { 
-                    is_credit: 'true', // Marker untuk backend JournalService
+                    is_credit: 'true', 
                     due_date: purchaseInfo.dueDate
                 }),
             }
@@ -213,23 +277,23 @@ const processPurchase = async () => {
 
         await journalService.createBuyTransaction(payload);
         
-        // Pesan Sukses disesuaikan
         if (isCreditBuy.value) {
             toast.add({ severity: 'info', summary: 'Hutang Dicatat', detail: `Pembelian kredit sebesar ${formatCurrency(grandTotal.value)} berhasil dicatat.`, life: 5000 });
         } else {
              toast.add({ severity: 'success', summary: 'Stok Masuk', detail: 'Data pembelian berhasil disimpan', life: 5000 });
         }
         
-        // Reset state
         cart.value = [];
         purchaseInfo.supplier = '';
         purchaseInfo.referenceNo = '';
         purchaseInfo.notes = '';
         purchaseInfo.paymentMethod = 'CASH';
         purchaseInfo.dueDate = null;
+        currentPage.value = 1; // Reset ke halaman 1
         await loadProducts(); 
 
     } catch (e) {
+        console.error("Error processing purchase:", e);
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Transaksi gagal diproses', life: 3000 });
     } finally {
         processing.value = false;
@@ -241,9 +305,9 @@ const formatCurrency = (value) => {
 };
 
 const getStockColor = (qty) => {
-    if (qty <= 0) return 'bg-red-100 text-red-700 border-red-200';
-    if (qty < 10) return 'bg-orange-100 text-orange-700 border-orange-200';
-    return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (qty <= 0) return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+    if (qty < 10) return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800';
+    return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
 };
 
 onMounted(async () => {
@@ -254,8 +318,8 @@ onMounted(async () => {
     });
 });
 
-// [BARU] Expose fungsi refresh agar bisa dipanggil dari parent (TransactionIndex.vue)
 const refreshData = async () => {
+    currentPage.value = 1; // Pastikan refresh memuat ulang halaman 1
     await loadProducts();
 }
 defineExpose({ refreshData });
@@ -264,18 +328,18 @@ defineExpose({ refreshData });
 <template>
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-950 font-sans">
         <div class="flex-1 flex flex-col dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
-            <div class="p-4 border-b border-surface-100 dark:border-surface-800 flex flex-col gap-3 bg-surface-50/30">
+            <div class="p-4 border-b border-surface-100 dark:border-surface-800 flex flex-col gap-3 bg-surface-50/30 dark:bg-surface-950/50">
                 <div class="flex justify-between items-center">
                     <div class="flex items-center gap-2.5 text-orange-600 dark:text-orange-400">
                         <div class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shadow-sm">
                             <i class="pi pi-download text-lg"></i>
                         </div>
                         <div class="flex flex-col">
-                            <h2 class="font-black text-sm uppercase tracking-wide leading-none">Stok Masuk</h2>
+                            <h2 class="font-black text-sm uppercase tracking-wide leading-none text-surface-800 dark:text-surface-100">Stok Masuk</h2>
                             <span class="text-[10px] text-surface-500 mt-1 font-medium">Pilih produk untuk restock</span>
                         </div>
                     </div>
-                    <Button label="Produk Baru" icon="pi pi-plus" size="small" outlined severity="warning" class="!text-[11px] !py-1.5 !px-3 !rounded-lg" @click="$emit('open-create-modal')" />
+                    <Button label="Produk Baru" icon="pi pi-plus" size="small" outlined severity="warning" class="!text-[11px] !py-1.5 !px-3 !rounded-lg" @click="showCreateModal = true" />
                 </div>
                 
                 <div class="flex flex-col md:flex-row gap-2">
@@ -288,11 +352,11 @@ defineExpose({ refreshData });
                             placeholder="Filter Kategori" 
                             display="chip" 
                             :maxSelectedLabels="1" 
-                            class="w-full !h-[38px] !text-xs !border-orange-200 dark:!border-surface-700"
+                            class="w-full !h-[38px] !text-xs dark:bg-surface-800 !border-orange-200 dark:!border-surface-700"
                             :pt="{ label: { class: '!py-2 !px-3' } }"
                         >
                             <template #option="slotProps">
-                                <div class="flex align-items-center">
+                                <div class="flex align-items-center text-surface-700 dark:text-surface-200">
                                     <i class="pi pi-tag mr-2 text-orange-500 text-xs"></i>
                                     <span class="text-xs">{{ slotProps.option.name }}</span>
                                 </div>
@@ -306,7 +370,7 @@ defineExpose({ refreshData });
                             id="search-input-buy"
                             v-model="searchQuery" 
                             type="text"
-                            placeholder="Cari nama produk atau scan barcode... (F2)" 
+                            placeholder="Cari nama produk atau scan barcode... (Enter untuk cari di database, F2)" 
                             class="w-full pl-9 pr-4 py-2.5 text-xs font-medium dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition-all shadow-sm h-[38px]"
                             @keydown="onSearchKeydown" 
                             @input="handleSearch"
@@ -316,12 +380,12 @@ defineExpose({ refreshData });
                 </div>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-4 bg-surface-50 dark:bg-surface-950 scrollbar-thin">
+            <div class="flex-1 overflow-y-auto p-4 bg-surface-50 dark:bg-surface-950 scrollbar-thin flex flex-col">
                 <div v-if="loading" class="flex justify-center py-20">
                     <ProgressSpinner style="width: 35px; height: 35px" strokeWidth="4" />
                 </div>
 
-                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
                     <div 
                         v-for="prod in filteredProducts" 
                         :key="prod.uuid"
@@ -360,22 +424,50 @@ defineExpose({ refreshData });
                     </div>
                 </div>
                 
-                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-3 opacity-70">
+                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-3 opacity-70 flex-1">
                     <div class="w-16 h-16 bg-surface-200 dark:bg-surface-800 rounded-full flex items-center justify-center">
                          <i class="pi pi-search text-2xl"></i>
                     </div>
                     <span class="text-xs font-medium">Produk tidak ditemukan</span>
                 </div>
+                
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-950">
+                    <Button 
+                        icon="pi pi-chevron-left" 
+                        label="Sebelumnya"
+                        size="small" 
+                        text 
+                        :disabled="currentPage === 1"
+                        @click="changePage(currentPage - 1)"
+                        class="!text-xs"
+                    />
+                    
+                    <span class="text-xs font-medium text-surface-600 dark:text-surface-400">
+                        Halaman <span class="font-bold text-orange-600">{{ currentPage }}</span> dari {{ totalPages }}
+                        <span class="text-[10px] ml-1">({{ totalProducts }} total)</span>
+                    </span>
+
+                    <Button 
+                        label="Selanjutnya"
+                        icon="pi pi-chevron-right" 
+                        iconPos="right"
+                        size="small" 
+                        text 
+                        :disabled="currentPage === totalPages"
+                        @click="changePage(currentPage + 1)"
+                        class="!text-xs"
+                    />
+                </div>
             </div>
         </div>
 
         <div class="w-[380px] flex flex-col dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
-            <div class="p-3 px-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50">
+            <div class="p-3 px-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50 dark:bg-surface-950/50">
                 <div class="flex items-center gap-2">
                     <div class="w-7 h-7 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
                         <span class="font-bold text-xs">{{ totalItems }}</span>
                     </div>
-                    <span class="font-bold text-sm text-surface-700">Item Masuk</span>
+                    <span class="font-bold text-sm text-surface-700 dark:text-surface-200">Item Masuk</span>
                 </div>
                 <Button 
                     v-if="cart.length > 0" 
@@ -390,8 +482,8 @@ defineExpose({ refreshData });
                 />
             </div>
 
-            <div id="cart-items-container-buy" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30">
-                <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 gap-2 opacity-60">
+            <div id="cart-items-container-buy" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-950/30">
+                <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-2 opacity-60">
                     <i class="pi pi-inbox text-4xl mb-1"></i>
                     <p class="text-xs font-medium">Belum ada barang dipilih</p>
                 </div>
@@ -434,7 +526,7 @@ defineExpose({ refreshData });
                                     v-model="item.buyPrice" 
                                     mode="currency" currency="IDR" locale="id-ID" 
                                     class="w-full !h-full" 
-                                    inputClass="!text-xs !h-full !p-0 !font-mono !font-bold !text-orange-600 !bg-transparent !border-none focus:!ring-0"
+                                    inputClass="!text-xs !h-full !p-0 !font-mono !font-bold !text-orange-600 dark:!text-orange-400 !bg-transparent !border-none focus:!ring-0"
                                     placeholder="0" :min="0" 
                                 />
                             </div>
@@ -446,14 +538,14 @@ defineExpose({ refreshData });
                                         @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
                                     <i class="pi pi-minus text-[9px] font-bold"></i>
                                 </button>
-                                <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800" min="1" />
+                                <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" />
                                 <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:hover:text-primary-600 rounded-r-lg transition-colors" 
                                         @click="item.qty++">
                                     <i class="pi pi-plus text-[9px] font-bold"></i>
                                 </button>
                             </div>
 
-                            <div class="text-[11px] font-black text-surface-700 dark:text-surface-300 bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded">
+                            <div class="text-[11px] font-black text-surface-700 dark:text-surface-300 bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded border border-surface-200 dark:border-surface-700">
                                 {{ formatCurrency(item.buyPrice * item.qty) }}
                             </div>
                         </div>
@@ -470,10 +562,10 @@ defineExpose({ refreshData });
         </div>
 
         <div class="w-[320px] flex flex-col dark:bg-surface-900 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
-             <div class="p-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50/30">
-                 <h2 class="font-bold text-sm text-surface-700 flex items-center gap-2">
-                     <div class="w-6 h-6 rounded-md bg-orange-100 flex items-center justify-center">
-                        <i class="pi pi-file-edit text-orange-600 text-xs"></i>
+             <div class="p-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50/30 dark:bg-surface-950/50">
+                 <h2 class="font-bold text-sm text-surface-700 dark:text-surface-200 flex items-center gap-2">
+                     <div class="w-6 h-6 rounded-md bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                        <i class="pi pi-file-edit text-orange-600 dark:text-orange-400 text-xs"></i>
                      </div>
                      Data Dokumen
                  </h2>
@@ -485,7 +577,7 @@ defineExpose({ refreshData });
                      <div class="relative">
                         <i class="pi pi-building text-surface-400 text-xs absolute top-1/2 -translate-y-1/2 left-3"></i>
                         <InputText v-model="purchaseInfo.supplier" placeholder="Nama Supplier / Toko" 
-                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors" />
+                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30 focus:!transition-colors" />
                      </div>
                  </div>
 
@@ -494,7 +586,7 @@ defineExpose({ refreshData });
                      <div class="relative">
                         <i class="pi pi-hashtag text-surface-400 text-xs absolute top-1/2 -translate-y-1/2 left-3"></i>
                         <InputText v-model="purchaseInfo.referenceNo" placeholder="No. Faktur / Nota" 
-                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors" />
+                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30 focus:!transition-colors" />
                      </div>
                  </div>
 
@@ -504,24 +596,45 @@ defineExpose({ refreshData });
                         :options="[{label: 'Cash/Transfer', value: 'CASH'}, {label: 'Kredit (Hutang)', value: 'CREDIT'}]"
                         optionLabel="label" optionValue="value"
                         class="w-full"
-                        :pt="{ button: { class: '!text-xs !py-2' } }"
+                        :pt="{ 
+                            button: ({ context }) => ({ 
+                                class: [
+                                    '!text-xs !py-2', 
+                                    context.instance.value === 'CREDIT' 
+                                        ? '!bg-red-500/10 !text-red-500 !border-red-500/50' 
+                                        : '!bg-emerald-500/10 !text-emerald-500 !border-emerald-500/50',
+                                    'dark:!bg-surface-800 dark:!border-surface-700 dark:!text-surface-200'
+                                ] 
+                            }) 
+                        }"
                     />
                  </div>
                  
                  <div v-if="isCreditBuy" class="space-y-1">
                      <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Jatuh Tempo <span class="text-red-400">*</span></label>
-                     <Calendar v-model="purchaseInfo.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" :manualInput="false" showIcon class="w-full" inputClass="!text-xs !py-2.5 !h-11" />
+                     <Calendar 
+                        v-model="purchaseInfo.dueDate" 
+                        dateFormat="dd/mm/yy" 
+                        :minDate="new Date()" 
+                        :manualInput="false" 
+                        showIcon 
+                        class="w-full" 
+                        inputClass="!text-xs !py-2.5 !h-11 !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30" 
+                        :class="{ 'p-invalid': isCreditBuy && !purchaseInfo.dueDate && cart.length > 0 }"
+                    />
                  </div>
 
 
                  <div class="space-y-1 flex-1 flex flex-col">
                      <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Catatan</label>
-                     <Textarea v-model="purchaseInfo.notes" placeholder="Keterangan tambahan..." 
-                        class="w-full !text-xs !rounded-xl !bg-surface-50 focus:!transition-colors !p-3 resize-none flex-1 border-surface-200" />
+                     <Textarea 
+                        v-model="purchaseInfo.notes" 
+                        placeholder="Keterangan tambahan..." 
+                        class="w-full !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30 !p-3 resize-none flex-1" />
                  </div>
              </div>
 
-             <div class="p-4 bg-surface-150 relative z-10">
+             <div class="p-4 bg-surface-150 dark:bg-surface-950 relative z-10 border-t border-surface-200 dark:border-surface-800">
                 <Button 
                     :label="isCreditBuy ? 'CATAT HUTANG' : 'SIMPAN STOK'" 
                     icon="pi pi-check-circle" 
@@ -539,11 +652,18 @@ defineExpose({ refreshData });
 </template>
 
 <style scoped>
-/* Scrollbar Halus */
-.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+/* Scrollbar Halus (sesuaikan untuk mode gelap) */
+.scrollbar-thin::-webkit-scrollbar { width: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { 
+    background: #e5e7eb; /* surface-200 */
+    border-radius: 4px; 
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb { 
+    background: #374151; /* surface-700 */
+}
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #4b5563; }
 
 /* Override PrimeVue Dropdown agar rapih */
 :deep(.custom-pill-dropdown .p-dropdown-label) {

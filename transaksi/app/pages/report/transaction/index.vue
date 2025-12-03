@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 // Import komponen laporan baru
 import ReportSale from '~/components/ReportSale.vue';
 import ReportBuy from '~/components/ReportBuy.vue';
+import ReportReturn from '~/components/ReportReturn.vue';
 import ReportGraph from '~/components/ReportGraph.vue';
 
 const route = useRoute();
@@ -16,6 +17,7 @@ const activeTab = ref(route.query.tab || 'sale');
 // Refs untuk memanggil fungsi refresh dari komponen anak
 const saleRef = ref(null);
 const buyRef = ref(null);
+const returnRef = ref(null);
 const graphRef = ref(null);
 
 // --- UTILS ---
@@ -42,6 +44,8 @@ watch(() => route.query.tab, async (newTab) => {
         saleRef.value.refreshData();
     } else if (activeTab.value === 'buy' && buyRef.value && buyRef.value.refreshData) {
         buyRef.value.refreshData();
+    } else if (activeTab.value === 'return' && returnRef.value && returnRef.value.refreshData) {
+        returnRef.value.refreshData();
     } else if (activeTab.value === 'graph' && graphRef.value && graphRef.value.refreshData) {
         graphRef.value.refreshData();
     }
@@ -85,6 +89,12 @@ definePageMeta({ layout: 'default' });
                 <i class="pi pi-shopping-bag mr-2"></i> Pembelian
             </button>
             <button 
+                @click="activeTab = 'return'"
+                :class="getTabClass('return')"
+            >
+                <i class="pi pi-shopping-bag mr-2"></i> Retur Barang
+            </button>
+            <button 
                 @click="activeTab = 'graph'"
                 :class="getTabClass('graph')"
             >
@@ -102,6 +112,11 @@ definePageMeta({ layout: 'default' });
                 <ReportBuy 
                     v-else-if="activeTab === 'buy'" 
                     ref="buyRef"
+                    class="h-full"
+                />
+                <ReportReturn 
+                    v-else-if="activeTab === 'return'" 
+                    ref="returnRef"
                     class="h-full"
                 />
                 <ReportGraph 

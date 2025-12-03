@@ -533,16 +533,20 @@ export class JournalService {
     end.setHours(23, 59, 59, 999);
     const saleCodePattern = `SALE-${storeUuid}-%`;
     const buyCodePattern = `BUY-${storeUuid}-%`;
+    const returnSaleCodePattern = `RT_SALE-${storeUuid}-%`;
+    const returnBuyCodePattern = `RT_BUY-${storeUuid}-%`;
     
     // NOTE: Logika ini HARUS diupdate untuk menyertakan RT_SALE dan RT_BUY jika ingin grafik yang akurat
     const query = this.journalRepository.createQueryBuilder('j')
       .innerJoin('j.details', 'jd', 'jd.key = :key', { key: 'grand_total' })
       .where('j.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere(`j.code LIKE :saleCodePattern OR j.code LIKE :buyCodePattern`, { saleCodePattern, buyCodePattern })
+      .andWhere(`j.code LIKE :saleCodePattern OR j.code LIKE :buyCodePattern OR j.code LIKE :returnSaleCodePattern OR j.code LIKE :returnBuyCodePattern`, { saleCodePattern, buyCodePattern, returnSaleCodePattern, returnBuyCodePattern })
       .select([
         "DATE_FORMAT(j.created_at, '%Y-%m-%d') as date",
         `SUM(CASE WHEN j.code LIKE :saleCodePattern THEN CAST(jd.value AS DECIMAL) ELSE 0 END) as total_sale`,
-        `SUM(CASE WHEN j.code LIKE :buyCodePattern THEN CAST(jd.value AS DECIMAL) ELSE 0 END) as total_buy`
+        `SUM(CASE WHEN j.code LIKE :buyCodePattern THEN CAST(jd.value AS DECIMAL) ELSE 0 END) as total_buy`,
+        `SUM(CASE WHEN j.code LIKE :returnSaleCodePattern THEN CAST(jd.value AS DECIMAL) ELSE 0 END) as total_rt_sale`,
+        `SUM(CASE WHEN j.code LIKE :returnBuyCodePattern THEN CAST(jd.value AS DECIMAL) ELSE 0 END) as total_rt_buy`
       ])
       .groupBy("date")
       .orderBy("date", "ASC");

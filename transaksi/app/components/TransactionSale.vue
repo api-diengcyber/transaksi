@@ -1,11 +1,10 @@
-// components/TransactionSale.vue
-
 <script setup>
 import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import ProductCreateModal from '~/components/ProductCreateModal.vue';
 import { useAuthStore } from '~/stores/auth.store';
 
+// Asumsi services ini sudah di-inject atau di-import dengan benar
 const productService = useProductService();
 const journalService = useJournalService();
 const categoryService = useCategoryService();
@@ -13,8 +12,8 @@ const authStore = useAuthStore();
 const toast = useToast();
 
 // --- STATE PAGINATION & PRODUCT ---
-const products = ref([]); // Data produk yang telah dimuat (akumulasi dari Load More)
-const filteredProducts = ref([]); // Produk yang ditampilkan setelah filter kategori lokal/search
+const products = ref([]); 
+const filteredProducts = ref([]); 
 const cart = ref([]);
 const searchQuery = ref('');
 const loading = ref(true);
@@ -22,20 +21,19 @@ const processing = ref(false);
 const showCreateModal = ref(false);
 
 const categories = ref([]); 
-const selectedCategoryUuids = ref([]); 
+const selectedCategoryUuids = ref([]); // State untuk filter kategori
 
-// [BARU] State Paginasi
+// [PAGINASI] State
 const currentPage = ref(1);
-const limit = 30; // Batas item per halaman (dapat disesuaikan)
+const limit = 12; // Sesuaikan jumlah produk per halaman (misal 12 agar rapi)
 const totalPages = ref(1);
 const totalProducts = ref(0);
-const moreLoading = ref(false);
 
 const payment = reactive({
-    method: 'CASH', // [BARU] Tambah metode pembayaran
+    method: 'CASH',
     amount: null,
-    customerName: '', // [BARU] Nama pelanggan untuk piutang
-    dueDate: null, // [BARU] Tanggal jatuh tempo
+    customerName: '', 
+    dueDate: null, 
 });
 
 // --- COMPUTED SETTINGS ---
@@ -57,20 +55,16 @@ const grandTotal = computed(() => {
     return taxMethod.value === 'exclusive' ? cartSubtotal.value + taxAmount.value : cartSubtotal.value;
 });
 
-const isCreditSale = computed(() => payment.method === 'CREDIT'); // [BARU] Check credit sale
-const amountPaid = computed(() => isCreditSale.value ? 0 : (payment.amount || 0)); // [UPDATE] Jika kredit, jumlah dibayar 0
-
+const isCreditSale = computed(() => payment.method === 'CREDIT');
+const amountPaid = computed(() => isCreditSale.value ? 0 : (payment.amount || 0)); 
 const changeAmount = computed(() => amountPaid.value - grandTotal.value);
 
 const canCheckout = computed(() => {
     if (cart.value.length === 0) return false;
     
-    // [UPDATE] Logika Checkout:
     if (isCreditSale.value) {
-        // Jika Kredit: Hanya perlu GrandTotal > 0, Nama Pelanggan diisi, dan Tanggal Jatuh Tempo
         return grandTotal.value > 0 && !!payment.customerName && !!payment.dueDate;
     } else {
-        // Jika Cash/Non-Kredit: Perlu Uang Diterima >= Total
         return amountPaid.value >= grandTotal.value;
     }
 });
@@ -79,9 +73,8 @@ const canCheckout = computed(() => {
 
 const onSearchKeydown = (event) => {
     if (event.key === 'Enter') {
-        // [UPDATE PAGINASI] Tekan Enter untuk memicu pencarian ke API (reset halaman)
-        currentPage.value = 1;
-        loadProducts(); 
+        currentPage.value = 1; // Reset ke halaman 1 saat pencarian baru
+        loadProducts(); // Panggil API search
     }
 };
 
@@ -92,107 +85,115 @@ const fetchCategories = async () => {
     } catch (e) { console.error(e); }
 };
 
-const loadProducts = async (isLoadMore = false) => {
-    if (!isLoadMore) {
-        loading.value = true;
-        // Kosongkan produk hanya jika halaman baru (bukan load more)
-        if (currentPage.value === 1) products.value = []; 
-    } else {
-        moreLoading.value = true;
-    }
+// [UPDATE & PERBAIKAN] Logic load produk dengan paginasi dan filter kategori
+const loadProducts = async () => {
+    loading.value = true;
+    products.value = []; // Reset tampilan saat loading
 
     try {
-        // [PERBAIKAN PAGINASI] Panggil API dengan paginasi dan query pencarian
         const currentQuery = searchQuery.value.toLowerCase().trim();
-        const response = await productService.getAllProducts(currentPage.value, limit, currentQuery);
+        const categoryUuids = selectedCategoryUuids.value.join(','); // Gabungkan UUID kategori untuk parameter API (misal dipisahkan koma)
         
-        // Asumsi response API: { data: Product[], meta: { total_page: number, total: number } }
+        // Panggil API dengan parameter page, limit, query, dan categoryUuids
+        // Asumsi signature productService.getAllProducts adalah (page, limit, query, categoryUuids)
+        const response = await productService.getAllProducts(
+            currentPage.value, 
+            limit, 
+            currentQuery, 
+            categoryUuids 
+        );
+        
         const productsArray = response?.data || [];
         
         const newProducts = productsArray.map(p => ({
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],
+            // Ambil UUID kategori untuk filter lokal (jika perlu)
             categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean)
         }));
         
-        if (isLoadMore) {
-            products.value.push(...newProducts); // Tambahkan untuk Load More
-        } else {
-            products.value = newProducts; // Ganti dengan data halaman baru
-        }
+        // Ganti data produk 
+        products.value = newProducts; 
 
-        // Update metadata paginasi
-        totalPages.value = response?.meta?.total_page || 1;
+        // [PERBAIKAN] Gunakan 'totalPage' (camelCase) jika 'total_page' tidak ada
+        totalPages.value = response?.meta?.totalPage || response?.meta?.total_page || 1;
         totalProducts.value = response?.meta?.total || 0;
         
-        handleLocalFiltering(); // Filter kategori setelah data dimuat (jika ada)
-
+        // Karena API sudah memfilter berdasarkan Query & Kategori, 
+        // handleLocalFiltering hanya perlu menangani scan barcode dan filter instant search (jika diperlukan)
+        handleLocalFiltering(true); // Kirim flag isApiLoad
     } catch (error) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat produk', life: 3000 });
     } finally {
         loading.value = false;
-        moreLoading.value = false;
     }
 };
 
-const loadMoreProducts = () => {
-    if (currentPage.value < totalPages.value) {
-        currentPage.value++;
-        loadProducts(true);
+// [BARU] Fungsi Navigasi Halaman
+const changePage = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages.value) {
+        currentPage.value = newPage;
+        loadProducts();
     }
 };
 
-
-const handleLocalFiltering = () => {
-    const selectedCats = selectedCategoryUuids.value;
+// [UPDATE] Penyesuaian handleLocalFiltering
+const handleLocalFiltering = (isApiLoad = false) => {
     let result = products.value;
 
-    // 1. FILTER KATEGORI LOKAL (HANYA DARI PRODUK YANG SUDAH DIMUAT)
+    // 1. FILTER KATEGORI LOKAL TIDAK DIPERLUKAN LAGI JIKA API SUDAH MEMFILTER
+    // Namun, jika API tidak memfilter kategori, blok ini bisa dihidupkan:
+    /*
+    const selectedCats = selectedCategoryUuids.value;
     if (selectedCats.length > 0) {
         result = result.filter(p => {
             return p.categoryUuids.some(catUuid => selectedCats.includes(catUuid));
         });
     }
+    */
 
-    // 2. SCAN BARCODE INSTANT & LOCAL TEXT FILTERING
+    // 2. FILTER SEARCH LOKAL (Instant) & Scan Barcode
     const query = searchQuery.value.toLowerCase().trim();
     if (query) {
-        // Pengecekan Barcode untuk Add to Cart Instan
+        // Cek Barcode Persis (Prioritas Utama)
         const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
         if (exactProduct) {
             const matchedUnit = exactProduct.units.find(u => u.barcode === query);
             addToCart(exactProduct, matchedUnit);
             searchQuery.value = ''; 
             toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
+            filteredProducts.value = products.value; // Tampilkan ulang semua produk yang dimuat API
             return; 
         }
         
-        // Filter Teks Lokal untuk efek mengetik sebelum user menekan Enter (kecuali jika ada filter kategori, yang harus didahulukan)
-        // Jika user mengetik, kita hanya memfilter produk yang sudah ada di memori/layar.
-        result = result.filter(p => 
-            p.name.toLowerCase().includes(query) || 
-            p.units.some(u => u.barcode?.includes(query))
-        );
+        // Filter Teks Lokal (Hanya di data yang sudah dimuat)
+        // Jika API sudah memfilter, ini hanya perlu dilakukan jika user mengetik
+        // di luar saat proses Enter (API search)
+        if (!isApiLoad) {
+            result = result.filter(p => 
+                p.name.toLowerCase().includes(query) || 
+                p.units.some(u => u.barcode?.includes(query))
+            );
+        }
     }
 
     filteredProducts.value = result;
 };
 
-
-// [UPDATE] Ketika kategori berubah, reset halaman dan muat ulang produk dari API
+// Watchers
+// Saat kategori berubah, reset halaman ke 1 dan muat ulang dari API
 watch(selectedCategoryUuids, () => {
     currentPage.value = 1;
     loadProducts();
 });
 
-// [UPDATE] Ketika input pencarian berubah, lakukan filter lokal untuk efek instan/barcode.
-// Pencarian ke DB hanya dilakukan saat Enter ditekan (di onSearchKeydown).
+// Saat Search Query berubah, lakukan filter cepat (hanya di data yang sudah dimuat)
 watch(searchQuery, () => {
     handleLocalFiltering();
 });
 
-
+// Cart Logic
 const addToCart = (product, specificUnit = null) => {
     let selectedUnit = specificUnit;
     if (!selectedUnit) {
@@ -250,7 +251,7 @@ const removeFromCart = (index) => {
 };
 
 const onProductCreated = async (newProduct) => {
-    currentPage.value = 1; // [UPDATE] Reset page saat produk baru dibuat
+    currentPage.value = 1;
     await loadProducts();
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
     if (fullProduct) addToCart(fullProduct);
@@ -263,10 +264,9 @@ const processCheckout = async () => {
         const payload = {
             amount: grandTotal.value,
             details: {
-                payment_method: payment.method, // [UPDATE] Kirim payment.method
-                // [UPDATE] Conditional fields untuk Kredit/Cash
+                payment_method: payment.method,
                 ...(isCreditSale.value ? {
-                    is_credit: 'true', // Marker untuk backend JournalService
+                    is_credit: 'true', 
                     due_date: payment.dueDate,
                     customer_name: payment.customerName,
                     payment_received: 0, 
@@ -295,21 +295,19 @@ const processCheckout = async () => {
         
         await journalService.createSaleTransaction(payload);
         
-        // Pesan Sukses disesuaikan
         if (isCreditSale.value) {
              toast.add({ severity: 'info', summary: 'Piutang Dicatat', detail: `Penjualan kredit ke ${payment.customerName} sebesar ${formatCurrency(grandTotal.value)}`, life: 5000 });
         } else {
              toast.add({ severity: 'success', summary: 'Transaksi Sukses', detail: 'Kembalian: ' + formatCurrency(changeAmount.value), life: 5000 });
         }
         
-        // Reset state
         cart.value = [];
         payment.amount = null;
-        payment.method = 'CASH'; // [UPDATE] Reset metode pembayaran
-        payment.customerName = ''; // [UPDATE] Reset field kredit
-        payment.dueDate = null; // [UPDATE] Reset field kredit
-        currentPage.value = 1; // [UPDATE] Reset page
-        await loadProducts(); 
+        payment.method = 'CASH';
+        payment.customerName = '';
+        payment.dueDate = null;
+        currentPage.value = 1;
+        await loadProducts(); // Muat ulang produk setelah transaksi
     } catch (e) {
         console.error(e);
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Terjadi kesalahan saat memproses', life: 3000 });
@@ -330,7 +328,6 @@ const getDefaultUnitName = (prod) => {
     return defaultUnit?.unitName;
 };
 
-// FIX: Menambahkan kelas dark mode ke helper stok
 const getStockColor = (qty) => {
     if (qty <= 0) return 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
     if (qty < 10) return 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
@@ -346,9 +343,8 @@ onMounted(async () => {
     });
 });
 
-// [BARU] Expose fungsi refresh agar bisa dipanggil dari parent (TransactionIndex.vue)
 const refreshData = async () => {
-    currentPage.value = 1; // [UPDATE] Reset page saat refresh
+    currentPage.value = 1;
     await loadProducts();
 }
 defineExpose({ refreshData });
@@ -359,7 +355,6 @@ defineExpose({ refreshData });
         
         <div class="flex-1 flex flex-col dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
             <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-50/50 dark:bg-surface-950/50">
-                
                 <div class="w-full md:w-48">
                     <MultiSelect 
                         v-model="selectedCategoryUuids" 
@@ -397,62 +392,80 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Produk Baru'" @click="$emit('open-create-modal')" />
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950 scrollbar-thin">
-                <div v-if="loading" class="flex justify-center py-20">
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950 scrollbar-thin flex flex-col">
+                <div v-if="loading" class="flex-1 flex justify-center items-center">
                     <ProgressSpinner style="width: 40px; height: 40px" />
                 </div>
 
-                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
-                    <div v-for="prod in filteredProducts" :key="prod.uuid"
-                        @click="addToCart(prod)"
-                        class="group relative dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-3 cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none flex flex-col justify-between h-28"
-                    >
-                        <div>
-                            <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">
-                                {{ prod.name }}
+                <div v-else-if="filteredProducts.length > 0" class="flex-1">
+                    <div class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                        <div v-for="prod in filteredProducts" :key="prod.uuid"
+                            @click="addToCart(prod)"
+                            class="group relative dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-3 cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none flex flex-col justify-between h-28"
+                        >
+                            <div>
+                                <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">
+                                    {{ prod.name }}
+                                </div>
+                                <div class="flex gap-1 mt-1">
+                                    <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">
+                                        Stok: {{ getDefaultUnitStock(prod) }}
+                                    </span>
+                                    <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">
+                                        {{ getDefaultUnitName(prod) }}
+                                    </span>
+                                </div>
                             </div>
-                            <div class="flex gap-1 mt-1">
-                                <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">
-                                    Stok: {{ getDefaultUnitStock(prod) }}
+                            
+                            <div class="flex justify-between items-end mt-2">
+                                <span class="text-[9px] text-surface-400 truncate max-w-[50%]">
+                                    {{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}
                                 </span>
-                                <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">
-                                    {{ getDefaultUnitName(prod) }}
+                                <span class="text-sm font-black text-surface-800 dark:text-white">
+                                    {{ (() => {
+                                        const defUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
+                                        const defPrice = prod.prices?.find(p => p.unitUuid === defUnit?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0];
+                                        return formatCurrency(defPrice?.price || 0);
+                                    })() }}
                                 </span>
                             </div>
-                        </div>
-                        
-                        <div class="flex justify-between items-end mt-2">
-                            <span class="text-[9px] text-surface-400 truncate max-w-[50%]">
-                                {{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}
-                            </span>
-                            <span class="text-sm font-black text-surface-800 dark:text-white">
-                                {{ (() => {
-                                    const defUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
-                                    const defPrice = prod.prices?.find(p => p.unitUuid === defUnit?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0];
-                                    return formatCurrency(defPrice?.price || 0);
-                                })() }}
-                            </span>
                         </div>
                     </div>
                 </div>
 
-                <div v-else class="flex flex-col items-center justify-center h-full text-surface-400 dark:text-surface-600 gap-2 opacity-60">
+                <div v-else class="flex-1 flex flex-col items-center justify-center text-surface-400 dark:text-surface-600 gap-2 opacity-60">
                     <i class="pi pi-box text-4xl"></i>
                     <span class="text-xs">Produk tidak ditemukan</span>
                 </div>
 
-                <div v-if="currentPage < totalPages && filteredProducts.length > 0" class="mt-4 text-center">
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-950">
                     <Button 
-                        :label="moreLoading ? 'Memuat...' : `Tampilkan Lebih Banyak (${products.length}/${totalProducts})`" 
-                        icon="pi pi-arrow-down" 
-                        size="small"
-                        outlined
-                        :loading="moreLoading"
-                        @click="loadMoreProducts"
-                        class="!text-xs !py-2 !px-4"
+                        icon="pi pi-chevron-left" 
+                        label="Sebelumnya"
+                        size="small" 
+                        text 
+                        :disabled="currentPage === 1"
+                        @click="changePage(currentPage - 1)"
+                        class="!text-xs"
+                    />
+                    
+                    <span class="text-xs font-medium text-surface-600 dark:text-surface-400">
+                        Halaman <span class="font-bold text-primary-600">{{ currentPage }}</span> dari {{ totalPages }}
+                        <span class="text-[10px] ml-1">({{ totalProducts }} total)</span>
+                    </span>
+
+                    <Button 
+                        label="Selanjutnya"
+                        icon="pi pi-chevron-right" 
+                        iconPos="right"
+                        size="small" 
+                        text 
+                        :disabled="currentPage === totalPages"
+                        @click="changePage(currentPage + 1)"
+                        class="!text-xs"
                     />
                 </div>
-                </div>
+            </div>
         </div>
 
         <div class="w-[380px] flex flex-col dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
@@ -467,7 +480,7 @@ defineExpose({ refreshData });
             </div>
 
             <div id="cart-items-container" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-950/30">
-                <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
+                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
                     <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center">
                         <i class="pi pi-shopping-cart text-2xl opacity-40"></i>
                     </div>
@@ -570,7 +583,7 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-[320px] flex flex-col rounded-xl shadow-lg border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 relative">
+        <div class="w-[320px] flex flex-col rounded-xl shadow-lg border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
              <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
              
              <div class="p-4 flex-1 flex flex-col gap-5 relative z-10 overflow-y-auto scrollbar-thin">
@@ -622,37 +635,22 @@ defineExpose({ refreshData });
                 <div class="flex-1 flex flex-col justify-center items-center border-t border-surface-800 border-dashed pt-2">
                     <span class="text-xs text-surface-400 mb-1">{{ isCreditSale ? 'Sisa Hutang' : 'Kembalian' }}</span>
                     <span class="text-2xl font-mono font-bold" :class="changeAmount < 0 ? 'text-red-400' : 'text-emerald-400'">
-                        {{ formatCurrency(isCreditSale ? grandTotal : Math.max(0, changeAmount)) }}
+                        {{ isCreditSale ? formatCurrency(grandTotal) : formatCurrency(changeAmount) }}
                     </span>
-                    <div v-if="!isCreditSale && changeAmount < 0" class="text-[10px] text-red-400 mt-1 bg-red-900/30 px-2 py-0.5 rounded">Kurang {{ formatCurrency(Math.abs(changeAmount)) }}</div>
-                    <div v-else-if="isCreditSale && canCheckout" class="text-[10px] text-blue-400 mt-1 bg-blue-900/30 px-2 py-0.5 rounded">Piutang akan dicatat</div>
                 </div>
-             </div>
-
-             <div class="p-4 relative z-10">
-                <Button :label="isCreditSale ? 'CATAT PIUTANG' : 'PROSES BAYAR'" icon="pi pi-print" 
-                    class="w-full font-black !py-3 !text-sm !bg-emerald-500 hover:!bg-emerald-600 !border-none !text-white shadow-lg shadow-emerald-900/50 active:translate-y-0.5 transition-all" 
-                    :disabled="!canCheckout" :loading="processing" @click="processCheckout" size="large" />
-             </div>
+            </div>
+            
+            <div class="p-4 border-t border-surface-700/50 relative z-10">
+                <Button 
+                    label="Bayar" 
+                    icon="pi pi-check" 
+                    class="w-full !h-12 !text-base"
+                    :severity="isCreditSale ? 'warning' : 'success'"
+                    :loading="processing" 
+                    :disabled="!canCheckout"
+                    @click="processCheckout"
+                />
+            </div>
         </div>
-
-        <ProductCreateModal v-model:visible="showCreateModal" @product-created="onProductCreated" />
     </div>
 </template>
-
-<style scoped>
-/* Custom Scrollbar Halus */
-.scrollbar-thin::-webkit-scrollbar { width: 4px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-/* Override PrimeVue styling specifically for these dropdowns */
-:deep(.custom-tiny-dropdown .p-dropdown-label) {
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-</style>

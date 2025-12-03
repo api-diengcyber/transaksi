@@ -1,9 +1,8 @@
-// api-diengcyber/transaksi/transaksi-8c061ef45e91bf8e12e1b9338353de87878e544c/transaksi/app/components/ReportSale.vue
-
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
+// Asumsi services ini sudah di-inject/di-import dengan benar
 const productService = useProductService();
 const journalService = useJournalService();
 const toast = useToast();
@@ -16,18 +15,26 @@ const filters = ref({
     global: { value: null, matchMode: 'contains' }
 });
 
+// --- PAGINATION (PrimeVue Built-in) ---
+// Note: Menggunakan built-in paginator di <DataTable>
+
 // --- COMPUTED STATS ---
 const stats = computed(() => {
-    // Filter hanya transaksi SALE NON-RETURN untuk menghitung total omset kotor
-    const grossSales = transactions.value.filter(t => t.type === 'SALE');
-    const totalOmset = grossSales.reduce((sum, t) => sum + t.total, 0);
+    // Hanya hitung dari data yang sudah difilter/diproses di transactions.value
+    const grossSales = transactions.value.filter(t => t.type === 'SALE' && !t.isReturn);
+    
+    // Total omset kotor (sebelum retur)
+    const totalOmset = grossSales.reduce((sum, t) => sum + Math.abs(t.total), 0);
+    
+    // Total transaksi (SALE + RT_SALE)
     const totalTrx = transactions.value.length; 
+    
     const average = totalTrx > 0 ? totalOmset / totalTrx : 0;
     
-    // Hitung Total Piutang (Piutang hanya dicatat saat SALE kredit)
+    // Hitung Total Piutang (Piutang hanya dicatat saat SALE kredit, totalnya positif)
     const totalPiutang = transactions.value
-        .filter(t => t.isCredit && t.type === 'SALE')
-        .reduce((sum, t) => sum + t.total, 0);
+        .filter(t => t.isCredit && t.type === 'SALE' && !t.isReturn)
+        .reduce((sum, t) => sum + Math.abs(t.total), 0);
 
     // Hitung total nota retur
     const totalReturnNotes = transactions.value.filter(t => t.isReturn).length;
@@ -39,56 +46,62 @@ const stats = computed(() => {
 const loadData = async () => {
     loading.value = true;
     try {
-        const productsData = await productService.getAllProducts();
-        productsMap.value = (productsData || []).reduce((acc, curr) => {
+        // 1. Ambil data produk dan buat map (HARUS SUKSES)
+        const productsResponse = await productService.getAllProducts();
+        const productsData = Array.isArray(productsResponse) ? productsResponse : productsResponse?.data || [];
+        
+        productsMap.value = productsData.reduce((acc, curr) => {
             acc[curr.uuid] = curr.name;
             return acc;
         }, {});
 
-        // Fetch SALE dan RT_SALE lalu gabungkan
-        const [saleData, returnSaleData] = await Promise.all([
-             // Jika API gagal, gunakan try/catch individual atau default value:
+        // 2. Fetch SALE dan RT_SALE (dengan safe handling)
+        const [saleResponse, returnSaleResponse] = await Promise.all([
+             // Coba fetch SALE, jika gagal kembalikan array kosong
              journalService.getSalesReport().catch(e => { console.error("Error fetching SALE:", e); return []; }),
+             // Coba fetch RT_SALE, jika gagal kembalikan array kosong
              journalService.findAllByType('RT_SALE').catch(e => { console.error("Error fetching RT_SALE:", e); return []; }),
         ]);
         
-        // Pastikan kedua hasil adalah array sebelum digabung
-        const safeSaleData = Array.isArray(saleData) ? saleData : [];
-        const safeReturnData = Array.isArray(returnSaleData) ? returnSaleData : [];
+        // Pastikan hasilnya adalah array atau ambil dari properti 'data' jika ada
+        const safeSaleData = Array.isArray(saleResponse) ? saleResponse : saleResponse?.data || [];
+        const safeReturnData = Array.isArray(returnSaleResponse) ? returnSaleResponse : returnSaleResponse?.data || [];
 
         const rawData = [
             ...safeSaleData, 
             ...safeReturnData
         ];
         
+        // 3. Transformasi Data
         transactions.value = rawData
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort by date desc
             .map(journal => {
+            
+            // Ambil details dan konversi ke map yang mudah diakses
             const detailsMap = Array.isArray(journal.details) 
                 ? journal.details.reduce((acc, curr) => { acc[curr.key] = curr.value; return acc; }, {}) 
                 : (journal.details || {});
 
-            const isReturn = journal.code.startsWith('RT_SALE'); // Cek dari code
-            const isCredit = detailsMap['is_credit'] === 'true'; // Cek dari detail
+            const isReturn = journal.code.startsWith('RT_SALE'); 
+            const isCredit = detailsMap['is_credit'] === 'true'; 
             const count = Number(detailsMap['total_items_count'] || 0);
+            const total = Number(detailsMap['grand_total'] || 0);
             
             const items = [];
             for (let i = 0; i < count; i++) {
                 const pUuid = detailsMap[`product_uuid#${i}`];
-                // Menggunakan Math.abs untuk price/subtotal karena retur mengirim nilai negatif
+                
                 const itemQty = Number(detailsMap[`qty#${i}`] || 0);
-                const itemPrice = Math.abs(Number(detailsMap[`price#${i}`] || 0)); 
-                const itemSubtotal = Math.abs(Number(detailsMap[`subtotal#${i}`] || 0));
-
+                const itemPrice = Math.abs(Number(detailsMap[`price#${i}`] || 0)); // Gunakan Math.abs untuk harga per unit
+                const itemSubtotal = Math.abs(Number(detailsMap[`subtotal#${i}`] || 0)); // Gunakan Math.abs untuk subtotal
+                
                 items.push({
-                    productName: productsMap.value[pUuid] || 'Unknown Product',
+                    productName: productsMap.value[pUuid] || 'Produk Tidak Ditemukan', // Ganti 'Unknown Product'
                     qty: itemQty,
                     price: itemPrice,
                     subtotal: itemSubtotal,
                 });
             }
-
-            const total = Number(detailsMap['grand_total'] || 0);
 
             return {
                 uuid: journal.uuid,
@@ -97,7 +110,7 @@ const loadData = async () => {
                 isReturn: isReturn,
                 isCredit: isCredit, 
                 date: journal.createdAt,
-                total: total,
+                total: total, // Biarkan total sesuai nilai asli (positif untuk SALE, negatif untuk RT_SALE)
                 method: detailsMap['payment_method'] || (isCredit ? 'KREDIT' : 'CASH'),
                 customer: detailsMap['customer_name'] || '-', 
                 dueDate: detailsMap['due_date'] || null,
@@ -107,7 +120,7 @@ const loadData = async () => {
 
     } catch (e) {
         console.error("Gagal memuat data", e);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data penjualan', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Error', detail: `Gagal memuat data: ${e.message}`, life: 5000 });
         transactions.value = [];
     } finally {
         loading.value = false;
@@ -226,7 +239,7 @@ defineExpose({ refreshData });
                     <template #body="slotProps">
                         <div class="flex flex-col py-1">
                             <span class="font-bold font-mono text-xs"
-                                :class="slotProps.data.isReturn ? 'text-red-700' : 'text-emerald-700'"
+                                :class="slotProps.data.isReturn ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'"
                             >
                                 {{ slotProps.data.code }}
                             </span>
@@ -261,7 +274,7 @@ defineExpose({ refreshData });
                 <Column field="total" header="Total" sortable class="text-right">
                     <template #body="slotProps">
                         <span class="font-black text-sm"
-                           :class="slotProps.data.isReturn ? 'text-red-600' : 'text-emerald-600'"
+                           :class="slotProps.data.isReturn ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'"
                         >
                             {{ formatCurrency(Math.abs(slotProps.data.total)) }}
                             <i v-if="slotProps.data.isReturn" class="pi pi-minus-circle text-[10px] ml-1"></i>
@@ -278,7 +291,7 @@ defineExpose({ refreshData });
                 <template #expansion="slotProps">
                     <div class="p-4 bg-emerald-50/50 dark:bg-surface-950/50 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
                         <div class="flex items-center gap-2 mb-3 ml-1">
-                            <i class="pi pi-shopping-cart text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 p-1.5 rounded-md"></i>
+                            <i class="pi pi-shopping-cart text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 p-1.5 rounded-md"></i>
                             <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Detail {{ slotProps.data.isReturn ? 'Pengembalian' : 'Penjualan' }}</h5>
                         </div>
                         

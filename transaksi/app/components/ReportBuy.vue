@@ -18,8 +18,8 @@ const filters = ref({
 // --- COMPUTED STATS ---
 const stats = computed(() => {
     // Filter hanya transaksi NON-RETURN untuk menghitung total pengeluaran kotor
-    const grossPurchases = transactions.value.filter(t => t.type === 'BUY');
-    // Menggunakan Math.abs karena Hutang/Kredit dicatat positif di total, tapi di sini kita hanya sum BUY
+    const grossPurchases = transactions.value.filter(t => t.type === 'BUY' && !t.isReturn);
+    // Menggunakan Math.abs karena total retur negatif
     const total = grossPurchases.reduce((a, b) => a + Math.abs(b.total), 0); 
     const count = transactions.value.length;
     const average = count > 0 ? total / count : 0;
@@ -44,29 +44,43 @@ const stats = computed(() => {
 const loadData = async () => {
     loading.value = true;
     try {
-        const productsData = await productService.getAllProducts();
-        productsMap.value = (productsData || []).reduce((acc, curr) => {
+        // 1. Fetch data produk untuk productsMap (Mapping Nama Produk)
+        const productsResponse = await productService.getAllProducts().catch(e => {
+            console.error("Error fetching products:", e);
+            return [];
+        });
+        const productsData = Array.isArray(productsResponse) ? productsResponse : productsResponse?.data || [];
+        
+        productsMap.value = productsData.reduce((acc, curr) => {
             acc[curr.uuid] = curr;
             return acc;
         }, {});
 
-        // [FIX KRITIS] Gunakan catch individual agar Promise.all tidak crash jika satu endpoint gagal
-        const [buyData, returnBuyData] = await Promise.all([
+        // 2. Fetch transaksi BUY dan RT_BUY
+        const [buyResponse, returnBuyResponse] = await Promise.all([
              journalService.getPurchaseReport().catch(e => { console.error("Error fetching BUY:", e); return []; }),
              journalService.findAllByType('RT_BUY').catch(e => { console.error("Error fetching RT_BUY:", e); return []; }),
         ]);
 
+        const safeBuyData = Array.isArray(buyResponse) ? buyResponse : buyResponse?.data || [];
+        const safeReturnBuyData = Array.isArray(returnBuyResponse) ? returnBuyResponse : returnBuyResponse?.data || [];
+
         const rawData = [
-            ...(Array.isArray(buyData) ? buyData : []), 
-            ...(Array.isArray(returnBuyData) ? returnBuyData : [])
+            ...safeBuyData, 
+            ...safeReturnBuyData
         ];
         
-        // Map Data Safely
+        // 3. Map Data Safely
         transactions.value = rawData
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
             .map(journal => {
-            const detailsMap = journal.details.reduce((acc, curr) => {
-                acc[curr.key] = curr.value;
+            
+            const journalDetails = journal.details || [];
+            
+            const detailsMap = journalDetails.reduce((acc, curr) => {
+                if (curr && curr.key) {
+                    acc[curr.key] = curr.value;
+                }
                 return acc;
             }, {});
 
@@ -82,13 +96,12 @@ const loadData = async () => {
                 const productMaster = productsMap.value[pUuid];
                 const unitMaster = productMaster?.units?.find(u => u.uuid === uUuid);
                 
-                // Gunakan Math.abs karena item prices/subtotals di retur dikirim negatif
-                const itemQty = Number(detailsMap[`qty#${i}`]);
+                const itemQty = Number(detailsMap[`qty#${i}`] || 0);
                 const itemPrice = Math.abs(Number(detailsMap[`buy_price#${i}`] || 0));
                 const itemSubtotal = Math.abs(Number(detailsMap[`subtotal#${i}`] || 0));
 
                 items.push({
-                    productName: productMaster?.name || 'Unknown Product',
+                    productName: productMaster?.name || 'Produk Tidak Ditemukan',
                     unitName: unitMaster?.unitName || 'Unit',
                     qty: itemQty,
                     price: itemPrice,
@@ -100,7 +113,7 @@ const loadData = async () => {
             
             return {
                 uuid: journal.uuid,
-                code: journal.code,
+                code: journal.code || 'TRX-' + journal.uuid.substr(0,8).toUpperCase(),
                 type: isReturn ? 'RT_BUY' : 'BUY',
                 isReturn: isReturn,
                 isCredit: isCredit, 
@@ -115,9 +128,9 @@ const loadData = async () => {
         });
 
     } catch (e) {
-        console.error(e);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data pembelian', life: 3000 });
-        transactions.value = []; // Pastikan direset ke array kosong jika ada failure total
+        console.error("Gagal total memuat data pembelian:", e);
+        toast.add({ severity: 'error', summary: 'Error', detail: `Gagal memuat data pembelian: ${e.message || 'Cek koneksi API'}`, life: 5000 });
+        transactions.value = [];
     } finally {
         loading.value = false;
     }
@@ -227,7 +240,7 @@ defineExpose({ refreshData });
                     <template #body="slotProps">
                         <div class="flex flex-col py-1">
                              <span class="font-bold font-mono text-xs"
-                                :class="slotProps.data.isReturn ? 'text-red-700' : 'text-orange-600'"
+                                :class="slotProps.data.isReturn ? 'text-red-700 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'"
                             >
                                 {{ slotProps.data.code }}
                             </span>
@@ -260,7 +273,7 @@ defineExpose({ refreshData });
                     <template #body="slotProps">
                         <Tag 
                             :value="slotProps.data.isReturn ? 'RETUR' : slotProps.data.isCredit ? 'KREDIT' : 'CASH'" 
-                            :severity="slotProps.data.isReturn ? 'danger' : slotProps.data.isCredit ? 'purple' : 'success'" 
+                            :severity="slotProps.data.isReturn ? 'danger' : slotProps.data.isCredit ? 'info' : 'success'" 
                             rounded 
                             class="!text-[10px] !font-extrabold !px-2 uppercase" 
                         />
@@ -270,7 +283,7 @@ defineExpose({ refreshData });
 
                 <Column field="notes" header="Catatan">
                     <template #body="slotProps">
-                        <span v-if="slotProps.data.notes" class="text-xs text-surface-600 italic max-w-[200px] truncate block" :title="slotProps.data.notes">
+                        <span v-if="slotProps.data.notes" class="text-xs text-surface-600 dark:text-surface-300 italic max-w-[200px] truncate block" :title="slotProps.data.notes">
                             "{{ slotProps.data.notes }}"
                         </span>
                         <span v-else class="text-surface-400 text-xs">-</span>
@@ -286,7 +299,7 @@ defineExpose({ refreshData });
                 <Column field="total" header="Total Bayar" sortable class="text-right">
                     <template #body="slotProps">
                         <span class="font-black text-sm"
-                            :class="slotProps.data.isReturn ? 'text-red-600' : 'text-orange-600'"
+                            :class="slotProps.data.isReturn ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'"
                         >
                             {{ formatCurrency(Math.abs(slotProps.data.total)) }}
                             <i v-if="slotProps.data.isReturn" class="pi pi-minus-circle text-[10px] ml-1"></i>
@@ -303,7 +316,7 @@ defineExpose({ refreshData });
                 <template #expansion="slotProps">
                     <div class="p-4 bg-surface-50 dark:bg-surface-950/50 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
                         <div class="flex items-center gap-2 mb-3 ml-1">
-                            <i class="pi pi-box text-orange-500 bg-orange-100 dark:bg-orange-900/30 p-1.5 rounded-md"></i>
+                            <i class="pi pi-box text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 p-1.5 rounded-md"></i>
                             <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Rincian Barang {{ slotProps.data.isReturn ? 'Dikembalikan' : 'Masuk' }}</h5>
                         </div>
                         
@@ -311,12 +324,12 @@ defineExpose({ refreshData });
                             <DataTable :value="slotProps.data.items" size="small" class="text-xs">
                                 <Column field="productName" header="Produk">
                                     <template #body="i">
-                                        <span class="font-medium text-surface-700">{{ i.data.productName }}</span>
+                                        <span class="font-medium text-surface-700 dark:text-surface-200">{{ i.data.productName }}</span>
                                     </template>
                                 </Column>
                                 <Column field="unitName" header="Satuan" style="width: 100px">
                                     <template #body="i">
-                                        <span class="bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded text-[10px] font-bold text-surface-600">{{ i.data.unitName }}</span>
+                                        <span class="bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded text-[10px] font-bold text-surface-600 dark:text-surface-300">{{ i.data.unitName }}</span>
                                     </template>
                                 </Column>
                                 <Column field="qty" header="Qty" class="text-center" style="width: 100px">
@@ -330,12 +343,12 @@ defineExpose({ refreshData });
                                 </Column>
                                 <Column field="price" header="Harga Beli" class="text-right">
                                     <template #body="i">
-                                        {{ formatCurrency(i.data.price) }}
+                                        <span class="text-surface-500 dark:text-surface-400">{{ formatCurrency(i.data.price) }}</span>
                                     </template>
                                 </Column>
                                 <Column field="subtotal" header="Subtotal" class="text-right" style="width: 150px">
                                     <template #body="i">
-                                        <span class="font-bold">{{ formatCurrency(Math.abs(i.data.subtotal)) }}</span>
+                                        <span class="font-bold text-surface-900 dark:text-surface-100">{{ formatCurrency(Math.abs(i.data.subtotal)) }}</span>
                                     </template>
                                 </Column>
                             </DataTable>

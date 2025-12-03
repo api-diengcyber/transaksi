@@ -11,6 +11,7 @@ import {
     OneToMany,
 } from 'typeorm';
 import { UserEntity } from '../user/user.entity';
+import { ProductionFlowEntity } from '../production_flow/production_flow.entity';
 
 @Entity('production')
 export class ProductionEntity {
@@ -52,4 +53,7 @@ export class ProductionEntity {
     @ManyToOne(() => UserEntity)
     @JoinColumn({ name: 'deleted_by' })
     deletedByUser?: UserEntity;
+    
+    @OneToMany(() => ProductionFlowEntity, flow => flow.production) 
+    flows: ProductionFlowEntity[];
 }
