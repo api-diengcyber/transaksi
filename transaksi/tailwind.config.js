@@ -9,6 +9,7 @@ export default {
     "./error.vue",
   ],
   theme: {
+    darkMode: 'class',
     extend: {
       colors: {
         // Mapping class 'bg-primary-500' ke variable CSS kita

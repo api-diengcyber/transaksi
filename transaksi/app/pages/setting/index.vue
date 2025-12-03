@@ -279,7 +279,7 @@ definePageMeta({ layout: 'default' });
                 
                 <!-- SIDEBAR MENU -->
                 <aside class="w-full lg:w-64 shrink-0 space-y-2">
-                    <div class="bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
+                    <div class="light:bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
                         <div class="p-2">
                             <button 
                                 v-for="item in menuItems" 
@@ -516,7 +516,7 @@ definePageMeta({ layout: 'default' });
 
 <style scoped>
 .card-section {
-    @apply bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6;
+    @apply dark:!bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6;
 }
 
 .section-title {

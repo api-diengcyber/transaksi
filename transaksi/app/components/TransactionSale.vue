@@ -351,10 +351,10 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-950 font-sans">
+    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-500 font-sans">
         
-        <div class="flex-1 flex flex-col dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-50/50 dark:bg-surface-950/50">
+        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-500 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-500">
                 <div class="w-full md:w-48">
                     <MultiSelect 
                         v-model="selectedCategoryUuids" 
@@ -392,7 +392,7 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Produk Baru'" @click="$emit('open-create-modal')" />
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-950 scrollbar-thin flex flex-col">
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-500 scrollbar-thin flex flex-col">
                 <div v-if="loading" class="flex-1 flex justify-center items-center">
                     <ProgressSpinner style="width: 40px; height: 40px" />
                 </div>
@@ -438,7 +438,7 @@ defineExpose({ refreshData });
                     <span class="text-xs">Produk tidak ditemukan</span>
                 </div>
 
-                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-950">
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-500">
                     <Button 
                         icon="pi pi-chevron-left" 
                         label="Sebelumnya"
@@ -468,8 +468,8 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-[380px] flex flex-col dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-950/50 flex justify-between items-center">
+        <div class="w-[380px] flex flex-col bg-surface-0 dark:bg-surface-500 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-500/50 flex justify-between items-center">
                 <div class="flex items-center gap-2">
                     <div class="w-7 h-7 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center">
                         <span class="font-bold text-xs">{{ totalItems }}</span>
@@ -479,7 +479,7 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
             </div>
 
-            <div id="cart-items-container" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-950/30">
+            <div id="cart-items-container" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-500/30">
                  <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
                     <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center">
                         <i class="pi pi-shopping-cart text-2xl opacity-40"></i>
@@ -552,7 +552,7 @@ defineExpose({ refreshData });
                                     <i class="pi pi-plus text-[9px] font-bold"></i>
                                 </button>
                             </div>
-                            <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-700 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">
+                            <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-500 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">
                                 {{ formatCurrency(item.price * item.qty) }}
                             </div>
                         </div>
@@ -570,7 +570,7 @@ defineExpose({ refreshData });
                     <div class="flex justify-between items-center text-xs text-surface-500 dark:text-surface-400">
                         <span>
                             Pajak ({{ taxRate }}%) 
-                            <span v-if="taxMethod === 'inclusive'" class="text-[9px] bg-surface-200 dark:bg-surface-700 px-1 rounded ml-1">Include</span>
+                            <span v-if="taxMethod === 'inclusive'" class="text-[9px] bg-surface-200 dark:bg-surface-500 px-1 rounded ml-1">Include</span>
                         </span>
                         <span>{{ formatCurrency(taxAmount) }}</span>
                     </div>
@@ -583,7 +583,7 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-[320px] flex flex-col rounded-xl shadow-lg border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
+        <div class="w-[320px] flex flex-col bg-surface-0 dark:bg-surface-500 rounded-xl shadow-lg border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
              <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
              
              <div class="p-4 flex-1 flex flex-col gap-5 relative z-10 overflow-y-auto scrollbar-thin">

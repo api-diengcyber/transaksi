@@ -315,7 +315,7 @@ const isRouteActive = (item) => {
                         :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" 
                         text 
                         rounded 
-                        severity="secondary"
+                        severity="tertiary"
                         class="!w-10 !h-10 text-white hover:bg-white/10" 
                         @click="toggleDarkMode" 
                         v-tooltip.bottom="'Toggle Dark Mode'" 

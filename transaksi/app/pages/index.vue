@@ -15,30 +15,37 @@ const storeName = computed(() => authStore.activeStore?.name || 'Toko Default');
 // [UPDATE] Definisi Menu Aksi Cepat Dashboard sesuai dengan Struktur Navigasi
 const quickActions = [
     {
-        category: 'Transaksi',
-        color: 'bg-green-500',
+        category: 'Transaksi Cepat',
+        color: 'bg-green-600',
+        icon: 'pi pi-wallet',
         items: [
-            { label: 'Penjualan / Kasir', icon: 'pi pi-shopping-cart', route: '/transaction' },
+            { label: 'Kasir Penjualan', icon: 'pi pi-shopping-cart', route: '/transaction' },
+            { label: 'Pembelian Stok', icon: 'pi pi-download', route: '/transaction?tab=buy' },
+            { label: 'Retur Barang', icon: 'pi pi-arrow-left-to-line', route: '/transaction?tab=return' },
             { label: 'Piutang / Hutang', icon: 'pi pi-money-bill', route: '/arap' },
         ]
     },
     {
-        category: 'Manajemen',
-        color: 'bg-blue-500',
+        category: 'Manajemen Stok & Data',
+        color: 'bg-blue-600',
+        icon: 'pi pi-briefcase',
         items: [
             { label: 'Master Produk', icon: 'pi pi-box', route: '/product' },
-            { label: 'Restaurant / Meja', icon: 'pi pi-th-large', route: '/restaurant' },
-            { label: 'Produksi', icon: 'pi pi-building', route: '/production' },
-            { label: 'Stok/Gudang', icon: 'pi pi-warehouse', route: '/inventory' },
+            { label: 'Inventaris & Gudang', icon: 'pi pi-warehouse', route: '/inventory' },
+            { label: 'Order Produksi', icon: 'pi pi-building', route: '/production' },
             { label: 'Pengaturan User', icon: 'pi pi-users', route: '/user' },
+            { label: 'Resto / Tata Meja', icon: 'pi pi-th-large', route: '/restaurant' },
         ]
     },
     {
-        category: 'Laporan',
-        color: 'bg-orange-500',
+        category: 'Laporan & Analisis',
+        color: 'bg-orange-600',
+        icon: 'pi pi-chart-bar',
         items: [
             { label: 'Laporan Transaksi', icon: 'pi pi-chart-line', route: '/report/transaction' },
-            { label: 'Laporan Piutang/Hutang', icon: 'pi pi-chart-bar', route: '/report/arap' },
+            { label: 'Laporan Pembelian', icon: 'pi pi-chart-pie', route: '/report/transaction?tab=buy' },
+            { label: 'Laporan Piutang/Hutang', icon: 'pi pi-book', route: '/report/arap' },
+            { label: 'Analisis Grafik', icon: 'pi pi-chart-line', route: '/report/graph' },
         ]
     },
 ];
@@ -52,70 +59,90 @@ const navigateTo = (route) => {
 <template>
     <div class="animate-fade-in space-y-8">
         
-        <!-- HEADER SAMBUTAN -->
-        <div class="bg-white dark:bg-surface-900 shadow-xl rounded-2xl p-6 border-l-4 border-primary-500 dark:border-primary-600">
-            <h1 class="text-3xl font-extrabold text-surface-900 dark:text-surface-0 tracking-tight mb-1">
-                Selamat Datang, <span class="text-primary-600 dark:text-primary-400">{{ userName }}</span>!
+        <div class="light:bg-white dark:bg-dark shadow-2xl rounded-2xl p-8 border-t-8 border-primary-600 dark:border-primary-700 relative overflow-hidden">
+            <i class="pi pi-bolt text-[8rem] text-primary-500/10 dark:text-primary-400/10 absolute -top-10 -right-10 rotate-12"></i>
+            <h1 class="text-4xl font-black text-surface-900 dark:text-surface-0 tracking-tight mb-2 relative z-10">
+                Halo, <span class="text-primary-600 dark:text-primary-400">{{ userName }}</span>!
             </h1>
-            <p class="text-surface-600 dark:text-surface-300">Anda sedang mengelola toko: **{{ storeName }}**.</p>
+            <p class="text-lg text-surface-600 dark:text-surface-300">Selamat bekerja di **{{ storeName }}**. Mari optimalkan penjualan hari ini!</p>
         </div>
 
-        <!-- STATISTIK RINGKAS (Placeholder) -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-white dark:bg-surface-900 shadow-lg rounded-xl p-5 border border-surface-200 dark:border-surface-800 flex flex-col justify-between h-32">
-                <div class="text-xs font-bold text-surface-400 uppercase tracking-wider">Penjualan Hari Ini</div>
-                <div class="text-3xl font-extrabold text-green-600">Rp 12.500.000</div>
-                <div class="text-xs text-surface-500 flex items-center gap-1">
-                    <i class="pi pi-arrow-up text-green-500"></i> 12% dari kemarin
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-emerald-500 transition-all">
+                <div class="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center shrink-0">
+                    <i class="pi pi-chart-line text-2xl text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-surface-500 uppercase tracking-wider">Penjualan Hari Ini</div>
+                    <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">Rp 12.5 Jt</div>
+                    <div class="text-[10px] text-surface-500 flex items-center gap-1">
+                        <i class="pi pi-arrow-up text-emerald-500"></i> 12% dari kemarin
+                    </div>
                 </div>
             </div>
             
-            <div class="bg-white dark:bg-surface-900 shadow-lg rounded-xl p-5 border border-surface-200 dark:border-surface-800 flex flex-col justify-between h-32">
-                <div class="text-xs font-bold text-surface-400 uppercase tracking-wider">Total Stok Tersedia</div>
-                <div class="text-3xl font-extrabold text-blue-600">1,245 Unit</div>
-                <div class="text-xs text-surface-500 flex items-center gap-1">
-                    <i class="pi pi-box text-blue-500"></i> Di 4 Lokasi Rak
+            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-blue-500 transition-all">
+                <div class="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center shrink-0">
+                    <i class="pi pi-box text-2xl text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-surface-500 uppercase tracking-wider">Total Stok</div>
+                    <div class="text-2xl font-black text-blue-600 dark:text-blue-400">1,245 Unit</div>
+                    <div class="text-[10px] text-surface-500 flex items-center gap-1">
+                        <i class="pi pi-warehouse text-blue-500"></i> Di 4 Gudang
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-surface-900 shadow-lg rounded-xl p-5 border border-surface-200 dark:border-surface-800 flex flex-col justify-between h-32">
-                <div class="text-xs font-bold text-surface-400 uppercase tracking-wider">Piutang Belum Dibayar</div>
-                <div class="text-3xl font-extrabold text-red-600">Rp 4.100.000</div>
-                <div class="text-xs text-surface-500 flex items-center gap-1">
-                    <i class="pi pi-arrow-right text-red-500"></i> Dari 5 Pelanggan
+            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-red-500 transition-all">
+                <div class="w-14 h-14 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center shrink-0">
+                    <i class="pi pi-money-bill text-2xl text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-surface-500 uppercase tracking-wider">Piutang Belum Dibayar</div>
+                    <div class="text-2xl font-black text-red-600 dark:text-red-400">Rp 4.1 Jt</div>
+                    <div class="text-[10px] text-surface-500 flex items-center gap-1">
+                        <i class="pi pi-calendar text-red-500"></i> 5 Nota Jatuh Tempo
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-surface-900 shadow-lg rounded-xl p-5 border border-surface-200 dark:border-surface-800 flex flex-col justify-between h-32">
-                <div class="text-xs font-bold text-surface-400 uppercase tracking-wider">Resep Aktif</div>
-                <div class="text-3xl font-extrabold text-purple-600">23 Menu</div>
-                <div class="text-xs text-surface-500 flex items-center gap-1">
-                    <i class="pi pi-book text-purple-500"></i> Siap Produksi
+            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-purple-500 transition-all">
+                <div class="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center shrink-0">
+                    <i class="pi pi-book text-2xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-surface-500 uppercase tracking-wider">Order Produksi Aktif</div>
+                    <div class="text-2xl font-black text-purple-600 dark:text-purple-400">23 Batch</div>
+                    <div class="text-[10px] text-surface-500 flex items-center gap-1">
+                        <i class="pi pi-hourglass text-purple-500"></i> Sedang diproses
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- MENU AKSI CEPAT -->
-        <div class="space-y-6">
+        <div class="space-y-10 pt-4">
             <div v-for="section in quickActions" :key="section.category" class="space-y-4">
-                <h2 class="text-xl font-bold text-surface-800 dark:text-surface-100 flex items-center gap-2">
-                    <div :class="[section.color, 'w-2 h-2 rounded-full shadow-lg']"></div>
+                
+                <h2 class="text-2xl font-black text-surface-800 dark:text-surface-100 flex items-center gap-3 border-l-4 pl-3"
+                    :style="`border-color: var(--app-primary-color);`">
+                    <i :class="[section.icon, 'text-xl', section.color]"></i>
                     {{ section.category }}
                 </h2>
 
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     <div v-for="item in section.items" :key="item.label" 
                         @click="navigateTo(item.route)"
-                        class="bg-white dark:bg-surface-900 rounded-xl shadow-md border border-surface-200 dark:border-surface-800 p-4 cursor-pointer hover:shadow-lg hover:border-primary-400 transition-all active:scale-[0.98] group"
+                        class="light:bg-white dark:bg-surface-500 rounded-xl shadow-md border border-surface-200 dark:border-surface-800 p-5 cursor-pointer hover:shadow-xl hover:border-primary-500 transition-all active:scale-[0.98] group"
                     >
-                        <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3 transition-colors" :class="section.color">
-                            <i :class="[item.icon, 'text-white text-xl']"></i>
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors" :class="section.color">
+                            <i :class="[item.icon, 'text-white text-2xl group-hover:scale-110 transition-transform']"></i>
                         </div>
-                        <div class="font-semibold text-sm text-surface-800 dark:text-surface-100 group-hover:text-primary-600">
+                        <div class="font-bold text-base text-surface-800 dark:text-surface-100 group-hover:text-primary-600">
                             {{ item.label }}
                         </div>
-                        <p class="text-xs text-surface-500 dark:text-surface-400 mt-1 line-clamp-2">{{ item.description || '' }}</p>
-                    </div>
+                        </div>
                 </div>
             </div>
         </div>
