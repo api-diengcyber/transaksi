@@ -14,6 +14,10 @@ export class CreateProductionFlowDto {
     stepOrder: number;
 
     @IsOptional()
+    @IsString()
+    productUuid?: string;
+
+    @IsOptional()
     @IsArray()
     @IsString({ each: true })
     workerUserUuids?: string[];

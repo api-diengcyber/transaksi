@@ -8,11 +8,11 @@ import { GetUser } from 'src/common/decorators/get-user.decorator';
 @UseGuards(AtGuard)
 @Controller('production-flow')
 export class ProductionFlowController {
-    constructor(private readonly productionFlowService: ProductionFlowService) {}
+    constructor(private readonly productionFlowService: ProductionFlowService) { }
 
     @Post()
     create(
-        @Body() createDto: CreateProductionFlowDto, 
+        @Body() createDto: CreateProductionFlowDto,
         @GetUser('sub') userId: string,
         @GetUser('storeUuid') storeUuid: string,
     ) {
@@ -28,8 +28,8 @@ export class ProductionFlowController {
 
     @Patch(':uuid')
     update(
-        @Param('uuid') uuid: string, 
-        @Body() updateDto: UpdateProductionFlowDto, 
+        @Param('uuid') uuid: string,
+        @Body() updateDto: UpdateProductionFlowDto,
         @GetUser('sub') userId: string,
         @GetUser('storeUuid') storeUuid: string,
     ) {

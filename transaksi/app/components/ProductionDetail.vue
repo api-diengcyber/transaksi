@@ -11,6 +11,7 @@ const props = defineProps({
 const emit = defineEmits(['edit-production', 'delete-production']);
 
 const productionService = useProductionService();
+const productService = useProductService(); //
 const toast = useToast();
 const confirm = useConfirm();
 
@@ -18,6 +19,10 @@ const confirm = useConfirm();
 const flows = ref([]);
 const loadingFlows = ref(false);
 const matrixValues = ref({}); // Format: { [userUuid]: { [flowUuid]: value } }
+
+// --- STATE PRODUK ---
+const products = ref([]);
+const loadingProducts = ref(false);
 
 // --- STATE FORM FLOW ---
 const showFlowDialog = ref(false);
@@ -27,6 +32,7 @@ const flowForm = ref({
     stepName: '',
     stepOrder: 1,
     workerUserUuids: [], 
+    productUuid: null, // Tambahan field productUuid
     isCompleted: false
 });
 
@@ -45,6 +51,20 @@ const loadFlows = async () => {
     }
 };
 
+const loadProducts = async () => {
+    loadingProducts.value = true;
+    try {
+        // Ambil produk (limit besar untuk dropdown)
+        const response = await productService.getAllProducts(1, 100); 
+        // Sesuaikan dengan struktur response API Anda, biasanya response.data.data atau response.data
+        products.value = response.data || []; 
+    } catch (error) {
+        console.error("Gagal memuat produk", error);
+    } finally {
+        loadingProducts.value = false;
+    }
+};
+
 // ================= ACTIONS: FLOW CRUD =================
 
 const openCreateFlow = () => {
@@ -59,6 +79,7 @@ const openCreateFlow = () => {
         stepName: '',
         stepOrder: lastOrder + 1,
         workerUserUuids: [],
+        productUuid: null, // Reset product
         isCompleted: false
     };
     showFlowDialog.value = true;
@@ -69,11 +90,15 @@ const editFlowColumn = (flow) => {
     // Mapping workerUserUuids dari object workers
     const currentWorkerUuids = flow.workers ? flow.workers.map(w => w.userUuid) : [];
     
+    // Ambil productUuid dari flow (pastikan backend mengirim relation 'product')
+    const currentProductUuid = flow.product ? flow.product.uuid : flow.productUuid;
+
     flowForm.value = {
         uuid: flow.uuid,
         stepName: flow.stepName,
         stepOrder: flow.stepOrder,
         workerUserUuids: currentWorkerUuids,
+        productUuid: currentProductUuid || null, // Load existing product
         isCompleted: flow.isCompleted
     };
     showFlowDialog.value = true;
@@ -91,6 +116,7 @@ const saveFlow = async () => {
             stepName: flowForm.value.stepName,
             stepOrder: flowForm.value.stepOrder,
             workerUserUuids: flowForm.value.workerUserUuids,
+            productUuid: flowForm.value.productUuid, // Kirim productUuid
             isCompleted: flowForm.value.isCompleted
         };
 
@@ -154,9 +180,10 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 };
 
-// Load data saat komponen dimuat (lazy load handled by parent TabView lazy prop)
+// Load data saat komponen dimuat
 onMounted(() => {
     loadFlows();
+    loadProducts(); // Load produk untuk dropdown
 });
 </script>
 
@@ -208,7 +235,12 @@ onMounted(() => {
                     <div class="flex items-center justify-between w-full group">
                         <div class="flex flex-col items-start overflow-hidden">
                             <span class="font-bold truncate w-full" :title="flow.stepName">{{ flow.stepName }}</span>
-                            <span class="text-[10px] font-normal text-surface-500">Step {{ flow.stepOrder }}</span>
+                            <div class="flex flex-col items-start">
+                                <span class="text-[10px] font-normal text-surface-500">Step {{ flow.stepOrder }}</span>
+                                <span v-if="flow.product" class="text-[10px] font-bold text-primary-600 truncate max-w-[120px]" :title="flow.product.name">
+                                    {{ flow.product.name }}
+                                </span>
+                            </div>
                         </div>
                         <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm p-1 rounded-md shadow-sm">
                             <i class="pi pi-pencil text-surface-400 hover:text-blue-500 cursor-pointer text-xs" @click.stop="editFlowColumn(flow)"></i>
@@ -258,6 +290,22 @@ onMounted(() => {
                 <div class="flex flex-col gap-1">
                     <label class="font-semibold text-sm">Nama Langkah</label>
                     <InputText v-model="flowForm.stepName" placeholder="Contoh: Potong, Jahit, Packing" class="w-full" autofocus />
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <label class="font-semibold text-sm">Produk Hasil (Opsional)</label>
+                    <Dropdown 
+                        v-model="flowForm.productUuid" 
+                        :options="products" 
+                        optionLabel="name" 
+                        optionValue="uuid" 
+                        placeholder="Pilih Produk (Jika ada)" 
+                        filter
+                        showClear
+                        class="w-full"
+                        :loading="loadingProducts"
+                    />
+                    <small class="text-surface-500">Pilih jika langkah ini menghasilkan stok produk tertentu.</small>
                 </div>
 
                 <div class="flex flex-col gap-1">

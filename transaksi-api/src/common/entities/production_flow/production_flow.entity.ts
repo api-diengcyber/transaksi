@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { ProductionEntity } from '../production/production.entity';
 import { ProductionFlowUserEntity } from '../production_flow_user/production_flow_user.entity';
+import { ProductEntity } from '../product/product.entity'; //
 
 @Entity('production_flow')
 export class ProductionFlowEntity {
@@ -23,14 +24,17 @@ export class ProductionFlowEntity {
     @ManyToOne(() => ProductionEntity, production => production.flows)
     @JoinColumn({ name: 'production_uuid' })
     production: ProductionEntity;
-    
+
+    @Column({ name: 'product_uuid', type: 'varchar', length: 60, nullable: true })
+    productUuid?: string;
+
     @Column({ name: 'step_order', type: 'int' })
     stepOrder: number;
 
     @Column({ length: 500 })
     stepName: string;
 
-    @OneToMany(() => ProductionFlowUserEntity, worker => worker.productionFlow, { cascade: true }) 
+    @OneToMany(() => ProductionFlowUserEntity, worker => worker.productionFlow, { cascade: true })
     workers: ProductionFlowUserEntity[];
 
     @Column({ name: 'is_completed', type: 'boolean', default: false })
@@ -38,7 +42,7 @@ export class ProductionFlowEntity {
 
     @Column({ name: 'completed_at', type: 'timestamp', nullable: true })
     completedAt?: Date;
-    
+
     @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
     createdAt: Date;
 
@@ -53,4 +57,9 @@ export class ProductionFlowEntity {
 
     @Column({ name: 'updated_by', type: 'uuid', nullable: true })
     updatedBy?: string;
+
+    @ManyToOne(() => ProductEntity)
+    @JoinColumn({ name: 'product_uuid' })
+    product?: ProductEntity;
+
 }
