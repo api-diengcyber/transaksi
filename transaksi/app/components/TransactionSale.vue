@@ -266,43 +266,42 @@ const processCheckout = async () => {
     processing.value = true;
     try {
         const payload = {
+            payment_method: payment.method,
+            
             amount: grandTotal.value,
-            details: {
-                payment_method: payment.method,
-                
-                // [BARU] Kirim Target Store UUID jika mode inter-store aktif
-                target_store_uuid: isInterStore.value ? selectedTargetStore.value : null,
+            
+            // [BARU] Kirim Target Store UUID jika mode inter-store aktif
+            target_store_uuid: isInterStore.value ? selectedTargetStore.value : null,
 
-                // [MODIFIKASI] Logic Kredit & Nama Customer
-                ...((isCreditSale.value || isInterStore.value) ? {
-                    is_credit: 'true', 
-                    due_date: payment.dueDate || new Date(), // Default hari ini jika tidak diisi (opsional)
-                    // Jika Inter-Store, nama customer otomatis nama toko tujuan
-                    customer_name: isInterStore.value 
-                        ? `Toko: ${myStores.value.find(s => s.uuid === selectedTargetStore.value)?.name}` 
-                        : payment.customerName,
-                    payment_received: 0, 
-                    change: 0,
-                } : {
-                    is_credit: 'false',
-                    payment_received: payment.amount,
-                    change: changeAmount.value,
-                }),
-                
-                total_items_count: cart.value.length,
-                subtotal_amount: cartSubtotal.value,
-                tax_amount: taxAmount.value,
-                tax_percentage: taxEnabled.value ? taxRate.value : 0,
-                tax_method: taxEnabled.value ? taxMethod.value : null,
-                grand_total: grandTotal.value
-            }
+            // [MODIFIKASI] Logic Kredit & Nama Customer
+            ...((isCreditSale.value || isInterStore.value) ? {
+                is_credit: 'true', 
+                due_date: payment.dueDate || new Date(), // Default hari ini jika tidak diisi (opsional)
+                // Jika Inter-Store, nama customer otomatis nama toko tujuan
+                customer_name: isInterStore.value 
+                    ? `Toko: ${myStores.value.find(s => s.uuid === selectedTargetStore.value)?.name}` 
+                    : payment.customerName,
+                payment_received: 0, 
+                change: 0,
+            } : {
+                is_credit: 'false',
+                payment_received: payment.amount,
+                change: changeAmount.value,
+            }),
+            
+            total_items_count: cart.value.length,
+            subtotal_amount: cartSubtotal.value,
+            tax_amount: taxAmount.value,
+            tax_percentage: taxEnabled.value ? taxRate.value : 0,
+            tax_method: taxEnabled.value ? taxMethod.value : null,
+            grand_total: grandTotal.value
         };
         cart.value.forEach((item, index) => {
-            payload.details[`product_uuid#${index}`] = item.productUuid;
-            payload.details[`unit_uuid#${index}`] = item.unitUuid;
-            payload.details[`qty#${index}`] = item.qty;
-            payload.details[`price#${index}`] = item.price;
-            payload.details[`subtotal#${index}`] = item.qty * item.price;
+            payload[`product_uuid#${index}`] = item.productUuid;
+            payload[`unit_uuid#${index}`] = item.unitUuid;
+            payload[`qty#${index}`] = item.qty;
+            payload[`price#${index}`] = item.price;
+            payload[`subtotal#${index}`] = item.qty * item.price;
         });
         
         await journalService.createSaleTransaction(payload);

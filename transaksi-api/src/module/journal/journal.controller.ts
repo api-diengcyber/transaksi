@@ -1,9 +1,15 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JournalService } from './journal.service';
-import { ApiOperation, ApiResponse, ApiBody, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { GetStore } from 'src/common/decorators/get-store.decorator';
+// Import DTO yang baru dibuat
+import { 
+  CreateTransactionDto, 
+  CreateGlobalDebtDto, 
+  CreatePaymentDto 
+} from './dto/create-journal.dto';
 
 @ApiTags('Journal')
 @ApiBearerAuth()
@@ -18,40 +24,22 @@ export class JournalController {
 
   @Post('sale')
   @ApiOperation({ summary: 'Create sale journal entry' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        details: { type: 'object', example: { product: 'Apple', qty: 3, target_store_uuid: 'opt-uuid' } },
-      },
-      required: ['amount', 'details'],
-    },
-  })
   @ApiResponse({ status: 201, description: 'Sale journal created successfully' })
   async createSale(
-    @Body() body: any,
-    @GetUser('uuid') userId: string, // Mengambil User ID dari Token (Best Practice)
+    @Body() body: CreateTransactionDto,
+    @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-    // details akan diteruskan ke service, jika ada 'target_store_uuid',
-    // service akan memproses transaksi mirror ke toko lain.
+
+      console.log(body);
     return this.journalService.createSale(body.details, userId, storeUuid);
   }
 
   @Post('buy')
   @ApiOperation({ summary: 'Create buy journal entry' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        details: { type: 'object', example: { supplier: 'XYZ', invoice: 'INV-0012' } },
-      },
-      required: ['amount', 'details'],
-    },
-  })
   @ApiResponse({ status: 201, description: 'Buy journal created successfully' })
   async createBuy(
-    @Body() body: any,
+    @Body() body: CreateTransactionDto, // Gunakan DTO (strukturnya mirip Sale)
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -61,7 +49,7 @@ export class JournalController {
   @Post('return/sale')
   @ApiOperation({ summary: 'Create sale return journal entry' })
   async createSaleReturn(
-    @Body() body: any,
+    @Body() body: CreateTransactionDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -71,7 +59,7 @@ export class JournalController {
   @Post('return/buy')
   @ApiOperation({ summary: 'Create buy return journal entry' })
   async createBuyReturn(
-    @Body() body: any,
+    @Body() body: CreateTransactionDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -85,7 +73,7 @@ export class JournalController {
   @Post('debt/ar')
   @ApiOperation({ summary: 'Create accounts receivable (Piutang) global entry' })
   async createAr(
-    @Body() body: any,
+    @Body() body: CreateGlobalDebtDto, // Gunakan DTO Khusus Debt
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -95,7 +83,7 @@ export class JournalController {
   @Post('debt/ap')
   @ApiOperation({ summary: 'Create accounts payable (Hutang) global entry' })
   async createAp(
-    @Body() body: any,
+    @Body() body: CreateGlobalDebtDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -105,7 +93,7 @@ export class JournalController {
   @Post('payment/ar')
   @ApiOperation({ summary: 'Create accounts receivable payment journal entry' })
   async createArPayment(
-    @Body() body: any,
+    @Body() body: CreatePaymentDto, // Gunakan DTO Khusus Payment
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -115,7 +103,7 @@ export class JournalController {
   @Post('payment/ap')
   @ApiOperation({ summary: 'Create accounts payable payment journal entry' })
   async createApPayment(
-    @Body() body: any,
+    @Body() body: CreatePaymentDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -123,7 +111,7 @@ export class JournalController {
   }
   
   // =========================================================================
-  // LAPORAN & GRAFIK
+  // LAPORAN & GRAFIK (Tidak berubah karena GET)
   // =========================================================================
 
   @Get('report/:type')
@@ -142,7 +130,6 @@ export class JournalController {
     @Query('endDate') endDate: string,
     @GetStore() storeUuid: string,
   ) {
-    // Jika parameter tanggal tidak dikirim, gunakan default 7 hari terakhir
     if (!startDate || !endDate) {
         const end = new Date();
         const start = new Date();

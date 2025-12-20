@@ -6,47 +6,54 @@ export const useJournalService = () => {
     // Pastikan base URL sesuai dengan konfigurasi public di nuxt.config.ts
     const API_BASE = `${config.public.apiBase}/journal`;
 
-    // --- TRANSAKSI UTAMA (SALE & BUY) ---
+    // =========================================================================
+    // TRANSAKSI UTAMA (SALE, BUY)
+    // =========================================================================
     
-    // Menangani Penjualan (termasuk penjualan antar cabang jika ada target_store_uuid di payload)
+    // Menangani Penjualan
+    // Payload dari UI dibungkus ke dalam { details: ... } sesuai DTO Backend
     const createSaleTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/sale`, {
             method: 'POST',
-            body: payload
+            body: { details: payload } 
         });
     };
     
-    // Menangani Pembelian (termasuk pembelian otomatis dari cabang lain)
+    // Menangani Pembelian
     const createBuyTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/buy`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
     
-    // --- TRANSAKSI RETUR ---
+    // =========================================================================
+    // TRANSAKSI RETUR
+    // =========================================================================
 
     const createSaleReturnTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/return/sale`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
 
     const createBuyReturnTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/return/buy`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
     
-    // --- PIUTANG/HUTANG GLOBAL (KEUANGAN) ---
+    // =========================================================================
+    // PIUTANG/HUTANG GLOBAL (AR / AP)
+    // =========================================================================
 
     // Mencatat Piutang Awal (Saldo Awal / Pinjaman Karyawan dll)
     const createArTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/debt/ar`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
     
@@ -54,17 +61,19 @@ export const useJournalService = () => {
     const createApTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/debt/ap`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
 
-    // --- PEMBAYARAN PIUTANG/HUTANG ---
+    // =========================================================================
+    // PEMBAYARAN PIUTANG/HUTANG (PAYMENT)
+    // =========================================================================
 
     // Pelunasan Piutang (Terima Uang)
     const createArPaymentTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/payment/ar`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
     
@@ -72,11 +81,13 @@ export const useJournalService = () => {
     const createApPaymentTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/payment/ap`, {
             method: 'POST',
-            body: payload
+            body: { details: payload }
         });
     };
 
-    // --- LAPORAN/REPORTING ---
+    // =========================================================================
+    // LAPORAN/REPORTING (Tidak berubah karena menggunakan GET)
+    // =========================================================================
     
     const getSalesReport = async () => {
         return await useApi(`${API_BASE}/report/SALE`, {
