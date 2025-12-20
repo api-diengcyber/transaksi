@@ -66,11 +66,11 @@ const items = ref([
         ]
     },
     { 
-        label: 'Transaksi', 
-        icon: 'pi pi-wallet',
+        label: 'Menu', 
+        icon: 'pi pi-box',
         key: 'transaksi',
         items: [
-            { label: 'Penjualan / Pembelian', icon: 'pi pi-wallet', route: '/transaction' },
+            { label: 'Transaksi', icon: 'pi pi-wallet', route: '/transaction' },
             { label: 'Piutang / Hutang', icon: 'pi pi-money-bill', route: '/arap' },
             { label: 'Jurnal', icon: 'pi pi-book', route: '/arap' }, // Route sementara sama
         ]
@@ -80,7 +80,7 @@ const items = ref([
         icon: 'pi pi-chart-bar', 
         key: 'report',
         items: [
-             { label: 'Penjualan / Pembelian', icon: 'pi pi-chart-line', route: '/report/transaction' },
+             { label: 'Transaksi', icon: 'pi pi-chart-line', route: '/report/transaction' },
              { label: 'Piutang / Hutang', icon: 'pi pi-chart-line', route: '/report/arap' },
              { label: 'Produk / Stok', icon: 'pi pi-chart-line', route: '/report/arap' },
              { label: 'Produksi', icon: 'pi pi-chart-line', route: '/report/arap' },
@@ -207,7 +207,7 @@ const isRouteActive = (item) => {
 
                 <div class="flex items-center gap-3 pr-2 shrink-0">
                     
-                    <!-- <div class="hidden sm:block">
+                    <div class="hidden sm:block">
                         <button 
                             @click="toggleStoreMenu" 
                             class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm transition-colors border border-white/10"
@@ -217,7 +217,7 @@ const isRouteActive = (item) => {
                             <span class="font-medium max-w-[100px] truncate">{{ authStore.activeStore?.name || 'Pilih Toko' }}</span>
                             <i class="pi pi-chevron-down text-xs opacity-70"></i>
                         </button>
-                    </div> -->
+                    </div>
 
                     <Button :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" text rounded severity="tertiary"
                         class="!w-10 !h-10 text-white hover:bg-white/10" @click="toggleDarkMode" />

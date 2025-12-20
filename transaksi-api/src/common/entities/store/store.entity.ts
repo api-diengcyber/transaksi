@@ -7,6 +7,8 @@ import {
   OneToMany,
   ManyToMany,
   PrimaryColumn,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
 import { StoreSettingEntity } from '../store_setting/store_setting.entity';
 import { UserEntity } from '../user/user.entity';
@@ -45,6 +47,13 @@ export class StoreEntity {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
+  
+  @ManyToOne(() => StoreEntity, (store) => store.branches, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'parent_store_uuid' })
+  parentStore: StoreEntity;
+  
+  @OneToMany(() => StoreEntity, (store) => store.parentStore)
+  branches: StoreEntity[];
 
   @ManyToMany(() => UserEntity, (user) => user.stores)
   users: UserEntity[];
