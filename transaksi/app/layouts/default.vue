@@ -94,12 +94,12 @@ const items = ref([
         ]
     },
     { 
-        label: 'Transaksi', 
-        icon: 'pi pi-wallet',
+        label: 'Menu', 
+        icon: 'pi pi-box',
         key: 'transaksi',
         items: [
             { 
-                label: 'Penjualan / Pembelian', 
+                label: 'Transaksi', 
                 icon: 'pi pi-wallet',
                 route: '/transaction', 
                 command: (event) => {
@@ -130,7 +130,7 @@ const items = ref([
         key: 'report',
         items: [
              { 
-                label: 'Penjualan / Pembelian', 
+                label: 'Transaksi', 
                 icon: 'pi pi-chart-line', 
                 route: '/report/transaction',
                 command: (event) => {
