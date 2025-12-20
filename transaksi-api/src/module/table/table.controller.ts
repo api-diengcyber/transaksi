@@ -5,6 +5,7 @@ import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { TableService } from './table.service'; 
 import { CreateTableDto, UpdateTableDto } from './dto/create-table.dto';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @ApiTags('Restaurant Table (Meja)')
 @ApiBearerAuth() 
@@ -18,7 +19,7 @@ export class TableController {
   async create(
     @Body() body: CreateTableDto,
     @GetUser('sub') userId: string, 
-    @GetUser('storeUuid') storeUuid: string 
+    @GetStore() storeUuid: string,
   ) {
     return this.tableService.create(body, userId, storeUuid); 
   }
@@ -26,7 +27,7 @@ export class TableController {
   @Get('find-all')
   @ApiOperation({ summary: 'Get all restaurant tables' })
   async findAll(
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.tableService.findAll(storeUuid);
   }
@@ -35,7 +36,7 @@ export class TableController {
   @ApiOperation({ summary: 'Get table detail' })
   async findOne(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.tableService.findOne(uuid, storeUuid);
   }
@@ -46,7 +47,7 @@ export class TableController {
     @Param('uuid') uuid: string,
     @Body() body: UpdateTableDto,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.tableService.update(uuid, body, userId, storeUuid); 
   }
@@ -56,7 +57,7 @@ export class TableController {
   async remove(
     @Param('uuid') uuid: string,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.tableService.remove(uuid, userId, storeUuid); 
   }
@@ -65,7 +66,7 @@ export class TableController {
   @ApiOperation({ summary: 'Restore deleted table' })
   async restore(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.tableService.restore(uuid, storeUuid);
   }

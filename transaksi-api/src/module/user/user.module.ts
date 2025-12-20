@@ -12,7 +12,7 @@ import { storeProvider } from 'src/common/entities/store/store.provider'; // Dip
   providers: [
     ...userProvider,
     ...userRoleProvider,
-    ...storeProvider, // Daftarkan Store Provider
+    ...storeProvider,
     UserService,
   ],
   exports: [UserService],

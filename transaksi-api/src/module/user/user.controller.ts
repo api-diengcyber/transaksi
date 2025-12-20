@@ -7,6 +7,7 @@ import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @ApiTags('User Management')
 @ApiBearerAuth()
@@ -20,7 +21,7 @@ export class UserController {
   async create(
     @Body() dto: CreateUserDto,
     @GetUser('sub') creatorId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.userService.create(dto, creatorId, storeUuid);
   }
@@ -28,7 +29,7 @@ export class UserController {
   @Get('find-all')
   @ApiOperation({ summary: 'Get all users belonging to the current store' })
   async findAll(
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.userService.findAll(storeUuid);
   }
@@ -43,7 +44,7 @@ export class UserController {
   @ApiOperation({ summary: 'Get user detail by UUID (must belong to the current store)' })
   async findOne(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.userService.findOne(uuid, storeUuid);
   }
@@ -54,7 +55,7 @@ export class UserController {
     @Param('uuid') uuid: string,
     @Body() dto: UpdateUserDto,
     @GetUser('sub') updaterId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.userService.update(uuid, dto, updaterId, storeUuid);
   }
@@ -66,7 +67,7 @@ export class UserController {
     @Param('uuid') uuid: string,
     @Body('password') password: string,
     @GetUser('sub') updaterId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     if (!password || password.length < 6) {
         throw new BadRequestException('Password must be at least 6 characters long.');
@@ -79,7 +80,7 @@ export class UserController {
   async remove(
     @Param('uuid') uuid: string,
     @GetUser('sub') deleterId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.userService.softDelete(uuid, deleterId, storeUuid);
   }

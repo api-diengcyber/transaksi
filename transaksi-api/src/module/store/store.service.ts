@@ -9,6 +9,7 @@ import { AuthService } from 'src/module/auth/auth.service';
 import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
 import { CategoryService } from '../category/category.service';
+import { CreateStoreDto } from './dto/create-store.dto';
 
 // [BARU] Helper untuk menghasilkan pengenal lokal
 const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -23,8 +24,12 @@ const generateUserRoleUuid = (storeUuid: string) => `${storeUuid}-ROLE-${generat
 @Injectable()
 export class StoreService {
   constructor(
+    @Inject('STORE_REPOSITORY')
+    private storeRepository: Repository<StoreEntity>,
     @Inject('STORE_SETTING_REPOSITORY')
-    private settingRepository: Repository<StoreSettingEntity>,
+    private storeSettingRepository: Repository<StoreSettingEntity>,
+    @Inject('USER_REPOSITORY')
+    private userRepository: Repository<UserEntity>,
     @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly authService: AuthService,
     private readonly categoryService: CategoryService,
@@ -133,7 +138,7 @@ export class StoreService {
       await manager.save(initialSettings);
 
       // 6. TOKEN (Bawa storeUuid)
-      const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username, savedStore.uuid);
+      const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username);
       const rtHash = await bcrypt.hash(tokens.refreshToken, 10);
       savedUser.refreshToken = rtHash;
       await manager.save(savedUser);
@@ -147,7 +152,7 @@ export class StoreService {
   }
 
   // [UPDATED] 2. GET MY STORES (LIST + ACTIVE STATUS BY TOKEN)
-  async getMyStores(userId: string, activeStoreUuid: string) {
+  async getMyStores(userId: string, activeStoreUuid: string | null) {
     const userRepo = this.dataSource.getRepository(UserEntity);
 
     // Ambil User beserta semua tokonya
@@ -236,31 +241,31 @@ export class StoreService {
   async updateStoreLogo(storeUuid: string, logoUrl: string, originalName: string) {
     const key = 'store_logo_url';
     
-    const existingSetting = await this.settingRepository.findOne({
+    const existingSetting = await this.storeSettingRepository.findOne({
       where: { storeUuid, key: key }
     });
 
     if (existingSetting) {
       existingSetting.value = logoUrl;
-      await this.settingRepository.save(existingSetting);
+      await this.storeSettingRepository.save(existingSetting);
     } else {
-      const newSetting = this.settingRepository.create({
+      const newSetting = this.storeSettingRepository.create({
         uuid: generateStoreSettingUuid(storeUuid),
         storeUuid,
         key: key,
         value: logoUrl,
       });
-      await this.settingRepository.save(newSetting);
+      await this.storeSettingRepository.save(newSetting);
     }
     
-    const existingFileName = await this.settingRepository.findOne({
+    const existingFileName = await this.storeSettingRepository.findOne({
         where: { storeUuid, key: 'store_logo_filename' }
     });
     if (existingFileName) {
         existingFileName.value = originalName;
-        await this.settingRepository.save(existingFileName);
+        await this.storeSettingRepository.save(existingFileName);
     } else {
-        await this.settingRepository.save(this.settingRepository.create({
+        await this.storeSettingRepository.save(this.storeSettingRepository.create({
             uuid: generateStoreSettingUuid(storeUuid),
             storeUuid,
             key: 'store_logo_filename',
@@ -269,5 +274,31 @@ export class StoreService {
     }
 
     return { message: 'Logo updated successfully', logoUrl };
+  }
+  
+  async createStore(userId: string, dto: CreateStoreDto) {
+    const newStore = this.storeRepository.create({
+      uuid: generateStoreUuid(),
+      name: dto.name,
+      address: dto.address,
+      phone: dto.phone,
+    });
+
+    const savedStore = await this.storeRepository.save(newStore);
+
+    const user = await this.userRepository.findOne({
+      where: { uuid: userId },
+      relations: ['stores'], 
+    });
+
+    if (user) {
+      if (!user.stores) {
+        user.stores = [];
+      }
+      user.stores.push(savedStore);
+      await this.userRepository.save(user);
+    }
+
+    return savedStore;
   }
 }

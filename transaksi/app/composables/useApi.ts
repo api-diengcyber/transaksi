@@ -1,30 +1,37 @@
-// composables/useApi.ts
+// app/composables/useApi.ts
+
 export const useApi = async (url: string, options: any = {}) => {
     const config = useRuntimeConfig();
     const API_BASE = config.public.apiBase;
     
     const accessToken = useCookie('accessToken');
     const refreshToken = useCookie('refreshToken');
+    
+    // [BARU] Ambil Store ID dari cookie terpisah
+    const selectedStoreId = useCookie('selectedStoreId'); 
 
-    // 1. Definisikan Header default (masukkan token jika ada)
-    const headers = {
+    // 1. Definisikan Header
+    const headers: any = {
         ...options.headers,
         Authorization: accessToken.value ? `Bearer ${accessToken.value}` : ''
     };
 
+    // [BARU] Inject Header Store ID jika ada
+    if (selectedStoreId.value) {
+        headers['x-store-id'] = selectedStoreId.value;
+    }
+
     try {
-        // 2. Coba Request Pertama
+        // 2. Request Pertama
         return await $fetch(url, {
             baseURL: API_BASE,
             ...options,
             headers
         });
     } catch (error: any) {
-        // 3. Jika Error 401 (Unauthorized) & Ada Refresh Token -> Coba Refresh
+        // 3. Logic Refresh Token (sama seperti sebelumnya, tapi endpoint refresh backend sudah tidak butuh storeUuid)
         if (error.response?.status === 401 && refreshToken.value) {
             try {
-                // Panggil Endpoint Refresh Token Backend
-                // Perhatikan: Backend Anda butuh Refresh Token di Header "Authorization: Bearer ..." (RtGuard)
                 const newTokens: any = await $fetch(`${API_BASE}/auth/refresh`, {
                     method: 'POST',
                     headers: {
@@ -32,31 +39,27 @@ export const useApi = async (url: string, options: any = {}) => {
                     }
                 });
 
-                // 4. Update Cookie dengan Token Baru
                 accessToken.value = newTokens.accessToken;
                 refreshToken.value = newTokens.refreshToken;
 
-                // 5. Ulangi Request Awal dengan Token Baru
+                // Update header dengan token baru (header x-store-id tetap ada)
+                headers.Authorization = `Bearer ${newTokens.accessToken}`;
+
                 return await $fetch(url, {
                     baseURL: API_BASE,
                     ...options,
-                    headers: {
-                        ...options.headers,
-                        Authorization: `Bearer ${newTokens.accessToken}`
-                    }
+                    headers
                 });
 
             } catch (refreshError) {
-                // Jika Refresh Token juga expired/salah -> Logout Paksa
-                console.error('Session expired, please login again.');
+                console.error('Session expired');
                 accessToken.value = null;
                 refreshToken.value = null;
+                selectedStoreId.value = null; // Clear store juga
                 navigateTo('/login');
                 throw refreshError;
             }
         }
-        
-        // Jika error bukan 401 atau tidak ada refresh token, lempar error aslinya
         throw error;
     }
 };

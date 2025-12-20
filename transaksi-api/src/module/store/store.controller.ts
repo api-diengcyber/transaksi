@@ -6,6 +6,8 @@ import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagg
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { CreateStoreDto } from './dto/create-store.dto';
 
 @ApiTags('Store')
 @Controller('store')
@@ -34,9 +36,8 @@ export class StoreController {
   @ApiOperation({ summary: 'Get list of user stores' })
   async getMyStores(
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') activeStoreUuid: string
   ) {
-    return this.storeService.getMyStores(userId, activeStoreUuid);
+    return this.storeService.getMyStores(userId, null);
   }
 
   @Post('save-setting')
@@ -45,7 +46,7 @@ export class StoreController {
   @ApiOperation({ summary: 'Update store profile and settings' })
   async saveSettings(
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
     @Body() dto: SaveSettingDto
   ) {
     return this.storeService.saveSettings(userId, storeUuid, dto);
@@ -58,12 +59,23 @@ export class StoreController {
   @UseInterceptors(FileInterceptor('file')) 
   async uploadLogo(
     @UploadedFile() file: Express.Multer.File, 
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded.');
     }
     const uploadedPath = `/uploads/${file.filename}`;
     return this.storeService.updateStoreLogo(storeUuid, uploadedPath, file.originalname);
+  }
+  
+  @Post('create')
+  @UseGuards(AtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new branch/store for current user' })
+  async createStore(
+    @GetUser('sub') userId: string,
+    @Body() dto: CreateStoreDto,
+  ) {
+    return this.storeService.createStore(userId, dto);
   }
 }

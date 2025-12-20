@@ -24,6 +24,9 @@ export class StoreEntity {
 
   @Column({ length: 50, nullable: true })
   phone: string;
+  
+  @Column({ name: 'parent_store_uuid', type: 'uuid', nullable: true })
+  parentStoreUuid: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

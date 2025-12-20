@@ -14,6 +14,7 @@ import { Type } from 'class-transformer';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { RecipeService } from './recipe.service'; 
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 // --- DTO for Payload ---
 
@@ -54,7 +55,7 @@ export class RecipeController {
   @ApiOperation({ summary: 'Get recipe ingredients for a given product (menu)' })
   async getRecipe(
     @Param('productUuid') productUuid: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.recipeService.getRecipeByProduct(productUuid, storeUuid);
   }
@@ -66,7 +67,7 @@ export class RecipeController {
     @Param('productUuid') productUuid: string,
     @Body() body: SaveRecipeDto,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.recipeService.saveRecipe(productUuid, body.ingredients, userId, storeUuid);
   }

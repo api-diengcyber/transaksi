@@ -15,6 +15,7 @@ import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/create-category.dto';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @ApiTags('Product Category')
 @ApiBearerAuth()
@@ -31,7 +32,7 @@ export class CategoryController {
   async create(
     @Body() body: CreateCategoryDto,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string, // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.categoryService.create(body, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -42,7 +43,7 @@ export class CategoryController {
   @Get('find-all')
   @ApiOperation({ summary: 'Get all categories' })
   async findAll(
-    @GetUser('storeUuid') storeUuid: string, // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.categoryService.findAll(storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -54,7 +55,7 @@ export class CategoryController {
   @ApiOperation({ summary: 'Get category detail by UUID' })
   async findOne(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string, 
+    @GetStore() storeUuid: string,
   ) {
     return this.categoryService.findOne(uuid, storeUuid);
   }
@@ -68,7 +69,7 @@ export class CategoryController {
     @Param('uuid') uuid: string,
     @Body() body: UpdateCategoryDto,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string, 
+    @GetStore() storeUuid: string,
   ) {
     return this.categoryService.update(uuid, body, userId, storeUuid);
   }
@@ -81,7 +82,7 @@ export class CategoryController {
   async remove(
     @Param('uuid') uuid: string,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string, // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.categoryService.remove(uuid, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }

@@ -1,24 +1,39 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue'; // [UPDATE] Tambah watch
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import { useAuthStore } from '~/stores/auth.store';
-import { useStoreService } from '~/composables/useStoreService'; // [BARU]
+import { useStoreService } from '~/composables/useStoreService'; 
+
+// [UPDATE] Init Router & Route untuk manipulasi URL
+const router = useRouter();
+const route = useRoute();
 
 const authStore = useAuthStore();
 const toast = useToast();
 const confirm = useConfirm();
-const storeService = useStoreService(); // [BARU]
+const storeService = useStoreService();
 
 // --- STATE UI ---
 const activeTab = ref('general');
 const loading = ref(false);
 const initialLoading = ref(true);
-const logoLoading = ref(false); // [BARU] State untuk upload logo
+const logoLoading = ref(false);
+
+// State untuk Create Store
+const isCreateStoreModalOpen = ref(false);
+const createLoading = ref(false);
+const formStore = ref({
+    name: '',
+    address: '',
+    phone: '',
+    email: ''
+});
 
 const menuItems = [
     { id: 'general', label: 'Identitas Toko', icon: 'pi pi-building', desc: 'Nama, alamat, dan kontak' },
     { id: 'display', label: 'Tampilan & Warna', icon: 'pi pi-palette', desc: 'Warna utama aplikasi' },
+    { id: 'stores', label: 'Manajemen Toko', icon: 'pi pi-sitemap', desc: 'Buat dan kelola toko' },
     { id: 'sales', label: 'Transaksi Penjualan', icon: 'pi pi-shopping-cart', desc: 'Pajak, struk, dan stok' },
     { id: 'purchase', label: 'Pembelian (Stok)', icon: 'pi pi-truck', desc: 'Supplier dan persetujuan' },
     { id: 'device', label: 'Perangkat & Printer', icon: 'pi pi-print', desc: 'Konfigurasi hardware' },
@@ -30,7 +45,7 @@ const settings = reactive({
     store_phone: '',
     store_address: '',
     store_footer_msg: '',
-    store_logo_url: null, // [BARU] URL logo (tersimpan di DB settings)
+    store_logo_url: null,
     theme_primary_color: '#2563eb',
     
     // 2. Sales
@@ -51,35 +66,45 @@ const settings = reactive({
     dev_show_logo_receipt: false
 });
 
-// [BARU] Computed untuk menampilkan URL Logo
+// Computed untuk Logo
 const currentLogoUrl = computed(() => {
-    // Ambil URL logo dari state lokal (yang sudah dimuat dari API)
     const urlPath = settings.store_logo_url;
     const fallback = 'https://placehold.co/150x150/e0f2f1/047857?text=Logo+Store';
     
     if (!urlPath) return fallback;
 
-    // Asumsi: Logo diakses melalui Base URL API
     const config = useRuntimeConfig();
-    const baseUrl = config.public.apiBase.replace('/api', ''); // Sesuaikan base URL Anda
-    
-    // Jika URL sudah full, gunakan langsung. Jika tidak, gabungkan dengan base URL.
+    const baseUrl = config.public.apiBase.replace('/api', ''); 
     return urlPath.startsWith('http') ? urlPath : `${baseUrl}${urlPath}`;
 });
 
+// [BARU] Fungsi untuk ganti tab dan update URL
+const changeTab = (tabId) => {
+    activeTab.value = tabId;
+    // Update Query Param di URL tanpa reload page
+    router.push({ query: { ...route.query, tab: tabId } });
+};
+
+// [BARU] Watcher untuk mendeteksi perubahan URL (Handling Refresh / Direct Link / Back Button)
+watch(() => route.query.tab, (newTab) => {
+    // Jika ada param ?tab=... dan valid ada di menuItems, set activeTab
+    if (newTab && menuItems.some(item => item.id === newTab)) {
+        activeTab.value = newTab;
+    } else {
+        // Default ke general jika tidak ada param atau param ngawur
+        activeTab.value = 'general';
+    }
+}, { immediate: true }); // immediate: true agar dijalankan saat mounting pertama kali
 
 // --- LOGIC MAPPER ---
-
 const mapApiToState = (apiSettingsObj) => {
     if (!apiSettingsObj || typeof apiSettingsObj !== 'object') return;
 
-    // Handle jika backend mengembalikan Array [{key, value}]
     if (Array.isArray(apiSettingsObj)) {
         apiSettingsObj.forEach(item => {
             updateSettingValue(item.key, item.value);
         });
     } else {
-        // Handle jika backend mengembalikan Object {key: value}
         for (const [key, value] of Object.entries(apiSettingsObj)) {
             updateSettingValue(key, value);
         }
@@ -87,7 +112,6 @@ const mapApiToState = (apiSettingsObj) => {
 };
 
 const updateSettingValue = (key, value) => {
-    // [FIX] Khusus untuk logo, simpan langsung
     if (key === 'store_logo_url') {
         settings.store_logo_url = value;
         return;
@@ -109,14 +133,13 @@ const mapStateToPayload = () => {
     const settingsArray = [];
     const profileKeys = ['store_name', 'store_phone', 'store_address']; 
     
-    // Semua properti settings yang bukan profile utama akan dikirim, termasuk store_logo_url
     for (const [key, value] of Object.entries(settings)) {
         if (profileKeys.includes(key)) continue;
 
         let formattedValue = value;
         if (typeof value === 'boolean') formattedValue = value ? 'true' : 'false';
         if (typeof value === 'number') formattedValue = String(value);
-        if (value === null || value === undefined) formattedValue = ''; // Kirim string kosong jika null/undefined
+        if (value === null || value === undefined) formattedValue = ''; 
         
         settingsArray.push({ key, value: formattedValue });
     }
@@ -124,7 +147,6 @@ const mapStateToPayload = () => {
 };
 
 // --- FETCHING ---
-
 const fetchSettings = async () => {
     initialLoading.value = true;
     try {
@@ -132,14 +154,11 @@ const fetchSettings = async () => {
         const storeData = authStore.activeStore;
 
         if (storeData) {
-            // 1. Map Profil
             settings.store_name = storeData.name || '';
             settings.store_phone = storeData.phone || '';
             settings.store_address = storeData.address || '';
             
-            // 2. Map Settings
             if (storeData.settings) {
-                // Reset store_logo_url sebelum mapping, untuk mencegah duplikasi
                 settings.store_logo_url = null; 
                 mapApiToState(storeData.settings);
             }
@@ -152,27 +171,21 @@ const fetchSettings = async () => {
     }
 };
 
-// --- ACTIONS ---
-
+// --- ACTIONS SETTINGS ---
 const saveSettings = async () => {
     loading.value = true;
     try {
-        // [FIX] Tambahkan store_footer_msg ke payload settings
-        
         const payload = {
             name: settings.store_name,
             phone: settings.store_phone,
             address: settings.store_address,
-            
             settings: mapStateToPayload() 
         };
 
         await authStore.saveStoreSettings(payload);
-        
         await authStore.fetchUserStores(); 
         
         toast.add({ severity: 'success', summary: 'Tersimpan', detail: 'Pengaturan berhasil diperbarui.', life: 3000 });
-
     } catch (e) {
         console.error(e);
         const msg = e.response?._data?.message || e.message || 'Terjadi kesalahan saat menyimpan.';
@@ -182,61 +195,39 @@ const saveSettings = async () => {
     }
 };
 
-// [BARU] Handler ketika file dipilih/di-drop
 const onLogoUpload = async (event) => {
     const file = event.files ? event.files[0] : null;
-
     if (!file) return;
 
     logoLoading.value = true;
     try {
         const response = await storeService.uploadStoreLogo(file);
-        
-        // Cek response, jika ada logoUrl yang dikirim dari API, gunakan itu
         if (response.logoUrl) {
             settings.store_logo_url = response.logoUrl;
         }
-        
-        // Muat ulang data toko untuk sinkronisasi state penuh (termasuk topbar)
         await authStore.fetchUserStores();
-        
-        toast.add({ 
-            severity: 'success', 
-            summary: 'Upload Sukses', 
-            detail: `Logo berhasil diunggah dan disimpan!`, 
-            life: 3000 
-        });
-
+        toast.add({ severity: 'success', summary: 'Upload Sukses', detail: `Logo berhasil diunggah!`, life: 3000 });
     } catch (e) {
         console.error(e);
-        toast.add({ 
-            severity: 'error', 
-            summary: 'Gagal Upload', 
-            detail: e.message || 'Gagal mengunggah file. Pastikan formatnya benar.', 
-            life: 5000 
-        });
+        toast.add({ severity: 'error', summary: 'Gagal Upload', detail: e.message || 'Gagal mengunggah file.', life: 5000 });
     } finally {
         logoLoading.value = false;
-        // Penting: Reset komponen FileUpload agar tidak menyimpan file lama di memori UI
         event.target.value = ''; 
     }
 };
 
 const onRemoveLogo = () => {
      confirm.require({
-        message: 'Anda yakin ingin menghapus logo toko saat ini? Logo akan diganti dengan placeholder.',
+        message: 'Hapus logo toko saat ini?',
         header: 'Hapus Logo',
         icon: 'pi pi-exclamation-triangle',
         acceptClass: 'p-button-danger',
         accept: () => {
-            // Menghapus URL dari state lokal
             settings.store_logo_url = null;
-            // Langsung panggil saveSettings untuk menyimpan perubahan (menghapus URL dari DB)
             saveSettings();
         }
     });
 };
-
 
 const handleReset = () => {
     confirm.require({
@@ -244,10 +235,38 @@ const handleReset = () => {
         header: 'Konfirmasi Reset',
         icon: 'pi pi-refresh',
         acceptClass: 'p-button-danger',
-        accept: () => {
-            fetchSettings();
-        }
+        accept: () => fetchSettings()
     });
+};
+
+// --- ACTIONS CREATE STORE ---
+const resetCreateForm = () => {
+    formStore.value = { name: '', address: '', phone: '', email: '' };
+};
+
+const handleCreateStore = async () => {
+    if (!formStore.value.name || !formStore.value.address) {
+        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Nama dan Alamat wajib diisi', life: 3000 });
+        return;
+    }
+
+    createLoading.value = true;
+    try {
+        await storeService.createStore(formStore.value);
+        
+        toast.add({ severity: 'success', summary: 'Sukses', detail: 'Toko baru berhasil dibuat!', life: 3000 });
+        
+        // Refresh data toko di auth store agar muncul di list
+        await authStore.fetchUserStores();
+        
+        isCreateStoreModalOpen.value = false;
+        resetCreateForm();
+    } catch (error) {
+        console.error(error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal membuat toko.', life: 3000 });
+    } finally {
+        createLoading.value = false;
+    }
 };
 
 onMounted(() => {
@@ -263,11 +282,10 @@ definePageMeta({ layout: 'default' });
         <ConfirmDialog />
 
         <div class="max-w-6xl mx-auto">
-            <!-- Header Page -->
-            <div class="flex justify-between items-center mb-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                 <div>
                     <h1 class="text-2xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Pengaturan Toko</h1>
-                    <p class="text-surface-500 text-sm mt-1">Kelola profil, preferensi transaksi, dan konfigurasi sistem.</p>
+                    <p class="text-surface-500 text-sm mt-1">Kelola profil, toko, preferensi transaksi, dan sistem.</p>
                 </div>
                 <div class="flex gap-3">
                     <Button label="Reset" icon="pi pi-refresh" severity="secondary" text @click="handleReset" :disabled="loading" />
@@ -277,14 +295,13 @@ definePageMeta({ layout: 'default' });
 
             <div class="flex flex-col lg:flex-row gap-8">
                 
-                <!-- SIDEBAR MENU -->
                 <aside class="w-full lg:w-64 shrink-0 space-y-2">
                     <div class="light:bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
                         <div class="p-2">
                             <button 
                                 v-for="item in menuItems" 
                                 :key="item.id"
-                                @click="activeTab = item.id"
+                                @click="changeTab(item.id)" 
                                 class="w-full text-left p-3 rounded-lg flex items-start gap-3 transition-all duration-200 group relative overflow-hidden"
                                 :class="activeTab === item.id 
                                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-bold ring-1 ring-primary-200 dark:ring-primary-800' 
@@ -303,7 +320,6 @@ definePageMeta({ layout: 'default' });
                     </div>
                 </aside>
 
-                <!-- CONTENT AREA -->
                 <main class="flex-1">
                     <div v-if="initialLoading" class="flex justify-center py-20">
                         <ProgressSpinner style="width: 50px; height: 50px" />
@@ -311,10 +327,7 @@ definePageMeta({ layout: 'default' });
 
                     <div v-else class="space-y-6">
                         
-                        <!-- TAB: GENERAL -->
                         <div v-if="activeTab === 'general'" class="animate-fade-in space-y-6">
-                            
-                             <!-- Logo Upload Section -->
                             <div class="card-section">
                                 <h3 class="section-title">Logo Toko</h3>
                                 <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
@@ -326,7 +339,7 @@ definePageMeta({ layout: 'default' });
                                     </div>
                                     
                                     <div class="flex flex-col items-center sm:items-start">
-                                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">Unggah logo baru (Max 1MB, format: JPG/PNG). URL akan tersimpan di database.</p>
+                                        <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">Unggah logo baru (Max 1MB, format: JPG/PNG).</p>
 
                                         <div class="flex gap-2">
                                             <FileUpload 
@@ -346,7 +359,7 @@ definePageMeta({ layout: 'default' });
                                                 </template>
                                             </FileUpload>
 
-                                            <Button v-if="settings.store_logo_url" label="Hapus Logo" icon="pi pi-trash" severity="danger" size="small" @click="onRemoveLogo" :disabled="loading" />
+                                            <Button v-if="settings.store_logo_url" label="Hapus" icon="pi pi-trash" severity="danger" size="small" @click="onRemoveLogo" :disabled="loading" />
                                         </div>
                                     </div>
                                 </div>
@@ -370,13 +383,48 @@ definePageMeta({ layout: 'default' });
                                      <div class="field md:col-span-2">
                                         <label>Pesan Kaki (Footer Note Struk)</label>
                                         <InputText v-model="settings.store_footer_msg" class="w-full" placeholder="Contoh: Terimakasih telah berbelanja!" />
-                                        <small class="text-surface-500">Teks ini akan muncul di bagian paling bawah struk belanja.</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- TAB: DISPLAY -->
+                        <div v-else-if="activeTab === 'stores'" class="animate-fade-in space-y-6">
+                            <div class="flex justify-between items-center bg-primary-50 dark:bg-primary-900/10 p-4 rounded-xl border border-primary-100 dark:border-primary-800">
+                                <div>
+                                    <h3 class="text-lg font-bold text-primary-800 dark:text-primary-100">Daftar Toko</h3>
+                                    <p class="text-sm text-primary-600 dark:text-primary-300">Kelola semua toko toko Anda di sini.</p>
+                                </div>
+                                <Button label="Buat Toko Baru" icon="pi pi-plus" @click="isCreateStoreModalOpen = true" />
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div v-for="store in authStore.stores" :key="store.uuid" 
+                                    class="p-5 rounded-xl border transition-all cursor-pointer relative group bg-white dark:bg-surface-900 shadow-sm hover:shadow-md"
+                                    :class="store.uuid === authStore.activeStore?.uuid ? 'border-primary-500 ring-1 ring-primary-500' : 'border-surface-200 dark:border-surface-700 hover:border-primary-400'"
+                                    @click="authStore.switchStore(store.uuid)"
+                                >
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center text-primary-600 font-bold text-lg">
+                                                {{ store.name.charAt(0).toUpperCase() }}
+                                            </div>
+                                            <div>
+                                                <h4 class="font-bold text-surface-900 dark:text-surface-100">{{ store.name }}</h4>
+                                                <p class="text-xs text-surface-500">{{ store.phone || '-' }}</p>
+                                            </div>
+                                        </div>
+                                        <Tag v-if="store.uuid === authStore.activeStore?.uuid" value="Aktif" severity="success" class="text-xs" />
+                                    </div>
+                                    <p class="mt-3 text-sm text-surface-600 dark:text-surface-400 line-clamp-2 min-h-[2.5rem]">
+                                        {{ store.address || 'Belum ada alamat' }}
+                                    </p>
+                                    <div class="mt-3 pt-3 border-t border-surface-100 dark:border-surface-800 flex justify-end">
+                                         <span class="text-xs text-primary-600 group-hover:underline">Kelola Toko Ini &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div v-else-if="activeTab === 'display'" class="animate-fade-in space-y-6">
                             <div class="card-section">
                                 <h3 class="section-title">Warna Utama Aplikasi</h3>
@@ -385,16 +433,14 @@ definePageMeta({ layout: 'default' });
                                     <div class="flex gap-4 items-center">
                                         <ColorPicker v-model="settings.theme_primary_color" format="hex" class="!w-10 !h-10" />
                                         <InputText v-model="settings.theme_primary_color" placeholder="#2563eb" class="w-40 !py-2.5 !text-sm font-mono" />
-                                        <span class="text-sm text-surface-500">Warna ini akan mempengaruhi tombol dan elemen highlight.</span>
                                     </div>
                                     <small class="text-surface-500 mt-2 block">
-                                        *Catatan: Perubahan warna mungkin memerlukan *hard refresh* (Ctrl/Cmd + Shift + R) di browser untuk melihat efek penuh di seluruh UI.
+                                        *Catatan: Perubahan warna memerlukan refresh halaman untuk efek penuh.
                                     </small>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- TAB: SALES -->
                         <div v-if="activeTab === 'sales'" class="animate-fade-in space-y-6">
                             <div class="card-section">
                                 <div class="flex justify-between items-start mb-4">
@@ -413,10 +459,9 @@ definePageMeta({ layout: 'default' });
                                     <div class="field">
                                         <label>Metode Perhitungan</label>
                                         <SelectButton v-model="settings.sale_tax_method" 
-                                            :options="[{label: 'Exclude (Harga + PPN)', value: 'exclusive'}, {label: 'Include (Harga tmsk PPN)', value: 'inclusive'}]" 
+                                            :options="[{label: 'Exclude', value: 'exclusive'}, {label: 'Include', value: 'inclusive'}]" 
                                             optionLabel="label" optionValue="value" 
                                             class="w-full text-xs"
-                                            :pt="{ button: { class: '!text-xs !py-2' } }"
                                         />
                                     </div>
                                 </div>
@@ -443,7 +488,6 @@ definePageMeta({ layout: 'default' });
                             </div>
                         </div>
 
-                        <!-- TAB: PURCHASE -->
                         <div v-if="activeTab === 'purchase'" class="animate-fade-in space-y-6">
                             <div class="card-section">
                                 <h3 class="section-title">Konfigurasi Pembelian</h3>
@@ -459,7 +503,7 @@ definePageMeta({ layout: 'default' });
                                     <div class="flex items-center justify-between p-3 border border-surface-200 dark:border-surface-700 rounded-lg">
                                         <div>
                                             <div class="font-bold text-sm">Otomatis Approve</div>
-                                            <div class="text-xs text-surface-500">Stok langsung bertambah tanpa perlu persetujuan Supervisor.</div>
+                                            <div class="text-xs text-surface-500">Stok langsung bertambah tanpa perlu persetujuan.</div>
                                         </div>
                                         <InputSwitch v-model="settings.buy_auto_approve" />
                                     </div>
@@ -472,7 +516,6 @@ definePageMeta({ layout: 'default' });
                             </div>
                         </div>
 
-                        <!-- TAB: DEVICE -->
                         <div v-if="activeTab === 'device'" class="animate-fade-in space-y-6">
                             <div class="card-section">
                                 <h3 class="section-title">Pengaturan Printer Struk</h3>
@@ -482,11 +525,11 @@ definePageMeta({ layout: 'default' });
                                         <div class="flex gap-4 mt-1">
                                             <div class="flex align-items-center">
                                                 <RadioButton v-model="settings.dev_printer_width" inputId="p58" name="paper" value="58mm" />
-                                                <label for="p58" class="ml-2 text-sm">58mm (Kecil)</label>
+                                                <label for="p58" class="ml-2 text-sm">58mm</label>
                                             </div>
                                             <div class="flex align-items-center">
                                                 <RadioButton v-model="settings.dev_printer_width" inputId="p80" name="paper" value="80mm" />
-                                                <label for="p80" class="ml-2 text-sm">80mm (Standar)</label>
+                                                <label for="p80" class="ml-2 text-sm">80mm</label>
                                             </div>
                                         </div>
                                     </div>
@@ -495,11 +538,11 @@ definePageMeta({ layout: 'default' });
                                         <div class="flex flex-col gap-2 mt-1">
                                             <div class="flex align-items-center">
                                                 <Checkbox v-model="settings.dev_auto_print_receipt" binary inputId="autoprint" />
-                                                <label for="autoprint" class="ml-2 text-sm">Otomatis Print setelah bayar</label>
+                                                <label for="autoprint" class="ml-2 text-sm">Otomatis Print</label>
                                             </div>
                                             <div class="flex align-items-center">
                                                 <Checkbox v-model="settings.dev_show_logo_receipt" binary inputId="showlogo" />
-                                                <label for="showlogo" class="ml-2 text-sm">Tampilkan Logo Toko</label>
+                                                <label for="showlogo" class="ml-2 text-sm">Tampilkan Logo</label>
                                             </div>
                                         </div>
                                     </div>
@@ -511,12 +554,42 @@ definePageMeta({ layout: 'default' });
                 </main>
             </div>
         </div>
+
+        <Dialog v-model:visible="isCreateStoreModalOpen" modal header="Buat Toko Baru" :style="{ width: '500px' }" :draggable="false">
+            <div class="flex flex-col gap-4 mt-2">
+                <div class="flex flex-col gap-2">
+                    <label for="store_name" class="font-semibold text-sm">Nama Toko <span class="text-red-500">*</span></label>
+                    <InputText id="store_name" v-model="formStore.name" placeholder="Contoh: Toko Jakarta Pusat" class="w-full" />
+                </div>
+                
+                <div class="flex flex-col gap-2">
+                    <label for="store_address" class="font-semibold text-sm">Alamat <span class="text-red-500">*</span></label>
+                    <Textarea id="store_address" v-model="formStore.address" rows="3" placeholder="Alamat lengkap..." class="w-full" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-2">
+                        <label for="store_phone" class="font-semibold text-sm">No. Telepon</label>
+                        <InputText id="store_phone" v-model="formStore.phone" placeholder="08..." class="w-full" />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label for="store_email" class="font-semibold text-sm">Email</label>
+                        <InputText id="store_email" v-model="formStore.email" placeholder="email@toko.com" class="w-full" />
+                    </div>
+                </div>
+            </div>
+
+            <template #footer>
+                <Button label="Batal" icon="pi pi-times" text @click="isCreateStoreModalOpen = false" severity="secondary" />
+                <Button label="Simpan Toko" icon="pi pi-check" @click="handleCreateStore" :loading="createLoading" severity="primary" />
+            </template>
+        </Dialog>
     </div>
 </template>
 
 <style scoped>
 .card-section {
-    @apply dark:!bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6;
+    @apply dark:bg-surface-900 bg-white rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6;
 }
 
 .section-title {

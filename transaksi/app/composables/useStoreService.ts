@@ -24,9 +24,17 @@ export const useStoreService = () => {
         });
     }
 
+    const createStore = async (payload: any) => {
+        return await useApi('/store/create', {
+            method: 'POST',
+            body: payload
+        });
+    };
+
     return {
         getMyStore,
         saveStoreSettings,
         uploadStoreLogo,
+        createStore,
     };
 };

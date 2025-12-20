@@ -3,6 +3,7 @@ import { JournalService } from './journal.service';
 import { ApiOperation, ApiResponse, ApiBody, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @ApiTags('Journal')
 @ApiBearerAuth()
@@ -26,7 +27,7 @@ export class JournalController {
   @ApiResponse({ status: 201, description: 'Sale journal created successfully' })
   async createSale(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createSale(body.details, body.userId, storeUuid);
   }
@@ -46,7 +47,7 @@ export class JournalController {
   @ApiResponse({ status: 201, description: 'Buy journal created successfully' })
   async createBuy(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createBuy(body.details, body.userId, storeUuid);
   }
@@ -56,7 +57,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create sale return journal entry' })
   async createSaleReturn(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createSaleReturn(body.details, body.userId, storeUuid);
   }
@@ -66,7 +67,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create buy return journal entry' })
   async createBuyReturn(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createBuyReturn(body.details, body.userId, storeUuid);
   }
@@ -76,7 +77,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create accounts receivable (Piutang) global entry' })
   async createAr(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createAr(body.details, body.userId, storeUuid);
   }
@@ -86,7 +87,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create accounts payable (Hutang) global entry' })
   async createAp(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createAp(body.details, body.userId, storeUuid);
   }
@@ -96,7 +97,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create accounts receivable payment journal entry' })
   async createArPayment(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createArPayment(body.details, body.userId, storeUuid);
   }
@@ -106,7 +107,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create accounts payable payment journal entry' })
   async createApPayment(
     @Body() body: any,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.createApPayment(body.details, body.userId, storeUuid);
   }
@@ -115,7 +116,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Get journal report by type (e.g., SALE)' })
   async getReport(
     @Param('type') type: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     return this.journalService.findAllByType(type, storeUuid);
   }
@@ -125,7 +126,7 @@ export class JournalController {
   async getChart(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
   ) {
     if (!startDate || !endDate) {
         const end = new Date();
