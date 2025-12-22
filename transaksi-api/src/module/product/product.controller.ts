@@ -15,10 +15,11 @@ import { ProductUnitEnum } from 'src/common/entities/product_unit/product_unit.e
 
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @ApiTags('Product')
-@ApiBearerAuth() // Menambahkan fitur Authorize (Gembok) di Swagger
-@UseGuards(AtGuard) // Melindungi seluruh endpoint di controller ini
+@ApiBearerAuth()
+@UseGuards(AtGuard)
 @Controller('product')
 export class ProductController {
   constructor(private readonly productService: ProductService) { }
@@ -26,7 +27,7 @@ export class ProductController {
   @Get('find-all')
   @ApiOperation({ summary: 'Get all products with pagination and search' })
   async findAll(
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('search') search?: string
@@ -40,7 +41,7 @@ export class ProductController {
   @ApiOperation({ summary: 'Get product detail' })
   async findOne(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.productService.findOne(uuid, storeUuid);
   }
@@ -99,7 +100,7 @@ export class ProductController {
   async create(
     @Body() body: any,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.productService.create({ ...body, userId, storeUuid });
   }
@@ -110,7 +111,7 @@ export class ProductController {
     @Param('uuid') uuid: string,
     @Body() body: any,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.productService.update(uuid, body, userId, storeUuid);
   }
@@ -126,7 +127,7 @@ export class ProductController {
       setAsDefault?: boolean;
     },
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.productService.addUnit(
       productUuid,
@@ -145,7 +146,7 @@ export class ProductController {
     @Param('productUuid') productUuid: string,
     @Body() body: { price: number; name: string; unitUuid: string; setAsDefault?: boolean },
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.productService.addPrice(
       productUuid,
@@ -162,7 +163,7 @@ export class ProductController {
   async delete(
     @Param('uuid') uuid: string,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string
+    @GetStore() storeUuid: string,
   ) {
     return this.productService.softDelete(uuid, userId, storeUuid);
   }

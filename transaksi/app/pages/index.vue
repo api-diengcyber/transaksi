@@ -38,7 +38,7 @@ const quickActions = [
         ]
     },
     {
-        category: 'Laporan & Analisis',
+        category: 'Laporan Transaksi',
         color: 'bg-orange-600',
         icon: 'pi pi-chart-bar',
         items: [

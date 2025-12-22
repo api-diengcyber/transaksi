@@ -25,7 +25,6 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async fetchUserStores() {
       try {
-        // URL yang benar sesuai controller
         const response = await useApi('/store/my-store', { method: 'GET' });
         
         let data = response;
@@ -33,7 +32,23 @@ export const useAuthStore = defineStore('auth', {
 
         const storesList = Array.isArray(data) ? data : [data];
         this.stores = storesList;
-        this.activeStore = this.stores.find((s: any) => s.isActive) || this.stores[0] || null;
+
+        // [BARU] Logika prioritas pemilihan toko:
+        // 1. Cek Cookie 'selectedStoreId'
+        // 2. Cek property 'isActive' dari backend (jika ada)
+        // 3. Fallback ke toko pertama di list
+        const storeCookie = useCookie('selectedStoreId');
+        
+        if (storeCookie.value) {
+            this.activeStore = this.stores.find((s: any) => s.uuid === storeCookie.value) || this.stores[0];
+        } else {
+            this.activeStore = this.stores.find((s: any) => s.isActive) || this.stores[0] || null;
+        }
+
+        // Sinkronisasi cookie jika activeStore sudah ketemu
+        if (this.activeStore) {
+            storeCookie.value = this.activeStore.uuid;
+        }
         
         return this.activeStore;
       } catch (error) {
@@ -42,9 +57,26 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // [BARU] Action untuk ganti toko
+    async switchStore(storeUuid: string) {
+        const targetStore = this.stores.find(s => s.uuid === storeUuid);
+        
+        if (targetStore) {
+            this.activeStore = targetStore;
+            
+            // Simpan ke cookie agar useApi bisa membacanya dan mengirim header x-store-id
+            const storeCookie = useCookie('selectedStoreId');
+            storeCookie.value = storeUuid;
+            
+            // Reload halaman agar semua data di-fetch ulang dengan konteks toko baru
+            if (import.meta.client) {
+                window.location.reload();
+            }
+        }
+    },
+
     async saveStoreSettings(payload: any) {
       try {
-        // [FIXED] URL diperbaiki dari '/my-store/save-setting' menjadi '/store/save-setting'
         const response = await useApi('/store/save-setting', {
             method: 'POST',
             body: payload
@@ -61,7 +93,6 @@ export const useAuthStore = defineStore('auth', {
             
             if (Array.isArray(payload.settings)) {
                 payload.settings.forEach((newItem: any) => {
-                    // Jika settings di state object, convert atau handle array
                     if (Array.isArray(this.activeStore.settings)) {
                         const existingIdx = this.activeStore.settings.findIndex((s: any) => s.key === newItem.key);
                         if (existingIdx !== -1) {
@@ -91,6 +122,8 @@ export const useAuthStore = defineStore('auth', {
       this.stores = [];
       this.activeStore = null;
       this.isLoggedIn = false;
+      const storeCookie = useCookie('selectedStoreId');
+      storeCookie.value = null;
     }
   },
   persist: true 

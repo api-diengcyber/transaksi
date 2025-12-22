@@ -1,8 +1,5 @@
-import {
-  Injectable,
-  Inject,
-  ForbiddenException,
-} from '@nestjs/common';
+// src/module/auth/auth.service.ts
+import { Injectable, Inject, ForbiddenException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -22,14 +19,9 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  // ============================
-  // SIGN IN (LOGIN)
-  // ============================
   async signin(dto: AuthDto): Promise<Tokens> {
-    // 1. Cari User beserta Default Store-nya
     const user = await this.userRepository.findOne({
       where: { username: dto.username },
-      relations: ['defaultStore'], // <--- Load Relasi Default Store
     });
 
     if (!user) throw new ForbiddenException('Access Denied');
@@ -37,12 +29,8 @@ export class AuthService {
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatches) throw new ForbiddenException('Access Denied');
 
-    // 2. Ambil Store UUID (Jika ada)
-    const storeUuid = user.defaultStore ? user.defaultStore.uuid : null;
-
-    // 3. Generate Token dengan Store UUID
-    const tokens = await this.getTokens(user.uuid, user.username, storeUuid);
-    
+    // HAPUS logika ambil default store. Token murni user.
+    const tokens = await this.getTokens(user.uuid, user.username);
     await this.updateRefreshToken(user.uuid, tokens.refreshToken);
 
     return tokens;
@@ -51,34 +39,28 @@ export class AuthService {
   async logout(userId: string) {
     await this.userRepository.update(
         { uuid: userId }, 
-        { refreshToken: '' } // Pastikan nullable
+        { refreshToken: "" } 
     );
     return { message: 'Logged out successfully' };
   }
 
-  // ============================
-  // REFRESH TOKEN
-  // ============================
-  // [UPDATED] Terima parameter storeUuid dari token lama
-  async refreshTokens(userId: string, rt: string, storeUuid: string | null): Promise<Tokens> {
+  async refreshTokens(userId: string, rt: string): Promise<Tokens> {
     const user = await this.userRepository.findOne({
       where: { uuid: userId },
     });
     
-    if (!user || !user.refreshToken)
-      throw new ForbiddenException('Access Denied');
+    if (!user || !user.refreshToken) throw new ForbiddenException('Access Denied');
 
     const rtMatches = await bcrypt.compare(rt, user.refreshToken);
     if (!rtMatches) throw new ForbiddenException('Access Denied');
 
-    // Generate Token Baru dengan Store UUID yang SAMA dengan sebelumnya
-    const tokens = await this.getTokens(user.uuid, user.username, storeUuid);
+    // Generate token baru tanpa storeUuid
+    const tokens = await this.getTokens(user.uuid, user.username);
     await this.updateRefreshToken(user.uuid, tokens.refreshToken);
 
     return tokens;
   }
 
-  // ... Helper hashData & updateRefreshToken SAMA ...
   async updateRefreshToken(userId: string, rt: string) {
     const hash = await this.hashData(rt);
     await this.userRepository.update({ uuid: userId }, { refreshToken: hash });
@@ -88,37 +70,19 @@ export class AuthService {
     return bcrypt.hash(data, 10);
   }
 
-  // ============================
-  // GET TOKENS (MODIFIED)
-  // ============================
-  async getTokens(userId: string, username: string, storeUuid: string | null): Promise<Tokens> {
-    // Payload sekarang memuat storeUuid
+  // REVISI: Hapus storeUuid dari payload
+  async getTokens(userId: string, username: string): Promise<Tokens> {
     const payload = {
         sub: userId,
         username,
-        storeUuid // <--- Tambahkan ini
+        // storeUuid dihapus dari sini agar token reusable antar toko
     };
 
     const [at, rt] = await Promise.all([
-      this.jwtService.signAsync(
-        payload,
-        {
-          secret: 'at-secret', 
-          expiresIn: '15m',
-        },
-      ),
-      this.jwtService.signAsync(
-        payload, // Refresh token juga membawa info store agar konsisten saat refresh
-        {
-          secret: 'rt-secret', 
-          expiresIn: '7d',
-        },
-      ),
+      this.jwtService.signAsync(payload, { secret: 'at-secret', expiresIn: '15m' }),
+      this.jwtService.signAsync(payload, { secret: 'rt-secret', expiresIn: '7d' }),
     ]);
 
-    return {
-      accessToken: at,
-      refreshToken: rt,
-    };
+    return { accessToken: at, refreshToken: rt };
   }
 }

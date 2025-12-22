@@ -62,7 +62,7 @@ definePageMeta({ layout: 'default' });
     <div class="h-full flex flex-col">
         
         <div class="flex items-center justify-between mb-4">
-             <h1 class="text-3xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Laporan & Analisis</h1>
+             <h1 class="text-3xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Laporan Transaksi</h1>
              <div class="flex items-center gap-2">
                 <Button 
                     icon="pi pi-refresh" 

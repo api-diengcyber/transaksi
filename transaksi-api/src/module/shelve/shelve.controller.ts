@@ -5,6 +5,7 @@ import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { ShelveService } from './shelve.service';
 import { CreateShelveDto, UpdateShelveDto } from './dto/create-shelve.dto';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @ApiTags('Product Shelve (Rak)')
 @ApiBearerAuth() 
@@ -18,7 +19,7 @@ export class ShelveController {
   async create(
     @Body() body: CreateShelveDto,
     @GetUser('sub') userId: string, 
-    @GetUser('storeUuid') storeUuid: string // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.shelveService.create(body, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -26,7 +27,7 @@ export class ShelveController {
   @Get('find-all')
   @ApiOperation({ summary: 'Get all shelves' })
   async findAll(
-    @GetUser('storeUuid') storeUuid: string // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.shelveService.findAll(storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -35,7 +36,7 @@ export class ShelveController {
   @ApiOperation({ summary: 'Get shelf detail' })
   async findOne(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.shelveService.findOne(uuid, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -46,7 +47,7 @@ export class ShelveController {
     @Param('uuid') uuid: string,
     @Body() body: UpdateShelveDto,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.shelveService.update(uuid, body, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -56,7 +57,7 @@ export class ShelveController {
   async remove(
     @Param('uuid') uuid: string,
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.shelveService.remove(uuid, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }
@@ -65,7 +66,7 @@ export class ShelveController {
   @ApiOperation({ summary: 'Restore deleted shelf' })
   async restore(
     @Param('uuid') uuid: string,
-    @GetUser('storeUuid') storeUuid: string // <-- [UPDATED] Ambil storeUuid
+    @GetStore() storeUuid: string,
   ) {
     return this.shelveService.restore(uuid, storeUuid); // <-- [UPDATED] Teruskan storeUuid
   }

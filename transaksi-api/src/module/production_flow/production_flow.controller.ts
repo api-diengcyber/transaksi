@@ -4,6 +4,7 @@ import { CreateProductionFlowDto } from './dto/create-production-flow.dto';
 import { UpdateProductionFlowDto } from './dto/update-production-flow.dto';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 @UseGuards(AtGuard)
 @Controller('production-flow')
@@ -14,7 +15,7 @@ export class ProductionFlowController {
     create(
         @Body() createDto: CreateProductionFlowDto,
         @GetUser('sub') userId: string,
-        @GetUser('storeUuid') storeUuid: string,
+        @GetStore() storeUuid: string,
     ) {
         return this.productionFlowService.create(createDto, userId, storeUuid);
     }
@@ -31,7 +32,7 @@ export class ProductionFlowController {
         @Param('uuid') uuid: string,
         @Body() updateDto: UpdateProductionFlowDto,
         @GetUser('sub') userId: string,
-        @GetUser('storeUuid') storeUuid: string,
+        @GetStore() storeUuid: string,
     ) {
         return this.productionFlowService.update(uuid, updateDto, userId, storeUuid);
     }

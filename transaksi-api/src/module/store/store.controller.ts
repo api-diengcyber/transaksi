@@ -6,11 +6,14 @@ import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagg
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { CreateStoreDto } from './dto/create-store.dto';
+import { CreateBranchDto } from './dto/create-branch.dto';
 
 @ApiTags('Store')
 @Controller('store')
 export class StoreController {
-  constructor(private readonly storeService: StoreService) {}
+  constructor(private readonly storeService: StoreService) { }
 
   // [REVISI KRITIS] Endpoint Install diubah untuk menerima file dan body JSON
   @Post('install')
@@ -34,9 +37,8 @@ export class StoreController {
   @ApiOperation({ summary: 'Get list of user stores' })
   async getMyStores(
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') activeStoreUuid: string
   ) {
-    return this.storeService.getMyStores(userId, activeStoreUuid);
+    return this.storeService.getMyStores(userId, null);
   }
 
   @Post('save-setting')
@@ -45,7 +47,7 @@ export class StoreController {
   @ApiOperation({ summary: 'Update store profile and settings' })
   async saveSettings(
     @GetUser('sub') userId: string,
-    @GetUser('storeUuid') storeUuid: string,
+    @GetStore() storeUuid: string,
     @Body() dto: SaveSettingDto
   ) {
     return this.storeService.saveSettings(userId, storeUuid, dto);
@@ -53,17 +55,48 @@ export class StoreController {
 
   @Post('upload-logo')
   @UseGuards(AtGuard)
-  @ApiConsumes('multipart/form-data') 
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Uploads store logo and updates logo URL in settings' })
-  @UseInterceptors(FileInterceptor('file')) 
+  @UseInterceptors(FileInterceptor('file'))
   async uploadLogo(
-    @UploadedFile() file: Express.Multer.File, 
-    @GetUser('storeUuid') storeUuid: string,
+    @UploadedFile() file: Express.Multer.File,
+    @GetStore() storeUuid: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded.');
     }
     const uploadedPath = `/uploads/${file.filename}`;
     return this.storeService.updateStoreLogo(storeUuid, uploadedPath, file.originalname);
+  }
+
+  @Post('create')
+  @UseGuards(AtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new branch/store for current user' })
+  async createStore(
+    @GetUser('sub') userId: string,
+    @Body() dto: CreateStoreDto,
+  ) {
+    return this.storeService.createStore(userId, dto);
+  }
+
+  @Post('branch')
+  @UseGuards(AtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new branch (supports sub-branches)' })
+  async createBranch(
+    @GetUser('sub') userId: string,
+    @GetStore() currentStoreUuid: string,
+    @Body() dto: CreateBranchDto,
+  ) {
+    return this.storeService.createBranch(userId, currentStoreUuid, dto);
+  }
+
+  @Get('branch-tree')
+  @UseGuards(AtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get hierarchical branch tree' })
+  async getBranchTree(@GetStore() storeUuid: string) {
+    return this.storeService.getBranchTree(storeUuid);
   }
 }

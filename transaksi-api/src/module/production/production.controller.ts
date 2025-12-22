@@ -15,6 +15,7 @@ import { CreateProductionDto } from './dto/create-production.dto';
 import { UpdateProductionDto } from './dto/update-production.dto';
 import { AtGuard } from 'src/common/guards/at.guard'; // Asumsi path Guard
 import { GetUser } from 'src/common/decorators/get-user.decorator'; // Asumsi path Decorator
+import { GetStore } from 'src/common/decorators/get-store.decorator';
 
 
 @UseGuards(AtGuard)
@@ -27,7 +28,7 @@ export class ProductionController {
     create(
         @Body() createProductionDto: CreateProductionDto,
         @GetUser('sub') userId: string,
-        @GetUser('storeUuid') storeUuid: string,
+        @GetStore() storeUuid: string,
     ) {
         return this.productionService.create(createProductionDto, userId, storeUuid);
     }

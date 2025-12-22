@@ -1,11 +1,5 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+// src/module/auth/auth.controller.ts
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AtGuard } from 'src/common/guards/at.guard';
@@ -39,8 +33,7 @@ export class AuthController {
   refreshTokens(
     @GetUser('sub') userId: string,
     @GetUser('refreshToken') refreshToken: string,
-    @GetUser('storeUuid') storeUuid: string, // [BARU] Ambil storeUuid dari RT lama
   ) {
-    return this.authService.refreshTokens(userId, refreshToken, storeUuid);
+    return this.authService.refreshTokens(userId, refreshToken);
   }
 }

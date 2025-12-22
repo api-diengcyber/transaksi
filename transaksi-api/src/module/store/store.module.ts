@@ -8,6 +8,7 @@ import { storeSettingProvider } from 'src/common/entities/store_setting/store_se
 import { AuthModule } from '../auth/auth.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { CategoryModule } from '../category/category.module';
+import { userProvider } from 'src/common/entities/user/user.provider';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CategoryModule } from '../category/category.module';
   providers: [
     ...storeProvider,
     ...storeSettingProvider,
+    ...userProvider,
     StoreService,
   ],
 })

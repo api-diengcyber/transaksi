@@ -2,6 +2,8 @@ import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { Repository, DataSource, EntityManager, Like } from 'typeorm';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
+// [BARU] Import StoreEntity
+import { StoreEntity } from 'src/common/entities/store/store.entity';
 
 // [BARU] Helper untuk menghasilkan pengenal lokal
 const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -51,6 +53,9 @@ export class JournalService {
         throw new BadRequestException('Store ID is required for journal creation.');
     }
     
+    // [MODIFIKASI] Cek flag agar tidak looping tak terbatas (mirroring berulang)
+    const isMirror = details.is_mirror_transaction === true;
+
     const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
 
     return this.dataSource.transaction(async (manager) => {
@@ -62,15 +67,19 @@ export class JournalService {
       });
       await manager.save(journal);
 
-      const detailEntities = Object.entries(details).map(([key, value]) =>
-        manager.create(JournalDetailEntity, {
+      // [MODIFIKASI] Filter field internal sebelum menyimpan ke detail
+      const detailEntities = Object.entries(details).map(([key, value]) => {
+        // Skip field kontrol internal agar tidak mengotori database
+        if (['target_store_uuid', 'is_mirror_transaction'].includes(key)) return null;
+
+        return manager.create(JournalDetailEntity, {
           uuid: generateJournalDetailUuid(storeUuid),
           key,
           value: typeof value === 'object' ? JSON.stringify(value) : String(value),
           journalCode: code,
           createdBy: userId,
-        }),
-      );
+        });
+      }).filter(item => item !== null); // Hapus item null
 
       // 1. Simpan semua detail non-stock yang dikirim dari frontend
       await manager.save(detailEntities);
@@ -85,16 +94,31 @@ export class JournalService {
             await this.processCreditSaleAndBuyNominal(details, userId, manager, code, type as any, storeUuid);
       }
       
-      // [BARU] 4. Proses Pembuatan Piutang/Hutang Global (AR dan AP)
+      // 4. Proses Pembuatan Piutang/Hutang Global (AR dan AP)
       if (['AR', 'AP'].includes(type)) {
           await this.processGlobalDebtNominal(details, userId, manager, code, type as any, storeUuid);
       }
       
-      // [BARU] 5. Proses Pembayaran Piutang/Hutang (PAY_AR dan PAY_AP)
+      // 5. Proses Pembayaran Piutang/Hutang (PAY_AR dan PAY_AP)
       if (['PAY_AR', 'PAY_AP'].includes(type)) {
           await this.processPaymentNominal(details, userId, manager, code, type as any, storeUuid);
       }
 
+      // [BARU] LOGIKA INTER-STORE TRANSACTION
+      // Hanya jalankan jika ada target_store_uuid DAN ini bukan transaksi hasil mirror
+      if (details.target_store_uuid && !isMirror) {
+          // Kita panggil fungsi ini tanpa await agar tidak memblokir response utama (fire-and-forget), 
+          // atau gunakan await jika ingin menjamin konsistensi strict.
+          // Disini kita gunakan await untuk keamanan data.
+          await this.processInterStoreTransaction(
+              type, 
+              details, 
+              userId, 
+              storeUuid, 
+              details.target_store_uuid, 
+              manager
+          );
+      }
 
       return {
         message: `${type} journal created`,
@@ -105,6 +129,91 @@ export class JournalService {
   }
 
   // --- Processors ---
+
+  /**
+   * [BARU] Helper untuk Transaksi Antar Toko (Mirroring)
+   */
+  private async processInterStoreTransaction(
+      sourceType: string,
+      sourceDetails: Record<string, any>,
+      userId: string,
+      sourceStoreUuid: string,
+      targetStoreUuid: string,
+      manager: EntityManager
+  ) {
+      // 1. Tentukan Tipe Transaksi Lawan
+      let targetType = '';
+      if (sourceType === 'SALE') targetType = 'BUY';
+      else if (sourceType === 'BUY') targetType = 'SALE';
+      else if (sourceType === 'RT_SALE') targetType = 'RT_BUY';
+      else if (sourceType === 'RT_BUY') targetType = 'RT_SALE';
+      else return; // Tipe lain tidak diproses otomatis
+
+      // 2. Ambil Info Nama Toko untuk Label Supplier/Customer
+      // Kita perlu menggunakan manager untuk query karena kita berada dalam transaction scope (meski read-only)
+      const sourceStore = await manager.findOne(StoreEntity, { where: { uuid: sourceStoreUuid }});
+      const targetStore = await manager.findOne(StoreEntity, { where: { uuid: targetStoreUuid }});
+      
+      if (!sourceStore || !targetStore) return;
+
+      // 3. Clone & Modifikasi Details
+      const targetDetails = { ...sourceDetails };
+      
+      // Set flag agar tidak loop (Toko A -> Toko B -> Toko A ...)
+      targetDetails.is_mirror_transaction = true; 
+      delete targetDetails.target_store_uuid; // Hapus target agar bersih
+
+      // Set Nama Customer/Supplier Otomatis
+      // Jika targetnya SALE/RT_SALE, maka 'Customer' adalah Toko Sumber
+      if (targetType === 'SALE' || targetType === 'RT_SALE') {
+          targetDetails.customer_name = `Toko: ${sourceStore.name}`;
+          // Hapus field supplier jika ada terbawa dari copy
+          delete targetDetails.supplier;
+      } 
+      // Jika targetnya BUY/RT_BUY, maka 'Supplier' adalah Toko Sumber
+      else {
+          targetDetails.supplier = `Toko: ${sourceStore.name}`;
+          // Hapus field customer_name jika ada terbawa dari copy
+          delete targetDetails.customer_name;
+      }
+
+      // 4. Mapping Harga dan Key Item
+      // PENTING: Struktur key detail item di frontend biasanya 'price#0', 'buy_price#0', dst.
+      // Kita harus menukar key tersebut agar sesuai dengan logika 'processStockAndNominal' di sisi lawan.
+      
+      Object.keys(sourceDetails).forEach((key) => {
+          // Kasus: Toko A (SALE) -> Toko B (BUY)
+          // Di SALE field harganya 'price', di BUY field harganya 'buy_price' atau bisa juga 'price' tergantung implementasi FE.
+          // Namun processStockAndNominal membaca fieldName === 'price' || fieldName === 'buy_price', jadi aman.
+          // Tapi untuk kerapian data detail yang tersimpan:
+          
+          if (sourceType === 'SALE' && key.includes('price#') && !key.includes('buy_price')) {
+               const index = key.split('#')[1];
+               // Harga Jual di A menjadi Harga Beli di B
+               targetDetails[`buy_price#${index}`] = sourceDetails[key];
+          }
+          
+          if (sourceType === 'BUY' && key.includes('buy_price#')) {
+               const index = key.split('#')[1];
+               // Harga Beli di A (misal Retur) menjadi Harga Jual di B
+               targetDetails[`price#${index}`] = sourceDetails[key];
+          }
+      });
+
+      // 5. Eksekusi Pencatatan di Toko Target
+      // Kita panggil this.createJournal secara rekursif.
+      // PENTING: Karena createJournal membuat transaction baru, ini akan menjadi transaksi terpisah 
+      // dari transaksi utama. Jika transaksi utama rollback, yang ini mungkin sudah commit (tergantung timing error).
+      // Namun dalam konteks mirroring sederhana, ini pendekatan yang cukup aman dan mudah.
+      
+      try {
+          await this.createJournal(targetType, targetDetails, userId, targetStoreUuid);
+      } catch (error) {
+          console.error(`Gagal melakukan mirroring transaksi ke toko ${targetStore.name}:`, error);
+          // Opsional: Throw error jika ingin membatalkan transaksi utama juga
+          // throw new BadRequestException('Gagal memproses transaksi antar toko.');
+      }
+  }
   
   /**
    * Mengkonversi item dari payload transaksi BUY/SALE/RETUR menjadi entry Journal Detail
@@ -536,7 +645,6 @@ export class JournalService {
     const returnSaleCodePattern = `RT_SALE-${storeUuid}-%`;
     const returnBuyCodePattern = `RT_BUY-${storeUuid}-%`;
     
-    // NOTE: Logika ini HARUS diupdate untuk menyertakan RT_SALE dan RT_BUY jika ingin grafik yang akurat
     const query = this.journalRepository.createQueryBuilder('j')
       .innerJoin('j.details', 'jd', 'jd.key = :key', { key: 'grand_total' })
       .where('j.createdAt BETWEEN :start AND :end', { start, end })

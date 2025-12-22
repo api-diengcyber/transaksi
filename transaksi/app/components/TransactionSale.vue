@@ -3,11 +3,13 @@ import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import ProductCreateModal from '~/components/ProductCreateModal.vue';
 import { useAuthStore } from '~/stores/auth.store';
+import { useStoreService } from '~/composables/useStoreService'; // [BARU] Import Store Service
 
 // Asumsi services ini sudah di-inject atau di-import dengan benar
 const productService = useProductService();
 const journalService = useJournalService();
 const categoryService = useCategoryService();
+const storeService = useStoreService();
 const authStore = useAuthStore();
 const toast = useToast();
 
@@ -22,6 +24,11 @@ const showCreateModal = ref(false);
 
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]); // State untuk filter kategori
+
+// [BARU] State untuk Transaksi Antar Toko
+const myStores = ref([]);
+const isInterStore = ref(false);
+const selectedTargetStore = ref(null);
 
 // [PAGINASI] State
 const currentPage = ref(1);
@@ -59,9 +66,16 @@ const isCreditSale = computed(() => payment.method === 'CREDIT');
 const amountPaid = computed(() => isCreditSale.value ? 0 : (payment.amount || 0)); 
 const changeAmount = computed(() => amountPaid.value - grandTotal.value);
 
+// [UPDATE] Logic Validasi Checkout
 const canCheckout = computed(() => {
     if (cart.value.length === 0) return false;
     
+    // Validasi untuk Transaksi Antar Toko
+    if (isInterStore.value) {
+         return grandTotal.value > 0 && !!selectedTargetStore.value;
+    }
+
+    // Validasi Normal
     if (isCreditSale.value) {
         return grandTotal.value > 0 && !!payment.customerName && !!payment.dueDate;
     } else {
@@ -141,17 +155,6 @@ const changePage = (newPage) => {
 // [UPDATE] Penyesuaian handleLocalFiltering
 const handleLocalFiltering = (isApiLoad = false) => {
     let result = products.value;
-
-    // 1. FILTER KATEGORI LOKAL TIDAK DIPERLUKAN LAGI JIKA API SUDAH MEMFILTER
-    // Namun, jika API tidak memfilter kategori, blok ini bisa dihidupkan:
-    /*
-    const selectedCats = selectedCategoryUuids.value;
-    if (selectedCats.length > 0) {
-        result = result.filter(p => {
-            return p.categoryUuids.some(catUuid => selectedCats.includes(catUuid));
-        });
-    }
-    */
 
     // 2. FILTER SEARCH LOKAL (Instant) & Scan Barcode
     const query = searchQuery.value.toLowerCase().trim();
@@ -257,46 +260,57 @@ const onProductCreated = async (newProduct) => {
     if (fullProduct) addToCart(fullProduct);
 };
 
+// [UPDATE] Process Checkout dengan Inter-Store
 const processCheckout = async () => {
     if (!canCheckout.value) return;
     processing.value = true;
     try {
         const payload = {
+            payment_method: payment.method,
+            
             amount: grandTotal.value,
-            details: {
-                payment_method: payment.method,
-                ...(isCreditSale.value ? {
-                    is_credit: 'true', 
-                    due_date: payment.dueDate,
-                    customer_name: payment.customerName,
-                    payment_received: 0, 
-                    change: 0,
-                } : {
-                    is_credit: 'false',
-                    payment_received: payment.amount,
-                    change: changeAmount.value,
-                }),
-                
-                total_items_count: cart.value.length,
-                subtotal_amount: cartSubtotal.value,
-                tax_amount: taxAmount.value,
-                tax_percentage: taxEnabled.value ? taxRate.value : 0,
-                tax_method: taxEnabled.value ? taxMethod.value : null,
-                grand_total: grandTotal.value
-            }
+            
+            // [BARU] Kirim Target Store UUID jika mode inter-store aktif
+            target_store_uuid: isInterStore.value ? selectedTargetStore.value : null,
+
+            // [MODIFIKASI] Logic Kredit & Nama Customer
+            ...((isCreditSale.value || isInterStore.value) ? {
+                is_credit: 'true', 
+                due_date: payment.dueDate || new Date(), // Default hari ini jika tidak diisi (opsional)
+                // Jika Inter-Store, nama customer otomatis nama toko tujuan
+                customer_name: isInterStore.value 
+                    ? `Toko: ${myStores.value.find(s => s.uuid === selectedTargetStore.value)?.name}` 
+                    : payment.customerName,
+                payment_received: 0, 
+                change: 0,
+            } : {
+                is_credit: 'false',
+                payment_received: payment.amount,
+                change: changeAmount.value,
+            }),
+            
+            total_items_count: cart.value.length,
+            subtotal_amount: cartSubtotal.value,
+            tax_amount: taxAmount.value,
+            tax_percentage: taxEnabled.value ? taxRate.value : 0,
+            tax_method: taxEnabled.value ? taxMethod.value : null,
+            grand_total: grandTotal.value
         };
         cart.value.forEach((item, index) => {
-            payload.details[`product_uuid#${index}`] = item.productUuid;
-            payload.details[`unit_uuid#${index}`] = item.unitUuid;
-            payload.details[`qty#${index}`] = item.qty;
-            payload.details[`price#${index}`] = item.price;
-            payload.details[`subtotal#${index}`] = item.qty * item.price;
+            payload[`product_uuid#${index}`] = item.productUuid;
+            payload[`unit_uuid#${index}`] = item.unitUuid;
+            payload[`qty#${index}`] = item.qty;
+            payload[`price#${index}`] = item.price;
+            payload[`subtotal#${index}`] = item.qty * item.price;
         });
         
         await journalService.createSaleTransaction(payload);
         
-        if (isCreditSale.value) {
-             toast.add({ severity: 'info', summary: 'Piutang Dicatat', detail: `Penjualan kredit ke ${payment.customerName} sebesar ${formatCurrency(grandTotal.value)}`, life: 5000 });
+        if (isCreditSale.value || isInterStore.value) {
+            const msgDetail = isInterStore.value 
+                ? `Barang dikirim ke toko ${myStores.value.find(s => s.uuid === selectedTargetStore.value)?.name}`
+                : `Penjualan kredit ke ${payment.customerName}`;
+             toast.add({ severity: 'info', summary: 'Transaksi Dicatat', detail: msgDetail, life: 5000 });
         } else {
              toast.add({ severity: 'success', summary: 'Transaksi Sukses', detail: 'Kembalian: ' + formatCurrency(changeAmount.value), life: 5000 });
         }
@@ -306,6 +320,11 @@ const processCheckout = async () => {
         payment.method = 'CASH';
         payment.customerName = '';
         payment.dueDate = null;
+        
+        // Reset Inter Store State
+        isInterStore.value = false;
+        selectedTargetStore.value = null;
+
         currentPage.value = 1;
         await loadProducts(); // Muat ulang produk setelah transaksi
     } catch (e) {
@@ -338,6 +357,25 @@ onMounted(async () => {
     await fetchCategories(); 
     await loadProducts();
     
+    // [BARU] Load Daftar Toko untuk Inter-Store
+    try {
+        // const stores = await authStore.fetchUserStores();
+        const stores = await storeService.getMyStore();
+
+        // Asumsi authStore menyimpan info toko aktif saat ini, filter agar tidak kirim ke diri sendiri
+        const currentStoreUuid = authStore.user?.activeStoreUuid || authStore.activeStore.uuid;
+        
+        if (stores && Array.isArray(stores)) {
+            // Filter toko yang bukan toko saat ini
+            myStores.value = stores.filter(s => s.uuid !== currentStoreUuid);
+        }
+
+        console.log("---");
+        console.log(currentStoreUuid);
+    } catch (e) {
+        console.error("Gagal memuat daftar toko", e);
+    }
+
     window.addEventListener('keydown', (e) => {
         if (e.key === 'F2') document.getElementById('search-input-sale')?.focus();
     });
@@ -594,6 +632,27 @@ defineExpose({ refreshData });
                     </div>
                 </div>
 
+                <div class="bg-surface-800/50 p-3 rounded-xl border border-surface-700/50 space-y-3">
+                    <div class="flex items-center gap-2">
+                         <Checkbox v-model="isInterStore" :binary="true" inputId="interStore" />
+                         <label for="interStore" class="text-[10px] uppercase font-bold text-surface-400 cursor-pointer select-none">Kirim ke Toko Lain?</label>
+                    </div>
+
+                    <div v-if="isInterStore">
+                        <label class="text-[10px] text-surface-400 uppercase font-bold mb-2 block">Pilih Toko Tujuan <span class="text-red-400">*</span></label>
+                        <Dropdown 
+                            v-model="selectedTargetStore" 
+                            :options="myStores" 
+                            optionLabel="name" 
+                            optionValue="uuid"
+                            placeholder="Pilih Toko..." 
+                            class="w-full !text-xs"
+                            :pt="{ root: { class: '!h-11 !items-center' }, input: { class: '!text-xs' } }"
+                        />
+                         <small class="text-[9px] text-surface-500 mt-1 block italic">*Stok di toko tujuan akan bertambah otomatis.</small>
+                    </div>
+                </div>
+
                 <div class="bg-surface-800/50 p-3 rounded-xl border border-surface-700/50">
                     <label class="text-[10px] text-surface-400 uppercase font-bold mb-2 block">Metode Pembayaran</label>
                     <SelectButton 
@@ -620,32 +679,34 @@ defineExpose({ refreshData });
                 </div>
                 
                 <div v-else class="bg-surface-800/50 p-3 rounded-xl border border-surface-700/50 space-y-4">
-                     <div class="space-y-1">
+                     <div v-if="!isInterStore" class="space-y-1">
                         <label class="text-[10px] text-surface-400 uppercase font-bold mb-2 block">Nama Pelanggan <span class="text-red-400">*</span></label>
                         <InputText v-model="payment.customerName" placeholder="Nama Pelanggan" 
                             class="w-full !py-2.5 !text-xs !rounded-lg !border-surface-700 focus:!border-primary-500 focus:!ring-1 !h-11" />
                     </div>
                      <div class="space-y-1">
-                        <label class="text-[10px] text-surface-400 uppercase font-bold mb-2 block">Jatuh Tempo <span class="text-red-400">*</span></label>
+                        <label class="text-[10px] text-surface-400 uppercase font-bold mb-2 block">Jatuh Tempo <span v-if="isCreditSale" class="text-red-400">*</span></label>
                         <Calendar v-model="payment.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" :manualInput="false" showIcon class="w-full" inputClass="!text-xs !py-2.5 !h-11" />
                     </div>
                 </div>
 
 
                 <div class="flex-1 flex flex-col justify-center items-center border-t border-surface-800 border-dashed pt-2">
-                    <span class="text-xs text-surface-400 mb-1">{{ isCreditSale ? 'Sisa Hutang' : 'Kembalian' }}</span>
+                    <span class="text-xs text-surface-400 mb-1">
+                        {{ (isCreditSale || isInterStore) ? 'Sisa Hutang' : 'Kembalian' }}
+                    </span>
                     <span class="text-2xl font-mono font-bold" :class="changeAmount < 0 ? 'text-red-400' : 'text-emerald-400'">
-                        {{ isCreditSale ? formatCurrency(grandTotal) : formatCurrency(changeAmount) }}
+                        {{ (isCreditSale || isInterStore) ? formatCurrency(grandTotal) : formatCurrency(changeAmount) }}
                     </span>
                 </div>
             </div>
             
             <div class="p-4 border-t border-surface-700/50 relative z-10">
                 <Button 
-                    label="Bayar" 
-                    icon="pi pi-check" 
+                    :label="isInterStore ? 'Kirim ke Toko' : 'Bayar'" 
+                    :icon="isInterStore ? 'pi pi-send' : 'pi pi-check'" 
                     class="w-full !h-12 !text-base"
-                    :severity="isCreditSale ? 'warning' : 'success'"
+                    :severity="(isCreditSale || isInterStore) ? 'warning' : 'success'"
                     :loading="processing" 
                     :disabled="!canCheckout"
                     @click="processCheckout"

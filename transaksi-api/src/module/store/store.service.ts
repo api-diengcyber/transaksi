@@ -9,6 +9,8 @@ import { AuthService } from 'src/module/auth/auth.service';
 import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
 import { CategoryService } from '../category/category.service';
+import { CreateStoreDto } from './dto/create-store.dto';
+import { CreateBranchDto } from './dto/create-branch.dto';
 
 // [BARU] Helper untuk menghasilkan pengenal lokal
 const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -23,8 +25,12 @@ const generateUserRoleUuid = (storeUuid: string) => `${storeUuid}-ROLE-${generat
 @Injectable()
 export class StoreService {
   constructor(
+    @Inject('STORE_REPOSITORY')
+    private storeRepository: Repository<StoreEntity>,
     @Inject('STORE_SETTING_REPOSITORY')
-    private settingRepository: Repository<StoreSettingEntity>,
+    private storeSettingRepository: Repository<StoreSettingEntity>,
+    @Inject('USER_REPOSITORY')
+    private userRepository: Repository<UserEntity>,
     @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly authService: AuthService,
     private readonly categoryService: CategoryService,
@@ -36,26 +42,26 @@ export class StoreService {
 
     return await this.dataSource.transaction(async (manager) => {
       // 0. PREPARE ALL ROLES (Menjamin semua role di enum ada di database)
-      
+
       const allRoles = Object.values(UserRole);
       let adminUserRole: UserRoleEntity | null = null;
-      
-      for (const roleValue of allRoles) {
-          let roleEntity = await manager.findOne(UserRoleEntity, {
-            where: { role: roleValue },
-          });
 
-          if (!roleEntity) {
-            roleEntity = manager.create(UserRoleEntity, {
-              uuid: generateUserRoleUuid(customStoreUuid),
-              role: roleValue,
-            });
-            await manager.save(roleEntity);
-          }
-          
-          if (roleValue === UserRole.ADMIN) {
-            adminUserRole = roleEntity; // Simpan role ADMIN untuk user pertama
-          }
+      for (const roleValue of allRoles) {
+        let roleEntity = await manager.findOne(UserRoleEntity, {
+          where: { role: roleValue },
+        });
+
+        if (!roleEntity) {
+          roleEntity = manager.create(UserRoleEntity, {
+            uuid: generateUserRoleUuid(customStoreUuid),
+            role: roleValue,
+          });
+          await manager.save(roleEntity);
+        }
+
+        if (roleValue === UserRole.ADMIN) {
+          adminUserRole = roleEntity; // Simpan role ADMIN untuk user pertama
+        }
       }
 
       // Pastikan role admin ditemukan/terbuat
@@ -107,33 +113,33 @@ export class StoreService {
       }
 
       const initialSettings: Partial<StoreSettingEntity>[] = [];
-    
+
       if (logoPath) {
-          initialSettings.push(manager.create(StoreSettingEntity, {
-              uuid: generateStoreSettingUuid(customStoreUuid),
-              storeUuid: savedStore.uuid,
-              key: 'store_logo_url',
-              value: logoPath,
-          }));
-          initialSettings.push(manager.create(StoreSettingEntity, {
-              uuid: generateStoreSettingUuid(customStoreUuid),
-              storeUuid: savedStore.uuid,
-              key: 'store_logo_filename',
-              value: originalName ?? '',
-          }));
-          initialSettings.push(manager.create(StoreSettingEntity, {
-              uuid: generateStoreSettingUuid(customStoreUuid),
-              storeUuid: savedStore.uuid,
-              key: 'theme_primary_color',
-              value: '#2563eb',
-              createdBy: savedUser.uuid,
-          }));
+        initialSettings.push(manager.create(StoreSettingEntity, {
+          uuid: generateStoreSettingUuid(customStoreUuid),
+          storeUuid: savedStore.uuid,
+          key: 'store_logo_url',
+          value: logoPath,
+        }));
+        initialSettings.push(manager.create(StoreSettingEntity, {
+          uuid: generateStoreSettingUuid(customStoreUuid),
+          storeUuid: savedStore.uuid,
+          key: 'store_logo_filename',
+          value: originalName ?? '',
+        }));
+        initialSettings.push(manager.create(StoreSettingEntity, {
+          uuid: generateStoreSettingUuid(customStoreUuid),
+          storeUuid: savedStore.uuid,
+          key: 'theme_primary_color',
+          value: '#2563eb',
+          createdBy: savedUser.uuid,
+        }));
       }
 
       await manager.save(initialSettings);
 
       // 6. TOKEN (Bawa storeUuid)
-      const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username, savedStore.uuid);
+      const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username);
       const rtHash = await bcrypt.hash(tokens.refreshToken, 10);
       savedUser.refreshToken = rtHash;
       await manager.save(savedUser);
@@ -147,7 +153,7 @@ export class StoreService {
   }
 
   // [UPDATED] 2. GET MY STORES (LIST + ACTIVE STATUS BY TOKEN)
-  async getMyStores(userId: string, activeStoreUuid: string) {
+  async getMyStores(userId: string, activeStoreUuid: string | null) {
     const userRepo = this.dataSource.getRepository(UserEntity);
 
     // Ambil User beserta semua tokonya
@@ -235,39 +241,169 @@ export class StoreService {
 
   async updateStoreLogo(storeUuid: string, logoUrl: string, originalName: string) {
     const key = 'store_logo_url';
-    
-    const existingSetting = await this.settingRepository.findOne({
+
+    const existingSetting = await this.storeSettingRepository.findOne({
       where: { storeUuid, key: key }
     });
 
     if (existingSetting) {
       existingSetting.value = logoUrl;
-      await this.settingRepository.save(existingSetting);
+      await this.storeSettingRepository.save(existingSetting);
     } else {
-      const newSetting = this.settingRepository.create({
+      const newSetting = this.storeSettingRepository.create({
         uuid: generateStoreSettingUuid(storeUuid),
         storeUuid,
         key: key,
         value: logoUrl,
       });
-      await this.settingRepository.save(newSetting);
+      await this.storeSettingRepository.save(newSetting);
     }
-    
-    const existingFileName = await this.settingRepository.findOne({
-        where: { storeUuid, key: 'store_logo_filename' }
+
+    const existingFileName = await this.storeSettingRepository.findOne({
+      where: { storeUuid, key: 'store_logo_filename' }
     });
     if (existingFileName) {
-        existingFileName.value = originalName;
-        await this.settingRepository.save(existingFileName);
+      existingFileName.value = originalName;
+      await this.storeSettingRepository.save(existingFileName);
     } else {
-        await this.settingRepository.save(this.settingRepository.create({
-            uuid: generateStoreSettingUuid(storeUuid),
-            storeUuid,
-            key: 'store_logo_filename',
-            value: originalName,
-        }));
+      await this.storeSettingRepository.save(this.storeSettingRepository.create({
+        uuid: generateStoreSettingUuid(storeUuid),
+        storeUuid,
+        key: 'store_logo_filename',
+        value: originalName,
+      }));
     }
 
     return { message: 'Logo updated successfully', logoUrl };
+  }
+
+  async createStore(userId: string, dto: CreateStoreDto) {
+    const newStore = this.storeRepository.create({
+      uuid: generateStoreUuid(),
+      name: dto.name,
+      address: dto.address,
+      phone: dto.phone,
+    });
+
+    const savedStore = await this.storeRepository.save(newStore);
+
+    const user = await this.userRepository.findOne({
+      where: { uuid: userId },
+      relations: ['stores'],
+    });
+
+    if (user) {
+      if (!user.stores) {
+        user.stores = [];
+      }
+      user.stores.push(savedStore);
+      await this.userRepository.save(user);
+    }
+
+    return savedStore;
+  }
+
+  async createBranch(ownerId: string, currentContextStoreUuid: string, dto: CreateBranchDto) {
+    const branchStoreUuid = generateStoreUuid();
+    const branchUserUuid = generateUserUuid(branchStoreUuid);
+
+    // Tentukan Parent: Jika dikirim di DTO gunakan itu, jika tidak gunakan current context
+    const targetParentUuid = dto.parentStoreUuid || currentContextStoreUuid;
+
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Validasi Parent Store (Target)
+      const parentStore = await manager.findOne(StoreEntity, {
+        where: { uuid: targetParentUuid }
+      });
+      if (!parentStore) throw new NotFoundException('Parent store not found');
+
+      // 2. Ambil Role ADMIN
+      const adminRole = await manager.findOne(UserRoleEntity, {
+        where: { role: UserRole.ADMIN },
+      });
+      if (!adminRole) throw new BadRequestException('System role ADMIN not found');
+
+      // 3. Validasi Username/Email Unik
+      const existingUser = await manager.findOne(UserEntity, {
+        where: [{ username: dto.username }, { email: dto.email }]
+      });
+      if (existingUser) throw new BadRequestException('Username or Email already exists');
+
+      // 4. Create User Admin Cabang
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      const newAdmin = manager.create(UserEntity, {
+        uuid: branchUserUuid,
+        username: dto.username,
+        email: dto.email,
+        password: hashedPassword,
+        roles: [adminRole],
+        createdBy: ownerId,
+      });
+      const savedUser = await manager.save(newAdmin);
+
+      // 5. Create Store (Cabang) Linked ke Target Parent
+      const newBranch = manager.create(StoreEntity, {
+        uuid: branchStoreUuid,
+        name: dto.name,
+        address: dto.address,
+        phone: dto.phone,
+        parentStoreUuid: targetParentUuid, // [DYNAMIC LINK]
+        createdBy: ownerId,
+      });
+      const savedBranch = await manager.save(newBranch);
+
+      // 6. Link User ke Store
+      savedUser.defaultStore = savedBranch;
+      savedUser.stores = [savedBranch];
+      await manager.save(savedUser);
+
+      // 7. Init Categories
+      await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedBranch.uuid, manager);
+
+      // 8. Copy Theme
+      const parentTheme = await manager.findOne(StoreSettingEntity, {
+        where: { storeUuid: targetParentUuid, key: 'theme_primary_color' }
+      });
+
+      if (parentTheme) {
+        await manager.save(manager.create(StoreSettingEntity, {
+          uuid: generateStoreSettingUuid(branchStoreUuid),
+          storeUuid: savedBranch.uuid,
+          key: 'theme_primary_color',
+          value: parentTheme.value,
+          createdBy: savedUser.uuid
+        }));
+      }
+
+      return {
+        message: 'Branch created successfully',
+        branch: savedBranch,
+        parent: parentStore.name
+      };
+    });
+  }
+
+  async getBranchTree(rootStoreUuid: string) {
+    // Mengambil toko root beserta anak-anaknya secara rekursif
+    // TypeORM `relations` dengan depth tertentu atau menggunakan query builder
+
+    // Cara simpel: Load relation nested (Max depth 5 misal)
+    const tree = await this.storeRepository.findOne({
+      where: { uuid: rootStoreUuid },
+      relations: [
+        'branches',
+        'branches.branches',
+        'branches.branches.branches'
+      ],
+      order: {
+        createdAt: 'DESC'
+      }
+    });
+
+    if (!tree) return [];
+
+    // Format menjadi struktur yang mudah dikonsumsi frontend (Flat / Tree)
+    // Disini kita return object Tree langsung
+    return tree.branches || [];
   }
 }
