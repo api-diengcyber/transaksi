@@ -87,7 +87,7 @@ defineExpose({
 
 <template>
     <div 
-        class="bg-white dark:bg-surface-900 overflow-hidden transition-colors duration-500 min-h-full"
+        class="bg-surface-0 dark:bg-surface-400 overflow-hidden transition-colors duration-500 min-h-full"
         :class="[activeDebtType === 'piutang' ? 'border-emerald-300 dark:border-emerald-800' : 'border-red-300 dark:border-red-800']"
     >
         <div class="p-5 border-b border-surface-200 dark:border-surface-800 flex items-center gap-4"

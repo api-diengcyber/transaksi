@@ -60,7 +60,7 @@ defineExpose({ refresh: fetchProducts });
             <InputText v-model="filters['global'].value" placeholder="Cari Produk untuk atur Resep..." class="w-full pl-10 !rounded-full shadow-sm" />
         </div>
 
-        <div class="card bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden">
+        <div class="card bg-surface-0 dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden">
              
              <DataTable :value="products" :loading="loading" paginator :rows="10" dataKey="uuid" :filters="filters" stripedRows tableStyle="min-width: 60rem" class="text-sm datatable-dark-safe" :globalFilterFields="['name']">
                 

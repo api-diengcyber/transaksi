@@ -159,7 +159,7 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-950">
+    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-400">
         
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
              <div class="p-4 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
@@ -198,7 +198,7 @@ defineExpose({ refreshData });
 
         <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-900">
+            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-400">
                 <div class="w-full sm:w-auto">
                     <IconField iconPosition="left">
                         <InputIcon class="pi pi-search text-surface-400" />
@@ -262,7 +262,7 @@ defineExpose({ refreshData });
                 <Column field="actor" header="Pihak Terkait" sortable>
                      <template #body="slotProps">
                         <span class="font-medium text-surface-700 dark:text-surface-200">{{ slotProps.data.actor }}</span>
-                        <div v-if="slotProps.data.refNo !== '-'" class="text-[10px] text-surface-500 bg-surface-100 dark:bg-surface-800 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                        <div v-if="slotProps.data.refNo !== '-'" class="text-[10px] text-surface-500 bg-surface-100 dark:bg-surface-400 px-1.5 py-0.5 rounded inline-block mt-0.5">
                             Ref: {{ slotProps.data.refNo }}
                         </div>
                     </template>
@@ -301,7 +301,7 @@ defineExpose({ refreshData });
                 </Column>
 
                 <template #expansion="slotProps">
-                    <div class="p-4 bg-surface-50 dark:bg-surface-950/50 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
+                    <div class="p-4 bg-surface-50 dark:bg-surface-400 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
                         <div class="flex items-center gap-2 mb-3 ml-1">
                             <i class="pi pi-list text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30 p-1.5 rounded-md"></i>
                             <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Rincian Produk Retur</h5>
@@ -316,7 +316,7 @@ defineExpose({ refreshData });
                                 </Column>
                                 <Column field="unitName" header="Satuan" style="width: 100px">
                                     <template #body="i">
-                                        <span class="bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded text-[10px] font-bold text-surface-600 dark:text-surface-300">{{ i.data.unitName }}</span>
+                                        <span class="bg-surface-100 dark:bg-surface-400 px-2 py-0.5 rounded text-[10px] font-bold text-surface-600 dark:text-surface-300">{{ i.data.unitName }}</span>
                                     </template>
                                 </Column>
                                 <Column field="qty" header="Qty" class="text-center" style="width: 100px">

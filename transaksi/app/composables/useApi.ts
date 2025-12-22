@@ -3,12 +3,12 @@
 export const useApi = async (url: string, options: any = {}) => {
     const config = useRuntimeConfig();
     const API_BASE = config.public.apiBase;
-    
+
     const accessToken = useCookie('accessToken');
     const refreshToken = useCookie('refreshToken');
-    
+
     // [BARU] Ambil Store ID dari cookie terpisah
-    const selectedStoreId = useCookie('selectedStoreId'); 
+    const selectedStoreId = useCookie('selectedStoreId');
 
     // 1. Definisikan Header
     const headers: any = {

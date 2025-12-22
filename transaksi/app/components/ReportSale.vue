@@ -160,7 +160,7 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-950">
+    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-400">
         
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             <div class="p-4 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
@@ -202,7 +202,7 @@ defineExpose({ refreshData });
 
         <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-900">
+            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-400">
                 <div class="w-full sm:w-auto">
                     <IconField iconPosition="left">
                         <InputIcon class="pi pi-search text-surface-400" />
@@ -289,13 +289,13 @@ defineExpose({ refreshData });
                 </Column>
 
                 <template #expansion="slotProps">
-                    <div class="p-4 bg-emerald-50/50 dark:bg-surface-950/50 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
+                    <div class="p-4 bg-emerald-50/50 dark:bg-surface-400 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
                         <div class="flex items-center gap-2 mb-3 ml-1">
                             <i class="pi pi-shopping-cart text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 p-1.5 rounded-md"></i>
                             <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Detail {{ slotProps.data.isReturn ? 'Pengembalian' : 'Penjualan' }}</h5>
                         </div>
                         
-                        <div class="rounded-lg border border-surface-200 dark:border-surface-700 overflow-hidden bg-white dark:bg-surface-900">
+                        <div class="rounded-lg border border-surface-200 dark:border-surface-700 overflow-hidden bg-surface-0 dark:bg-surface-400">
                             <DataTable :value="slotProps.data.items" size="small" class="text-xs">
                                 <Column field="productName" header="Produk">
                                     <template #body="i">
@@ -304,7 +304,7 @@ defineExpose({ refreshData });
                                 </Column>
                                 <Column field="qty" header="Qty" class="text-center" style="width: 80px">
                                     <template #body="i">
-                                        <span class="font-bold text-surface-600 dark:text-surface-300 bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded border border-surface-200 dark:border-surface-700">x{{ i.data.qty }}</span>
+                                        <span class="font-bold text-surface-600 dark:text-surface-300 bg-surface-100 dark:bg-surface-400 px-2 py-0.5 rounded border border-surface-200 dark:border-surface-700">x{{ i.data.qty }}</span>
                                     </template>
                                 </Column>
                                 <Column field="price" header="Harga Satuan" class="text-right">

@@ -221,7 +221,7 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-950 p-4">
+    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-400 p-4">
         
         <div class="flex items-end gap-3 mb-4 border-b border-surface-200 dark:border-surface-700">
             <button 
@@ -240,7 +240,7 @@ defineExpose({ refreshData });
 
         <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-900">
+            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-400">
                 <div class="w-full sm:w-auto">
                     <IconField iconPosition="left">
                         <InputIcon class="pi pi-search text-surface-400" />
@@ -344,7 +344,7 @@ defineExpose({ refreshData });
 
         <Dialog v-model:visible="showPaymentModal" :header="`Pembayaran ${activeTab === 'piutang' ? 'Piutang' : 'Hutang'}`" :modal="true" class="w-11 md:w-3/5 lg:w-2/5">
             <div v-if="selectedDebt" class="p-fluid">
-                <div class="mb-4 p-3 bg-surface-100 dark:bg-surface-800 rounded-lg">
+                <div class="mb-4 p-3 bg-surface-100 dark:bg-surface-400 rounded-lg">
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs text-surface-500">Nota Referensi:</span>
                         <span class="font-bold text-sm">{{ selectedDebt.code }}</span>

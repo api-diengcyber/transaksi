@@ -59,7 +59,7 @@ const navigateTo = (route) => {
 <template>
     <div class="animate-fade-in space-y-8">
         
-        <div class="light:bg-white dark:bg-dark shadow-2xl rounded-2xl p-8 border-t-8 border-primary-600 dark:border-primary-700 relative overflow-hidden">
+        <div class="light:bg-surface-0 dark:bg-dark shadow-2xl rounded-2xl p-8 border-t-8 border-primary-600 dark:border-primary-700 relative overflow-hidden">
             <i class="pi pi-bolt text-[8rem] text-primary-500/10 dark:text-primary-400/10 absolute -top-10 -right-10 rotate-12"></i>
             <h1 class="text-4xl font-black text-surface-900 dark:text-surface-0 tracking-tight mb-2 relative z-10">
                 Halo, <span class="text-primary-600 dark:text-primary-400">{{ userName }}</span>!
@@ -69,7 +69,7 @@ const navigateTo = (route) => {
 
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
             
-            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-emerald-500 transition-all">
+            <div class="light:bg-surface-0 dark:bg-surface-400 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-emerald-500 transition-all">
                 <div class="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center shrink-0">
                     <i class="pi pi-chart-line text-2xl text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform"></i>
                 </div>
@@ -82,7 +82,7 @@ const navigateTo = (route) => {
                 </div>
             </div>
             
-            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-blue-500 transition-all">
+            <div class="light:bg-surface-0 dark:bg-surface-400 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-blue-500 transition-all">
                 <div class="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center shrink-0">
                     <i class="pi pi-box text-2xl text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform"></i>
                 </div>
@@ -95,7 +95,7 @@ const navigateTo = (route) => {
                 </div>
             </div>
 
-            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-red-500 transition-all">
+            <div class="light:bg-surface-0 dark:bg-surface-400 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-red-500 transition-all">
                 <div class="w-14 h-14 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center shrink-0">
                     <i class="pi pi-money-bill text-2xl text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform"></i>
                 </div>
@@ -108,7 +108,7 @@ const navigateTo = (route) => {
                 </div>
             </div>
 
-            <div class="light:bg-white dark:bg-surface-500 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-purple-500 transition-all">
+            <div class="light:bg-surface-0 dark:bg-surface-400 shadow-xl rounded-2xl p-5 border border-surface-200 dark:border-surface-800 flex items-center gap-4 group hover:border-purple-500 transition-all">
                 <div class="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center shrink-0">
                     <i class="pi pi-book text-2xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform"></i>
                 </div>
@@ -134,7 +134,7 @@ const navigateTo = (route) => {
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     <div v-for="item in section.items" :key="item.label" 
                         @click="navigateTo(item.route)"
-                        class="light:bg-white dark:bg-surface-500 rounded-xl shadow-md border border-surface-200 dark:border-surface-800 p-5 cursor-pointer hover:shadow-xl hover:border-primary-500 transition-all active:scale-[0.98] group"
+                        class="light:bg-surface-0 dark:bg-surface-400 rounded-xl shadow-md border border-surface-200 dark:border-surface-800 p-5 cursor-pointer hover:shadow-xl hover:border-primary-500 transition-all active:scale-[0.98] group"
                     >
                         <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-colors" :class="section.color">
                             <i :class="[item.icon, 'text-white text-2xl group-hover:scale-110 transition-transform']"></i>

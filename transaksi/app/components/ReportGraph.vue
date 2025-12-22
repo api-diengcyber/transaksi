@@ -249,10 +249,10 @@ defineExpose({ refreshData });
         
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
             <div class="w-full lg:w-auto p-1.5 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm flex flex-col sm:flex-row gap-2 ml-auto">
-                <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 p-1 rounded-lg">
-                    <button @click="applyQuickFilter(7)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-colors hover:bg-white hover:shadow-sm text-surface-600 dark:text-surface-300">7 Hari</button>
-                    <button @click="applyQuickFilter(30)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-colors hover:bg-white hover:shadow-sm text-surface-600 dark:text-surface-300">30 Hari</button>
-                    <button @click="applyQuickFilter('thisMonth')" class="px-3 py-1.5 text-xs font-bold rounded-md transition-colors hover:bg-white hover:shadow-sm text-surface-600 dark:text-surface-300">Bulan Ini</button>
+                <div class="flex gap-1 bg-surface-100 dark:bg-surface-400 p-1 rounded-lg">
+                    <button @click="applyQuickFilter(7)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-colors hover:bg-surface-0 hover:shadow-sm text-surface-600 dark:text-surface-300">7 Hari</button>
+                    <button @click="applyQuickFilter(30)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-colors hover:bg-surface-0 hover:shadow-sm text-surface-600 dark:text-surface-300">30 Hari</button>
+                    <button @click="applyQuickFilter('thisMonth')" class="px-3 py-1.5 text-xs font-bold rounded-md transition-colors hover:bg-surface-0 hover:shadow-sm text-surface-600 dark:text-surface-300">Bulan Ini</button>
                 </div>
 
                 <Calendar 
@@ -338,7 +338,7 @@ defineExpose({ refreshData });
             <div class="col-span-full bg-gradient-to-br from-primary-600 to-indigo-700 p-5 rounded-2xl shadow-xl shadow-primary-500/30 relative overflow-hidden group text-white">
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-2">
-                        <div class="p-2 bg-white/20 backdrop-blur-sm rounded-xl text-white">
+                        <div class="p-2 bg-surface-0/20 backdrop-blur-sm rounded-xl text-white">
                             <i class="pi pi-chart-line text-lg font-bold"></i>
                         </div>
                         <span class="text-sm font-bold text-white/90 uppercase tracking-wide">Profit Bersih</span>
@@ -361,7 +361,7 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-download" severity="secondary" text rounded v-tooltip.top="'Download Image'" />
             </div>
 
-            <div v-if="loading" class="absolute inset-0 bg-white/80 dark:bg-surface-900/80 z-20 flex items-center justify-center backdrop-blur-sm rounded-2xl">
+            <div v-if="loading" class="absolute inset-0 bg-surface-0/80 dark:bg-surface-400 z-20 flex items-center justify-center backdrop-blur-sm rounded-2xl">
                 <div class="flex flex-col items-center gap-3">
                     <ProgressSpinner style="width: 40px; height: 40px" strokeWidth="4" />
                     <span class="text-xs font-bold text-surface-500">Memuat data analisis...</span>

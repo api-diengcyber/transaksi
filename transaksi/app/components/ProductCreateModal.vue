@@ -284,13 +284,13 @@ const closeDialog = () => emit('update:visible', false);
     <Dialog :visible="visible" @update:visible="val => emit('update:visible', val)" 
             :header="isEditMode ? 'Edit Produk' : 'Produk Baru'" 
             :modal="true" :style="{ width: '900px' }" maximizable 
-            class="p-fluid" :pt="{ content: { class: '!py-2 dark:bg-surface-900' } }">
+            class="p-fluid" :pt="{ content: { class: '!py-2 dark:bg-surface-400' } }">
         
         <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field mb-0">
                     <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Nama Produk <span class="text-red-500">*</span></label>
-                    <InputText v-model="product.name" placeholder="Contoh: Kopi Kapal Api" class="w-full !h-9 text-sm dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" :class="{'p-invalid': submitted && !product.name}" />
+                    <InputText v-model="product.name" placeholder="Contoh: Kopi Kapal Api" class="w-full !h-9 text-sm dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" :class="{'p-invalid': submitted && !product.name}" />
                     <small class="text-red-500 text-[10px] mt-1" v-if="submitted && !product.name">Wajib diisi.</small>
                 </div>
 
@@ -304,15 +304,15 @@ const closeDialog = () => emit('update:visible', false);
                         placeholder="Pilih Kategori" 
                         display="chip" 
                         filter
-                        class="w-full !min-h-[2.25rem] text-xs compact-multiselect dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700"
+                        class="w-full !min-h-[2.25rem] text-xs compact-multiselect dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700"
                         :pt="{ label: { class: '!py-1.5 !px-2' } }"
                     />
                 </div>
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-white dark:bg-surface-900">
-            <div class="flex justify-between items-center mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-800/50 p-2 rounded-t-lg">
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-400">
+            <div class="flex justify-between items-center mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg">
                 <span class="section-title flex items-center gap-2">
                     <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">1</div>
                     Konfigurasi Satuan & Barcode
@@ -321,7 +321,7 @@ const closeDialog = () => emit('update:visible', false);
             </div>
             <div class="table-container">
                 <table class="w-full text-xs">
-                    <thead class="bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-200 text-[10px] uppercase font-bold">
+                    <thead class="bg-surface-100 dark:bg-surface-400 text-surface-600 dark:text-surface-200 text-[10px] uppercase font-bold">
                         <tr>
                             <th class="p-2 w-10 text-center border-b dark:border-surface-700">Def</th>
                             <th class="p-2 w-32 border-b dark:border-surface-700">Satuan</th>
@@ -334,15 +334,15 @@ const closeDialog = () => emit('update:visible', false);
                         <tr v-for="(u, idx) in configUnits" :key="u.tempId" class="hover:bg-surface-50 dark:hover:bg-surface-800/50">
                             <td class="p-2 text-center align-middle"><RadioButton v-model="u.isDefault" :value="true" name="uDef" @change="setUnitDefault(idx)" class="scale-75" /></td>
                             <td class="p-2 align-middle">
-                                <Dropdown v-model="u.unitName" :options="unitOptions" class="w-full !h-8 text-xs compact-input dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" editable placeholder="Pilih" :pt="{ input: { class: '!py-1 !px-2' } }" />
+                                <Dropdown v-model="u.unitName" :options="unitOptions" class="w-full !h-8 text-xs compact-input dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" editable placeholder="Pilih" :pt="{ input: { class: '!py-1 !px-2' } }" />
                             </td>
                             <td class="p-2 align-middle">
-                                <InputNumber v-model="u.multiplier" :min="1" class="w-full !h-8 dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1" :disabled="u.isDefault" />
+                                <InputNumber v-model="u.multiplier" :min="1" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1" :disabled="u.isDefault" />
                             </td>
                             <td class="p-2 align-middle">
                                 <div class="p-inputgroup !h-8">
                                     <span class="p-inputgroup-addon !px-2 !bg-surface-50 dark:!bg-surface-700 border-r-0 !min-w-[2rem] dark:border-surface-700"><i class="pi pi-barcode text-surface-400 dark:text-surface-500 text-xs"></i></span>
-                                    <InputText v-model="u.barcode" class="!text-xs !p-1 dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" placeholder="Scan..." />
+                                    <InputText v-model="u.barcode" class="!text-xs !p-1 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" placeholder="Scan..." />
                                 </div>
                             </td>
                             <td class="p-2 text-center align-middle">
@@ -354,8 +354,8 @@ const closeDialog = () => emit('update:visible', false);
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-white dark:bg-surface-900">
-            <div class="flex justify-between items-center mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-800/50 p-2 rounded-t-lg">
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-400">
+            <div class="flex justify-between items-center mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg">
                 <span class="section-title flex items-center gap-2">
                     <div class="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">2</div>
                     Harga Jual
@@ -364,7 +364,7 @@ const closeDialog = () => emit('update:visible', false);
             </div>
             <div class="table-container">
                 <table class="w-full text-xs">
-                    <thead class="bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-200 text-[10px] uppercase font-bold">
+                    <thead class="bg-surface-100 dark:bg-surface-400 text-surface-600 dark:text-surface-200 text-[10px] uppercase font-bold">
                         <tr>
                             <th class="p-2 w-10 text-center border-b dark:border-surface-700">Def</th>
                             <th class="p-2 w-40 border-b dark:border-surface-700">Nama Harga</th>
@@ -377,15 +377,15 @@ const closeDialog = () => emit('update:visible', false);
                     <tbody class="divide-y divide-surface-100 dark:divide-surface-800">
                         <tr v-for="(p, idx) in configPrices" :key="p.tempId" class="hover:bg-surface-50 dark:hover:bg-surface-800/50">
                             <td class="p-2 text-center align-middle"><RadioButton v-model="p.isDefault" :value="true" name="pDef" @change="setPriceDefault(idx)" class="scale-75" /></td>
-                            <td class="p-2 align-middle"><InputText v-model="p.name" class="w-full !h-8 !text-xs !p-1 dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" placeholder="Cth: Umum" /></td>
+                            <td class="p-2 align-middle"><InputText v-model="p.name" class="w-full !h-8 !text-xs !p-1 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" placeholder="Cth: Umum" /></td>
                             <td class="p-2 align-middle">
-                                <Dropdown v-model="p.unitTempId" :options="configUnits" optionLabel="unitName" optionValue="tempId" class="w-full !h-8 text-xs compact-input dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" :pt="{ input: { class: '!py-1 !px-2' } }" />
+                                <Dropdown v-model="p.unitTempId" :options="configUnits" optionLabel="unitName" optionValue="tempId" class="w-full !h-8 text-xs compact-input dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" :pt="{ input: { class: '!py-1 !px-2' } }" />
                             </td>
                             <td class="p-2 align-middle">
-                                <InputNumber v-model="p.minWholesaleQty" :min="0" class="w-full !h-8 dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1" placeholder="0" />
+                                <InputNumber v-model="p.minWholesaleQty" :min="0" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1" placeholder="0" />
                             </td>
                             <td class="p-2 align-middle">
-                                <InputNumber v-model="p.price" mode="currency" currency="IDR" locale="id-ID" class="w-full !h-8 dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-right !p-1" />
+                                <InputNumber v-model="p.price" mode="currency" currency="IDR" locale="id-ID" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-right !p-1" />
                             </td>
                             <td class="p-2 text-center align-middle">
                                 <Button icon="pi pi-trash" text rounded severity="danger" size="small" @click="removePriceRow(idx)" class="!w-6 !h-6 !p-0" />
@@ -396,8 +396,8 @@ const closeDialog = () => emit('update:visible', false);
             </div>
         </div>
         
-        <div class="section-box mb-6 bg-white dark:bg-surface-900">
-            <div class="mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-800/50 p-2 rounded-t-lg">
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-400">
+            <div class="mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg">
                 <span class="section-title flex items-center gap-2">
                     <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">3</div>
                     Stok Awal / Penyesuaian
@@ -411,18 +411,18 @@ const closeDialog = () => emit('update:visible', false);
             </div>
             
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-                <div v-for="u in configUnits" :key="u.tempId" class="bg-surface-50 dark:bg-surface-800 p-2 rounded border border-surface-200 dark:border-surface-700">
+                <div v-for="u in configUnits" :key="u.tempId" class="bg-surface-50 dark:bg-surface-400 p-2 rounded border border-surface-200 dark:border-surface-700">
                     <label class="text-[10px] font-bold text-surface-500 uppercase block mb-1">
                          {{ isEditMode ? 'Stok Baru' : 'Stok Awal' }} ({{ u.unitName }})
                     </label>
                      <div v-if="isEditMode" class="text-[10px] text-surface-400 mb-1">Stok Lama: {{ u.oldQty }}</div>
-                    <InputNumber v-model="u.newQty" :min="0" class="w-full !h-9" inputClass="!text-sm !text-center !font-bold text-surface-700 dark:text-surface-100 dark:bg-surface-700" placeholder="0" />
+                    <InputNumber v-model="u.newQty" :min="0" class="w-full !h-9" inputClass="!text-sm !text-center !font-bold text-surface-700 dark:text-surface-100 dark:bg-surface-400" placeholder="0" />
                 </div>
             </div>
         </div>
 
-        <div class="section-box bg-white dark:bg-surface-900">
-            <div class="mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-800/50 p-2 rounded-t-lg flex justify-between items-center">
+        <div class="section-box bg-surface-0 dark:bg-surface-400">
+            <div class="mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg flex justify-between items-center">
                 <span class="section-title flex items-center gap-2">
                     <div class="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">4</div>
                     Penempatan Rak / Lokasi (Opsional)
@@ -431,7 +431,7 @@ const closeDialog = () => emit('update:visible', false);
             </div>
             
             <div class="p-3 space-y-4">
-                <div v-for="(u, uIdx) in configUnits" :key="u.tempId" class="bg-surface-50 dark:bg-surface-800/40 rounded-lg border border-surface-200 dark:border-surface-700 p-3">
+                <div v-for="(u, uIdx) in configUnits" :key="u.tempId" class="bg-surface-50 dark:bg-surface-400/40 rounded-lg border border-surface-200 dark:border-surface-700 p-3">
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-bold text-sm text-surface-700 dark:text-surface-200 flex items-center gap-2">
                             <i class="pi pi-map-marker text-surface-400"></i>
@@ -440,13 +440,13 @@ const closeDialog = () => emit('update:visible', false);
                         <Button label="Tambah Lokasi" icon="pi pi-plus" size="small" outlined severity="secondary" class="!p-1 !text-[10px] !h-6" @click="addStockAllocation(uIdx)" />
                     </div>
 
-                    <div v-if="u.allocations.length === 0" class="text-center py-2 text-xs text-surface-400 italic border border-dashed border-surface-200 dark:border-surface-700 rounded bg-white dark:bg-surface-900">
+                    <div v-if="u.allocations.length === 0" class="text-center py-2 text-xs text-surface-400 italic border border-dashed border-surface-200 dark:border-surface-700 rounded bg-surface-0 dark:bg-surface-400">
                         Belum ada penempatan rak.
                     </div>
 
-                    <div v-else class="bg-white dark:bg-surface-900 rounded border border-surface-100 dark:border-surface-700 overflow-hidden">
+                    <div v-else class="bg-surface-0 dark:bg-surface-400 rounded border border-surface-100 dark:border-surface-700 overflow-hidden">
                         <table class="w-full text-xs">
-                            <thead class="bg-surface-100 dark:bg-surface-800 text-[10px] text-surface-500 uppercase">
+                            <thead class="bg-surface-100 dark:bg-surface-400 text-[10px] text-surface-500 uppercase">
                                 <tr>
                                     <th class="p-2 text-left font-bold">Pilih Rak</th>
                                     <th class="p-2 w-24 text-center font-bold">Jumlah</th>
@@ -457,11 +457,11 @@ const closeDialog = () => emit('update:visible', false);
                                 <tr v-for="(alloc, aIdx) in u.allocations" :key="aIdx">
                                     <td class="p-1.5">
                                         <Dropdown v-model="alloc.shelfUuid" :options="shelfOptions" optionLabel="name" optionValue="uuid" 
-                                            placeholder="Pilih Rak..." class="w-full !h-8 text-xs compact-input dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" 
+                                            placeholder="Pilih Rak..." class="w-full !h-8 text-xs compact-input dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" 
                                             :pt="{ input: { class: '!py-1 !px-2' }, panel: { class: '!text-xs' } }" />
                                     </td>
                                     <td class="p-1.5">
-                                        <InputNumber v-model="alloc.qty" :min="0" class="w-full !h-8 dark:bg-surface-800 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1 font-bold" placeholder="0" />
+                                        <InputNumber v-model="alloc.qty" :min="0" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1 font-bold" placeholder="0" />
                                     </td>
                                     <td class="p-1.5 text-center">
                                         <Button icon="pi pi-times" text rounded severity="danger" class="!w-6 !h-6 !p-0" @click="removeStockAllocation(uIdx, aIdx)" />
@@ -493,7 +493,7 @@ const closeDialog = () => emit('update:visible', false);
     @apply text-sm font-bold text-surface-700 dark:text-surface-200 uppercase tracking-wide;
 }
 .section-box {
-    /* Kelas dark:bg-surface-900 dipindahkan ke template */
+    /* Kelas dark:bg-surface-400 dipindahkan ke template */
     @apply rounded-lg shadow-sm overflow-hidden;
 }
 .table-container {

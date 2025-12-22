@@ -145,9 +145,9 @@ const goToLogin = () => {
     <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-600 to-primary-900 p-4">
         <Toast />
 
-        <div class="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
+        <div class="bg-surface-0 dark:bg-surface-400 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
             
-            <div class="w-full md:w-1/3 bg-surface-50 dark:bg-surface-800 p-8 flex flex-col justify-between border-r border-surface-200 dark:border-surface-700">
+            <div class="w-full md:w-1/3 bg-surface-50 dark:bg-surface-400 p-8 flex flex-col justify-between border-r border-surface-200 dark:border-surface-700">
                 <div>
                     <div class="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-6 shadow-lg">R</div>
                     <h1 class="text-2xl font-bold text-surface-800 dark:text-surface-100 mb-2">Setup Wizard</h1>
@@ -160,7 +160,7 @@ const goToLogin = () => {
                 </div>
             </div>
 
-            <div class="w-full md:w-2/3 p-8 md:p-12 relative flex flex-col justify-center bg-white dark:bg-surface-900">
+            <div class="w-full md:w-2/3 p-8 md:p-12 relative flex flex-col justify-center bg-surface-0 dark:bg-surface-400">
                 
                 <div v-if="activeStep === 0" class="animate-fade-in">
                     <h2 class="text-xl font-bold mb-1 text-primary-600">1. Profil Toko</h2>
@@ -171,7 +171,7 @@ const goToLogin = () => {
                         <!-- [BARU] UPLOAD LOGO -->
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Logo Toko (Opsional)</label>
-                            <div class="flex items-center gap-4 p-3 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-800">
+                            <div class="flex items-center gap-4 p-3 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-400">
                                 
                                 <div class="relative shrink-0">
                                     <img :src="logoPreviewUrl || 'https://placehold.co/70x70/FFFFFF/4c51bf?text=LOGO'" alt="Logo Preview" class="w-[70px] h-[70px] object-cover rounded-full border-4 border-white dark:border-surface-900 shadow-md" />

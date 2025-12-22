@@ -71,7 +71,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-950 p-4">
+    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-400 p-4">
         <Toast />
         <ConfirmDialog />
 
@@ -86,7 +86,7 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="flex-1 overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 shadow-sm">
+        <div class="flex-1 overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-400 shadow-sm">
             
             <div v-if="loading && productionOrders.length === 0" class="p-8 flex justify-center">
                 <ProgressSpinner />

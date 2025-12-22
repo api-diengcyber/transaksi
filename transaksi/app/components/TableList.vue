@@ -62,14 +62,14 @@ defineExpose({ refresh: fetchTables });
 
         <div v-else class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
             <div @click="emit('create')" class="rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 flex flex-col items-center justify-center text-center h-40 border-dashed border-2 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors group">
-                <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-800 group-hover:bg-primary-50 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
+                <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-400 group-hover:bg-primary-50 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
                     <i class="pi pi-plus text-xl"></i>
                 </div>
                 <span class="font-bold text-surface-600 dark:text-surface-400 group-hover:text-primary-600 text-sm">Tambah Meja</span>
             </div>
 
             <div v-for="table in tables" :key="table.uuid" 
-                class="rounded-xl shadow-md bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 p-4 flex flex-col justify-between hover:border-primary-400 transition-all h-40 relative"
+                class="rounded-xl shadow-md bg-surface-0 dark:bg-surface-400 border border-surface-200 dark:border-surface-700 p-4 flex flex-col justify-between hover:border-primary-400 transition-all h-40 relative"
             >
                 <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button icon="pi pi-pencil" text rounded size="small" severity="info" @click="emit('edit', table)" />

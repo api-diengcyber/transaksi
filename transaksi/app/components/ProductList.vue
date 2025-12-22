@@ -156,7 +156,7 @@ defineExpose({ refresh });
             </div>
         </div>
 
-        <div class="card bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden">
+        <div class="card bg-surface-0 dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden">
              
              <DataTable 
                 :value="products" 
@@ -189,7 +189,7 @@ defineExpose({ refresh });
                             </div>
                             <div>
                                 <div class="font-bold text-base text-surface-800 dark:text-surface-100 leading-tight mb-1">{{ slotProps.data.name }}</div>
-                                <div class="text-xs text-surface-500 dark:text-surface-400 bg-surface-100 dark:bg-surface-800 px-2 py-0.5 rounded-full inline-block">{{ slotProps.data.units.length }} Varian Satuan</div>
+                                <div class="text-xs text-surface-500 dark:text-surface-400 bg-surface-100 dark:bg-surface-400 px-2 py-0.5 rounded-full inline-block">{{ slotProps.data.units.length }} Varian Satuan</div>
                             </div>
                         </div>
                     </template>
@@ -233,7 +233,7 @@ defineExpose({ refresh });
                     <template #body="slotProps">
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 py-2">
                             <div v-for="u in slotProps.data.units" :key="u.uuid" 
-                                 class="relative bg-surface-50 dark:bg-surface-800/50 border rounded-lg p-3 flex flex-col gap-2 hover:shadow-md transition-all" 
+                                 class="relative bg-surface-50 dark:bg-surface-400 border rounded-lg p-3 flex flex-col gap-2 hover:shadow-md transition-all" 
                                  :class="u.uuid === slotProps.data.defaultUnitUuid 
                                     ? 'border-blue-300 ring-1 ring-blue-100 dark:ring-blue-900' 
                                     : 'border-surface-200 dark:border-surface-700'">
@@ -245,7 +245,7 @@ defineExpose({ refresh });
                                 <div class="flex justify-between items-center">
                                     <div class="flex items-center gap-2">
                                         <span class="font-bold text-sm text-surface-800 dark:text-surface-100">{{ u.unitName }}</span>
-                                        <span class="text-[10px] text-surface-500 dark:text-surface-400 bg-white dark:bg-surface-900 px-1 rounded border border-surface-200 dark:border-surface-700">x{{ u.unitMultiplier }}</span>
+                                        <span class="text-[10px] text-surface-500 dark:text-surface-400 bg-surface-0 dark:bg-surface-400 px-1 rounded border border-surface-200 dark:border-surface-700">x{{ u.unitMultiplier }}</span>
                                     </div>
                                     <div class="flex items-center gap-1">
                                         <span class="text-[10px] text-surface-500 dark:text-surface-400 uppercase font-bold">Stok:</span>
@@ -255,7 +255,7 @@ defineExpose({ refresh });
                                     </div>
                                 </div>
                                 
-                                <div class="flex items-center gap-2 text-xs text-surface-600 dark:text-surface-300 bg-white dark:bg-surface-900 p-1.5 rounded border border-dashed border-surface-200 dark:border-surface-700">
+                                <div class="flex items-center gap-2 text-xs text-surface-600 dark:text-surface-300 bg-surface-0 dark:bg-surface-400 p-1.5 rounded border border-dashed border-surface-200 dark:border-surface-700">
                                     <i class="pi pi-barcode text-surface-400 dark:text-surface-500"></i>
                                     <span class="font-mono truncate" :title="u.barcode || 'Tanpa Barcode'">{{ u.barcode || 'Tanpa Barcode' }}</span>
                                 </div>

@@ -159,14 +159,21 @@ export class StoreService {
     // Ambil User beserta semua tokonya
     const user = await userRepo.findOne({
       where: { uuid: userId },
-      relations: ['stores', 'stores.settings'], // Load settings untuk setiap toko
+      relations: [
+        'stores',
+        'stores.settings',
+        'stores.branches',
+        'stores.branches.settings',
+        'stores.parentStore',
+        'stores.parentStore.settings',
+      ],
     });
 
     if (!user) throw new NotFoundException('User not found');
 
-    // Mapping List Toko
+    // Mapping List Toko menjadi Satu Array Flat
     return user.stores.map((store) => {
-      // Format settings
+      // 1. Format settings
       const formattedSettings: Record<string, string> = {};
       if (store.settings) {
         store.settings.forEach((s) => {
@@ -174,8 +181,20 @@ export class StoreService {
         });
       }
 
-      // [LOGIC BARU] Cek active berdasarkan Token JWT, bukan database defaultStore
+      // 2. Cek active store
       const isActive = store.uuid === activeStoreUuid;
+
+      // 3. [LOGIC BARU] Tentukan Status (Pusat/Cabang) & Keterangan
+      // Jika memiliki parentStore, berarti ini adalah Cabang
+      const isBranch = !!store.parentStore;
+
+      // Label sederhana: 'Pusat' atau 'Cabang'
+      const storeType = isBranch ? 'CABANG' : 'PUSAT';
+
+      // Keterangan lebih detail: 'Cabang dari [Nama Induk]'
+      const description = isBranch
+        ? `Cabang dari ${store.parentStore.name}`
+        : 'Pusat Operasional';
 
       return {
         uuid: store.uuid,
@@ -184,6 +203,15 @@ export class StoreService {
         phone: store.phone,
         settings: formattedSettings,
         isActive: isActive,
+
+        // Info Tambahan untuk Frontend
+        storeType: storeType,       // 'PUSAT' | 'CABANG'
+        description: description,   // Text deskripsi
+        parentId: store.parentStore?.uuid || null, // UUID Parent jika butuh grouping
+
+        // Tetap sertakan branches jika frontend butuh info anaknya siapa saja
+        // Tapi struktur utamanya tetap array flat (satu level)
+        branches: store.branches || []
       };
     });
   }

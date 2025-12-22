@@ -35,15 +35,15 @@ const handleLogin = async () => {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col lg:flex-row bg-white dark:bg-surface-950 overflow-hidden">
+    <div class="min-h-screen flex flex-col lg:flex-row bg-surface-0 dark:bg-surface-400 overflow-hidden">
         <Toast />
 
         <div class="hidden lg:flex w-1/2 bg-primary-600 dark:bg-primary-900 relative items-center justify-center p-12 overflow-hidden">
-            <div class="absolute top-[-20%] left-[-20%] w-[800px] h-[800px] bg-white/10 rounded-full blur-3xl"></div>
+            <div class="absolute top-[-20%] left-[-20%] w-[800px] h-[800px] bg-surface-0/10 rounded-full blur-3xl"></div>
             <div class="absolute bottom-[-20%] right-[-20%] w-[600px] h-[600px] bg-primary-400/20 rounded-full blur-3xl"></div>
             
             <div class="relative z-10 text-center text-white max-w-lg">
-                <div class="mb-8 inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-white/20 backdrop-blur-sm shadow-xl border border-white/30">
+                <div class="mb-8 inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-surface-0/20 backdrop-blur-sm shadow-xl border border-white/30">
                     <i class="pi pi-chart-bar text-5xl text-white"></i>
                 </div>
                 <h2 class="text-4xl font-black mb-4 tracking-tight">RetailApp Pro</h2>
@@ -58,7 +58,7 @@ const handleLogin = async () => {
         </div>
 
         <div class="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
-            <div class="w-full max-w-md bg-white dark:bg-surface-900 p-8 sm:p-10 rounded-3xl shadow-xl border border-surface-100 dark:border-surface-800 relative z-10 animate-fade-up">
+            <div class="w-full max-w-md bg-surface-0 dark:bg-surface-400 p-8 sm:p-10 rounded-3xl shadow-xl border border-surface-100 dark:border-surface-800 relative z-10 animate-fade-up">
                 
                 <div class="text-center mb-10 lg:text-left">
                     <div class="lg:hidden w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto shadow-lg">R</div>
@@ -76,7 +76,7 @@ const handleLogin = async () => {
                             <InputText 
                                 v-model="form.username" 
                                 placeholder="admin" 
-                                class="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 dark:bg-surface-800 border-none focus:ring-2 focus:ring-primary-500 transition-all text-surface-800 dark:text-surface-100" 
+                                class="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 dark:bg-surface-400 border-none focus:ring-2 focus:ring-primary-500 transition-all text-surface-800 dark:text-surface-100" 
                                 :class="{'p-invalid': !form.username && loading}"
                             />
                         </div>
@@ -95,7 +95,7 @@ const handleLogin = async () => {
                                 :feedback="false" 
                                 toggleMask 
                                 placeholder="••••••" 
-                                inputClass="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 dark:bg-surface-800 border-none focus:ring-2 focus:ring-primary-500 !text-surface-900 dark:!text-surface-0 shadow-sm placeholder:text-surface-400" 
+                                inputClass="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 dark:bg-surface-400 border-none focus:ring-2 focus:ring-primary-500 !text-surface-900 dark:!text-surface-0 shadow-sm placeholder:text-surface-400" 
                                 class="w-full"
                             />
                         </div>

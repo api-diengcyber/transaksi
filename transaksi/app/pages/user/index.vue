@@ -160,7 +160,7 @@ const getRoleSeverity = (role) => {
                 <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500"></i>
                 <InputText v-model="filters.global.value" :placeholder="`Cari di ${roleTabs.find(t => t.role === activeRole)?.label}...`" class="w-full pl-10 !rounded-full shadow-sm" />
             </div>
-            <div class="flex flex-wrap lg:flex-nowrap gap-1 p-1 rounded-xl border border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 overflow-x-auto">
+            <div class="flex flex-wrap lg:flex-nowrap gap-1 p-1 rounded-xl border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-400 overflow-x-auto">
                 <button 
                     v-for="tab in roleTabs" 
                     :key="tab.role"
@@ -175,7 +175,7 @@ const getRoleSeverity = (role) => {
             </div>
         </div>
 
-        <div class="card bg-white dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden flex-1">
+        <div class="card bg-surface-0 dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden flex-1">
              
             <DataTable :value="filteredUsers" :loading="loading" paginator :rows="10" dataKey="uuid" stripedRows class="text-sm">
                 
