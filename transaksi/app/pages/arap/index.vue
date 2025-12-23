@@ -2,8 +2,8 @@
 import { ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
-import ArapDebtPaymentList from '~/components/ArapDebtPaymentList.vue';
-import ArapGlobalDebtModal from '~/components/ArapGlobalDebtModal.vue'; 
+import ArapDebtPaymentList from '~/components/arap/ArapDebtPaymentList.vue';
+import ArapGlobalDebtModal from '~/components/arap/ArapGlobalDebtModal.vue'; 
 
 const toast = useToast();
 

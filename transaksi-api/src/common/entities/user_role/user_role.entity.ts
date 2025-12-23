@@ -15,6 +15,8 @@ export enum UserRole {
   CASHIER = 'CASHIER',
   INVENTORY = 'INVENTORY',
   STAFF = 'STAFF',
+  SUPPLIER = 'SUPPLIER',
+  MEMBER = 'MEMBER',
 }
 
 @Entity('user_role')

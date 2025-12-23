@@ -3,12 +3,12 @@ import { ref, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 // Components for List View
-import TableList from '~/components/TableList.vue';
-import RecipeList from '~/components/RecipeList.vue';
+import TableList from '~/components/table/TableList.vue';
+import RecipeList from '~/components/recipe/RecipeList.vue';
 
 // Components for Modals
-import TableCreateModal from '~/components/TableCreateModal.vue';
-import RecipeCreateModal from '~/components/RecipeCreateModal.vue';
+import TableCreateModal from '~/components/table/TableCreateModal.vue';
+import RecipeCreateModal from '~/components/recipe/RecipeCreateModal.vue';
 
 const route = useRoute();
 const router = useRouter();

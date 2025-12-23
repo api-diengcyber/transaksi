@@ -3,10 +3,10 @@ import { ref, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 // Import komponen transaksi
-import TransactionSale from '~/components/TransactionSale.vue';
-import TransactionBuy from '~/components/TransactionBuy.vue';
-import ProductCreateModal from '~/components/ProductCreateModal.vue';
-import TransactionReturn from '~/components/TransactionReturn.vue'; 
+import TransactionSale from '~/components/transaction/TransactionSale.vue';
+import TransactionBuy from '~/components/transaction/TransactionBuy.vue';
+import TransactionReturn from '~/components/transaction/TransactionReturn.vue'; 
+import ProductCreateModal from '~/components/product/ProductCreateModal.vue';
 
 const route = useRoute();
 const router = useRouter();

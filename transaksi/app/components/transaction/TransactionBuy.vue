@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import ProductCreateModal from '~/components/ProductCreateModal.vue'; 
+import ProductCreateModal from '~/components/product/ProductCreateModal.vue'; 
 
 const productService = useProductService();
 const journalService = useJournalService();

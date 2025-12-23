@@ -3,7 +3,7 @@ import { ref, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 // Import komponen laporan list AR/AP yang telah dibuat
-import ReportArapList from '~/components/ReportArapList.vue'; 
+import ReportArapList from '~/components/report/ReportArapList.vue'; 
 
 const route = useRoute();
 const router = useRouter();

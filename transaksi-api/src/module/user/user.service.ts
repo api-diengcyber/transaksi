@@ -67,16 +67,32 @@ export class UserService {
     });
   }
 
-  async findAll(storeUuid: string) {
-    // Mengambil semua pengguna yang terhubung ke toko ini
+  async findAll(storeUuid: string, role?: UserRole) {
     const userRepo = this.dataSource.getRepository(UserEntity);
-    return userRepo.createQueryBuilder('user')
+    
+    // Inisialisasi query builder
+    let query = userRepo.createQueryBuilder('user')
         .leftJoinAndSelect('user.roles', 'roles')
         .leftJoin('user.stores', 'store')
-        .where('store.uuid = :storeUuid', { storeUuid })
+        .where('store.uuid = :storeUuid', { storeUuid });
+
+    // Tambahkan filter role jika parameter role ada
+    if (role) {
+      query = query.andWhere('roles.role = :role', { role });
+    }
+
+    // Eksekusi query
+    return query
         .orderBy('user.createdAt', 'DESC')
-        // Memilih kolom yang aman (tanpa password)
-        .select(['user.uuid', 'user.username', 'user.email', 'user.createdAt', 'user.deletedAt', 'roles.uuid', 'roles.role'])
+        .select([
+          'user.uuid', 
+          'user.username', 
+          'user.email', 
+          'user.createdAt', 
+          'user.deletedAt', 
+          'roles.uuid', 
+          'roles.role'
+        ])
         .getMany();
   }
   

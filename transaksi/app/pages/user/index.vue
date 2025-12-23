@@ -1,82 +1,92 @@
 <script setup>
-import { ref, onMounted, computed, watch, nextTick } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 definePageMeta({ layout: 'default' });
 
-// Anggap Anda akan membuat composable baru: useUserService()
-const userService = useUserService();
+// --- MOCK SERVICE (Ganti dengan import composable asli Anda) ---
+const userService = useUserService(); 
 const toast = useToast();
 const confirm = useConfirm();
 
+// --- STATE ---
 const allUsers = ref([]);
-const roles = ref([]); 
+const rolesList = ref([]); 
 const loading = ref(true);
 const filters = ref({ global: { value: null, matchMode: 'contains' } });
+const activeRole = ref('ALL'); 
 
+// Modal State
 const showUserModal = ref(false);
 const selectedUser = ref(null);
 
-// [BARU] State untuk Tab Aktif (Default ke 'ALL' atau 'ADMIN')
-const activeRole = ref('ALL'); 
+// --- COMPUTED ---
 
-// --- COMPUTED ROLES & LISTS ---
-
-// Daftar Role yang Relevan (diurutkan: ADMIN, MANAGER, sisanya)
+// 1. Menghitung Tab Role secara Dinamis
 const roleTabs = computed(() => {
-    const defaultRoles = ['ALL', 'ADMIN', 'MANAGER', 'CASHIER', 'WAREHOUSE', 'PRODUCTION', 'RESTAURANT', 'OUTLET'];
+    // Definisi urutan prioritas role agar tampilan rapi
+    const priorityRoles = ['ADMIN', 'MANAGER', 'CASHIER', 'WAREHOUSE', 'PRODUCTION', 'RESTAURANT', 'OUTLET'];
     
-    // Gabungkan dengan role yang benar-benar ada di data, untuk menghindari tab kosong
-    const uniqueRolesInUse = [...new Set(allUsers.value.flatMap(u => (u.roles || []).map(r => r.role)))];
+    // Ambil semua role unik yang ada di database saat ini
+    const existingRoles = [...new Set(allUsers.value.flatMap(u => (u.roles || []).map(r => r.role)))];
     
-    const finalTabs = defaultRoles.filter(role => role === 'ALL' || uniqueRolesInUse.includes(role)).map(role => {
-        let label = role;
-        if (role === 'ALL') label = 'Semua Pengguna';
-        else if (role === 'ADMIN') label = 'Administrator';
-        else if (role === 'CASHIER') label = 'Kasir';
-        else if (role === 'WAREHOUSE') label = 'Gudang';
-        else if (role === 'PRODUCTION') label = 'Produksi';
-        else if (role === 'RESTAURANT') label = 'Restoran';
-        else if (role === 'OUTLET') label = 'Outlet';
+    // Gabungkan prioritas dengan role yang ada (hindari duplikat)
+    const combinedRoles = ['ALL', ...new Set([...priorityRoles, ...existingRoles])];
 
-        return { label, role };
-    });
-    
-    return finalTabs;
+    // Filter: hanya tampilkan role yang benar-benar ada datanya (kecuali ALL)
+    return combinedRoles
+        .filter(role => role === 'ALL' || existingRoles.includes(role))
+        .map(role => {
+            let label = role;
+            // Mapping nama cantik
+            const labelMap = {
+                ALL: 'Semua', ADMIN: 'Admin', CASHIER: 'Kasir',
+                WAREHOUSE: 'Gudang', PRODUCTION: 'Produksi', 
+                RESTAURANT: 'Resto', OUTLET: 'Outlet', MANAGER: 'Manager'
+            };
+            
+            // Hitung jumlah user per role
+            const count = role === 'ALL' 
+                ? allUsers.value.length 
+                : allUsers.value.filter(u => u.roles?.some(r => r.role === role)).length;
+
+            return { 
+                role, 
+                label: labelMap[role] || role, 
+                count 
+            };
+        });
 });
 
-// Daftar Pengguna yang Difilter berdasarkan Tab Aktif
+// 2. Filter User Berdasarkan Tab & Pencarian
 const filteredUsers = computed(() => {
-    if (activeRole.value === 'ALL') {
-        return allUsers.value.filter(user => 
-            filters.value.global.value 
-            ? JSON.stringify(user).toLowerCase().includes(filters.value.global.value.toLowerCase())
-            : true
+    let result = allUsers.value;
+
+    // Filter by Tab
+    if (activeRole.value !== 'ALL') {
+        result = result.filter(user => user.roles?.some(r => r.role === activeRole.value));
+    }
+
+    // Filter by Search
+    if (filters.value.global.value) {
+        const keyword = filters.value.global.value.toLowerCase();
+        result = result.filter(user => 
+            user.username.toLowerCase().includes(keyword) || 
+            (user.email && user.email.toLowerCase().includes(keyword))
         );
     }
     
-    return allUsers.value.filter(user => {
-        // Cek apakah user memiliki role yang sesuai dengan tab aktif
-        const hasRole = user.roles.some(r => r.role === activeRole.value);
-        
-        if (!filters.value.global.value) return hasRole;
-
-        // Filter berdasarkan pencarian jika ada
-        const searchMatch = JSON.stringify(user).toLowerCase().includes(filters.value.global.value.toLowerCase());
-        return hasRole && searchMatch;
-    });
+    return result;
 });
 
-// --- FETCH DATA ---
+// --- METHODS ---
 const fetchUsers = async () => {
     loading.value = true;
     try {
-        const usersData = await userService.getAllUsers(); // Asumsi endpoint '/user/find-all'
-        const rolesData = await userService.getAllRoles(); // Asumsi endpoint '/user/roles'
-        
+        const usersData = await userService.fetchUsers();
+        // const rolesData = await userService.getAllRoles(); // Jika diperlukan untuk dropdown modal
         allUsers.value = usersData || [];
-        roles.value = rolesData || [];
     } catch (e) {
         console.error(e);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data pengguna', life: 3000 });
@@ -85,7 +95,6 @@ const fetchUsers = async () => {
     }
 };
 
-// --- HANDLERS ---
 const openCreateUser = () => {
     selectedUser.value = null;
     showUserModal.value = true;
@@ -98,19 +107,21 @@ const openEditUser = (user) => {
 
 const onUserSaved = () => {
     showUserModal.value = false;
-    fetchUsers();
+    fetchUsers(); // Refresh data
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Data pengguna disimpan', life: 3000 });
 };
 
 const confirmDeleteUser = (user) => {
     confirm.require({
-        message: `Hapus pengguna "${user.username}"?`,
+        message: `Apakah Anda yakin ingin menghapus user "${user.username}"?`,
         header: 'Konfirmasi Hapus',
-        icon: 'pi pi-user-minus',
+        icon: 'pi pi-exclamation-triangle',
         acceptClass: 'p-button-danger',
+        rejectClass: 'p-button-text',
         accept: async () => {
             try {
                 await userService.deleteUser(user.uuid);
-                toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Pengguna dihapus', life: 3000 });
+                toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Pengguna berhasil dihapus', life: 3000 });
                 fetchUsers();
             } catch (err) {
                 toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus pengguna', life: 3000 });
@@ -119,114 +130,174 @@ const confirmDeleteUser = (user) => {
     });
 };
 
-onMounted(() => {
-    fetchUsers();
-});
+const getRoleSeverity = (role) => {
+    const map = {
+        ADMIN: 'danger', MANAGER: 'warning', CASHIER: 'success', 
+        OUTLET: 'success', WAREHOUSE: 'info', PRODUCTION: 'info'
+    };
+    return map[role] || 'secondary';
+};
 
-// [BARU] Watcher untuk reset filter global saat tab berubah
+// Reset search saat pindah tab
 watch(activeRole, () => {
     filters.value.global.value = null;
 });
 
-// [BARU] Helper untuk mendapatkan severity Tag berdasarkan Role
-const getRoleSeverity = (role) => {
-    if (role === 'ADMIN') return 'danger';
-    if (role === 'MANAGER') return 'warning';
-    if (role === 'CASHIER' || role === 'OUTLET') return 'success';
-    if (role === 'WAREHOUSE' || role === 'PRODUCTION') return 'info';
-    return 'secondary';
-}
+onMounted(() => {
+    fetchUsers();
+});
 </script>
 
 <template>
-    <div class="h-full flex flex-col">
-        <Toast />
+    <div class="min-h-screen flex flex-col gap-6">
+        <Toast position="bottom-right" />
         <ConfirmDialog />
 
-        <div class="flex items-center justify-between mb-6">
-            <h1 class="text-3xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Manajemen Pengguna</h1>
-            <Button 
-                label="Tambah Pengguna" 
-                icon="pi pi-user-plus" 
-                severity="primary" 
-                @click="openCreateUser" 
-                raised 
-                rounded 
-            />
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight">
+                    Pengguna & Akses
+                </h1>
+                <p class="text-gray-500 dark:text-gray-400 mt-1">
+                    Kelola daftar pengguna, peran, dan hak akses aplikasi.
+                </p>
+            </div>
+            <div class="flex gap-3">
+                <Button 
+                    label="Tambah Baru" 
+                    icon="pi pi-plus" 
+                    severity="primary" 
+                    class="!px-4 !py-2.5 !rounded-lg font-semibold shadow-lg shadow-primary/30 transition-all hover:scale-105" 
+                    @click="openCreateUser" 
+                />
+            </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-4 mb-4">
-            <div class="relative w-full lg:w-96">
-                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500"></i>
-                <InputText v-model="filters.global.value" :placeholder="`Cari di ${roleTabs.find(t => t.role === activeRole)?.label}...`" class="w-full pl-10 !rounded-full shadow-sm" />
-            </div>
-            <div class="flex flex-wrap lg:flex-nowrap gap-1 p-1 rounded-xl border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-400 overflow-x-auto">
+        <div class="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-surface-0 dark:bg-surface-900 p-4 rounded-2xl border border-gray-200 dark:border-surface-700 shadow-sm">
+            
+            <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-surface-800 rounded-xl overflow-x-auto max-w-full lg:max-w-3xl no-scrollbar">
                 <button 
                     v-for="tab in roleTabs" 
                     :key="tab.role"
                     @click="activeRole = tab.role"
-                    class="px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
+                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap outline-none focus:ring-2 focus:ring-primary/50"
                     :class="activeRole === tab.role 
-                        ? 'bg-primary-600 text-white shadow-md' 
-                        : 'text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800'"
+                        ? 'bg-surface-0 dark:bg-surface-700 text-primary-600 dark:text-primary-400 shadow-sm' 
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-surface-700/50'"
                 >
-                    {{ tab.label }} ({{ (tab.role === 'ALL' ? allUsers : allUsers.filter(u => u.roles.some(r => r.role === tab.role))).length }})
+                    <span>{{ tab.label }}</span>
+                    <span 
+                        class="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                        :class="activeRole === tab.role 
+                            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                            : 'bg-gray-200 dark:bg-surface-600 text-gray-600 dark:text-gray-300'"
+                    >
+                        {{ tab.count }}
+                    </span>
                 </button>
+            </div>
+
+            <div class="relative w-full lg:w-72 group">
+                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors"></i>
+                <InputText 
+                    v-model="filters.global.value" 
+                    placeholder="Cari nama atau email..." 
+                    class="w-full !pl-10 !rounded-xl !border-gray-200 dark:!border-surface-700 dark:!bg-surface-800 dark:text-white focus:!border-primary !transition-all" 
+                />
             </div>
         </div>
 
-        <div class="card bg-surface-0 dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden flex-1">
-             
-            <DataTable :value="filteredUsers" :loading="loading" paginator :rows="10" dataKey="uuid" stripedRows class="text-sm">
-                
+        <div class="bg-surface-0 dark:bg-surface-900 border border-gray-200 dark:border-surface-700 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
+            <DataTable 
+                :value="filteredUsers" 
+                :loading="loading" 
+                paginator 
+                :rows="10" 
+                dataKey="uuid" 
+                tableStyle="min-width: 50rem"
+                class="flex-1"
+                :pt="{
+                    headerRow: { class: 'bg-gray-50 dark:bg-surface-800 text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wider font-semibold border-b border-gray-200 dark:border-surface-700' },
+                    bodyRow: { class: 'hover:bg-gray-50 dark:hover:bg-surface-800/50 transition-colors border-b border-gray-100 dark:border-surface-800 last:border-0' }
+                }"
+            >
                 <template #empty>
-                    <div class="flex flex-col items-center justify-center py-12 text-surface-400 dark:text-surface-600">
-                        <i class="pi pi-users text-5xl mb-3 opacity-30"></i>
-                        <p>Tidak ada pengguna terdaftar untuk role **{{ roleTabs.find(t => t.role === activeRole)?.label }}**.</p>
+                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                        <div class="bg-gray-50 dark:bg-surface-800 p-4 rounded-full mb-4">
+                            <i class="pi pi-users text-4xl text-gray-400 dark:text-gray-500"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Data Tidak Ditemukan</h3>
+                        <p class="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                            Tidak ada pengguna dengan kriteria pencarian atau filter peran yang dipilih.
+                        </p>
                     </div>
                 </template>
 
-                <Column field="username" header="Username" sortable style="width: 20%">
-                    <template #body="slotProps">
-                        <div class="font-bold text-surface-800 dark:text-surface-100">{{ slotProps.data.username }}</div>
-                        <div class="text-xs text-surface-500">{{ slotProps.data.email || '-' }}</div>
-                    </template>
-                </Column>
-
-                <Column header="Role" style="width: 25%">
-                    <template #body="slotProps">
-                        <div class="flex flex-wrap gap-1">
-                            <Tag v-for="role in slotProps.data.roles" 
-                                :key="role.uuid" 
-                                :value="role.role" 
-                                :severity="getRoleSeverity(role.role)" 
-                                rounded
-                                class="!text-[10px] uppercase font-bold" 
-                            />
+                <Column field="username" header="Pengguna" sortable style="width: 25%">
+                    <template #body="{ data }">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                {{ data.username.charAt(0).toUpperCase() }}
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-800 dark:text-gray-100 text-sm">{{ data.username }}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">{{ data.email || 'No Email' }}</div>
+                            </div>
                         </div>
                     </template>
                 </Column>
 
-                <Column header="Status Akun" style="width: 15%">
-                     <template #body="slotProps">
-                        <Tag :value="slotProps.data.deletedAt ? 'Nonaktif' : 'Aktif'" 
-                            :severity="slotProps.data.deletedAt ? 'danger' : 'success'" 
-                            rounded
-                            class="!text-[10px] uppercase font-bold" 
-                        />
+                <Column header="Role & Akses" style="width: 30%">
+                    <template #body="{ data }">
+                        <div class="flex flex-wrap gap-2">
+                            <Tag 
+                                v-for="role in data.roles" 
+                                :key="role.uuid" 
+                                :value="role.role" 
+                                :severity="getRoleSeverity(role.role)"
+                                class="!rounded-md !px-2 !py-1 !text-[11px] !font-bold uppercase tracking-wide" 
+                            />
+                            <span v-if="!data.roles?.length" class="text-xs text-gray-400 italic">No Access</span>
+                        </div>
                     </template>
                 </Column>
 
-                 <Column field="createdAt" header="Terdaftar Sejak" sortable style="width: 20%">
-                    <template #body="slotProps">
-                         {{ new Date(slotProps.data.createdAt).toLocaleDateString('id-ID') }}
+                <Column header="Status" style="width: 15%">
+                     <template #body="{ data }">
+                        <div 
+                            class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border"
+                            :class="!data.deletedAt 
+                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800' 
+                                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full mr-2" :class="!data.deletedAt ? 'bg-green-500' : 'bg-red-500'"></span>
+                            {{ !data.deletedAt ? 'Aktif' : 'Nonaktif' }}
+                        </div>
                     </template>
                 </Column>
 
-                <Column header="" style="width: 20%" class="text-right">
-                    <template #body="slotProps">
-                        <Button label="Edit" icon="pi pi-pencil" severity="info" text @click="openEditUser(slotProps.data)" />
-                        <Button label="Hapus" icon="pi pi-trash" severity="danger" text @click="confirmDeleteUser(slotProps.data)" />
+                <Column header="" style="width: 15%" alignFrozen="right">
+                    <template #body="{ data }">
+                        <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <Button 
+                                icon="pi pi-pencil" 
+                                text 
+                                rounded 
+                                severity="info" 
+                                class="!w-8 !h-8 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                v-tooltip.top="'Edit'"
+                                @click="openEditUser(data)" 
+                            />
+                            <Button 
+                                icon="pi pi-trash" 
+                                text 
+                                rounded 
+                                severity="danger" 
+                                class="!w-8 !h-8 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                v-tooltip.top="'Hapus'"
+                                @click="confirmDeleteUser(data)" 
+                            />
+                        </div>
                     </template>
                 </Column>
             </DataTable>
@@ -235,8 +306,19 @@ const getRoleSeverity = (role) => {
         <UserCreateEditModal 
             v-model:visible="showUserModal" 
             :userData="selectedUser" 
-            :roles="roles"
             @saved="onUserSaved" 
         />
     </div>
 </template>
+
+<style scoped>
+/* Utility untuk menyembunyikan scrollbar pada tab namun tetap bisa discroll */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+</style>

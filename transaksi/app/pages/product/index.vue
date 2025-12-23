@@ -4,13 +4,13 @@ import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 // Import Komponen List yang sudah dipisah
-import ProductList from '~/components/ProductList.vue';
-import CategoryList from '~/components/CategoryList.vue';
-import ShelveList from '~/components/ShelveList.vue';
+import ProductList from '~/components/product/ProductList.vue';
+import CategoryList from '~/components/category/CategoryList.vue';
+import ShelveList from '~/components/shelve/ShelveList.vue';
 
 // Import Modal Form
-import ProductCreateModal from '~/components/ProductCreateModal.vue';
-import ShelveCreateModal from '~/components/ShelveCreateModal.vue';
+import ProductCreateModal from '~/components/product/ProductCreateModal.vue';
+import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue';
 
 // --- STATE ---
 const activeMainTab = ref('products'); // 'products' | 'categories' | 'shelves'

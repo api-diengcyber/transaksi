@@ -11,6 +11,7 @@ import StoreManagementTab from "~/components/setting/StoreManagementTab.vue";
 import SalesTab from "~/components/setting/SalesTab.vue";
 import PurchaseTab from "~/components/setting/PurchaseTab.vue";
 import DeviceTab from "~/components/setting/DeviceTab.vue";
+import SyncTab from "~/components/setting/SyncTab.vue"; // [BARU] Import SyncTab
 
 const router = useRouter();
 const route = useRoute();
@@ -26,6 +27,7 @@ const menuItems = [
   { id: "general", label: "Identitas Toko", icon: "pi pi-building", desc: "Nama, alamat, dan kontak" },
   { id: "display", label: "Tampilan & Tata Letak", icon: "pi pi-palette", desc: "Tema warna dan posisi menu" },
   { id: "stores", label: "Manajemen Toko", icon: "pi pi-sitemap", desc: "Buat dan kelola toko" },
+  { id: "sync", label: "Sinkronisasi", icon: "pi pi-sync", desc: "Koneksi data server" }, // [BARU] Menu Item
   { id: "sales", label: "Transaksi Penjualan", icon: "pi pi-shopping-cart", desc: "Pajak, struk, dan stok" },
   { id: "purchase", label: "Pembelian (Stok)", icon: "pi pi-truck", desc: "Supplier dan persetujuan" },
   { id: "device", label: "Perangkat & Printer", icon: "pi pi-print", desc: "Konfigurasi hardware" },
@@ -37,7 +39,12 @@ const settings = reactive({
   
   // Display
   theme_primary_color: "#2563eb", 
-  layout_mode: "topbar", // [BARU] Default ke topbar
+  layout_mode: "topbar",
+
+  // [BARU] Synchronization Settings
+  sync_enabled: false, 
+  sync_mode: "automatic", // 'automatic' or 'manual'
+  sync_url: "",
 
   // 2. Sales
   sale_tax_enabled: false, sale_tax_percentage: 0, sale_tax_method: "exclusive", sale_allow_negative_stock: false, sale_require_customer: false,
@@ -139,7 +146,7 @@ const saveSettings = async () => {
     await authStore.saveStoreSettings(payload);
     await authStore.fetchUserStores();
     
-    // [BARU] Reload halaman jika mode layout berubah agar efeknya instan dan bersih
+    // Reload halaman jika mode layout berubah agar efeknya instan
     const currentLayout = authStore.getSetting('layout_mode');
     if (currentLayout !== settings.layout_mode && import.meta.client) {
        setTimeout(() => window.location.reload(), 500);
@@ -197,7 +204,7 @@ definePageMeta({ layout: "default" });
             <GeneralTab v-if="activeTab === 'general'" :settings="settings" :loading="loading" @refresh-store="fetchSettings" />
             <DisplayTab v-if="activeTab === 'display'" :settings="settings" />
             <StoreManagementTab v-if="activeTab === 'stores'" :settings="settings" />
-            <SalesTab v-if="activeTab === 'sales'" :settings="settings" />
+            <SyncTab v-if="activeTab === 'sync'" :settings="settings" :loading="loading" /> <SalesTab v-if="activeTab === 'sales'" :settings="settings" />
             <PurchaseTab v-if="activeTab === 'purchase'" :settings="settings" />
             <DeviceTab v-if="activeTab === 'device'" :settings="settings" />
           </div>

@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { 
   IsNotEmpty, 
-  IsNumber, 
   IsOptional, 
   IsString, 
   IsUUID, 
@@ -11,23 +10,21 @@ import {
 } from 'class-validator';
 
 // =============================================================================
-// BASE DETAILS (Field yang mungkin ada di dynamic object)
+// BASE DETAILS
 // =============================================================================
 class BaseJournalDetailsDto {
-    // Mengizinkan properti dinamis seperti 'product_uuid#0', 'qty#0'
-    [key: string]: any;
+    [key: string]: any; // Allow dynamic keys (product_uuid#0, etc)
 }
 
 // =============================================================================
-// 1. DTO UNTUK TRANSAKSI UTAMA (SALE / BUY / RETURN)
+// 1. DTO TRANSACTION (SALE / BUY / RETURN)
 // =============================================================================
-
 export class TransactionDetailsDto extends BaseJournalDetailsDto {
   @ApiProperty({ description: 'Total keseluruhan transaksi', example: 150000 })
   @IsNotEmpty()
   amount: number | string;
 
-  @ApiProperty({ description: 'Grand total (biasanya sama dengan amount)', example: 150000 })
+  @ApiPropertyOptional({ description: 'Grand total (jika berbeda)', example: 150000 })
   @IsOptional()
   grand_total?: number | string;
 
@@ -36,27 +33,27 @@ export class TransactionDetailsDto extends BaseJournalDetailsDto {
   @IsString()
   payment_method?: string;
 
+  // [PERBAIKAN] Gunakan IsOptional saja agar bisa terima boolean asli atau string boolean
   @ApiPropertyOptional({ description: 'Apakah transaksi kredit?', example: 'true' })
   @IsOptional()
-  @IsBooleanString()
-  is_credit?: string;
+  is_credit?: string | boolean;
 
-  @ApiPropertyOptional({ description: 'Tanggal jatuh tempo (jika kredit)', example: '2025-12-30' })
+  @ApiPropertyOptional({ description: 'Tanggal jatuh tempo', example: '2025-12-30' })
   @IsOptional()
   @IsDateString()
   due_date?: string;
 
-  @ApiPropertyOptional({ description: 'Nama Customer (untuk Sale)', example: 'Budi' })
+  @ApiPropertyOptional({ description: 'Nama Customer', example: 'Budi' })
   @IsOptional()
   @IsString()
   customer_name?: string;
 
-  @ApiPropertyOptional({ description: 'Nama Supplier (untuk Buy)', example: 'PT. Maju Jaya' })
+  @ApiPropertyOptional({ description: 'Nama Supplier', example: 'PT. Maju Jaya' })
   @IsOptional()
   @IsString()
   supplier?: string;
 
-  @ApiPropertyOptional({ description: 'Target Store UUID untuk mirroring', example: 'store-uuid-xxx' })
+  @ApiPropertyOptional({ description: 'Target Store UUID', example: 'store-uuid-xxx' })
   @IsOptional()
   @IsUUID()
   target_store_uuid?: string;
@@ -70,11 +67,10 @@ export class CreateTransactionDto {
 }
 
 // =============================================================================
-// 2. DTO UNTUK PIUTANG/HUTANG GLOBAL (AR / AP)
+// 2. DTO PIUTANG/HUTANG GLOBAL (AR / AP)
 // =============================================================================
-
 export class GlobalDebtDetailsDto extends BaseJournalDetailsDto {
-  @ApiProperty({ description: 'Nominal Piutang/Hutang', example: 500000 })
+  @ApiProperty({ description: 'Nominal', example: 500000 })
   @IsNotEmpty()
   amount: number | string;
 
@@ -93,7 +89,7 @@ export class GlobalDebtDetailsDto extends BaseJournalDetailsDto {
   @IsDateString()
   due_date?: string;
 
-  @ApiPropertyOptional({ description: 'Catatan tambahan', example: 'Saldo Awal' })
+  @ApiPropertyOptional({ description: 'Catatan', example: 'Saldo Awal' })
   @IsOptional()
   @IsString()
   notes?: string;
@@ -107,15 +103,14 @@ export class CreateGlobalDebtDto {
 }
 
 // =============================================================================
-// 3. DTO UNTUK PEMBAYARAN (PAYMENT AR / AP)
+// 3. DTO PEMBAYARAN (PAYMENT)
 // =============================================================================
-
 export class PaymentDetailsDto extends BaseJournalDetailsDto {
   @ApiProperty({ description: 'Nominal yang dibayar', example: 100000 })
   @IsNotEmpty()
   amount: number | string;
 
-  @ApiProperty({ description: 'Kode Jurnal Referensi yang dibayar', example: 'SALE-XXX-2025-0001' })
+  @ApiProperty({ description: 'Kode Referensi', example: 'SALE-XXX-2025-0001' })
   @IsNotEmpty()
   @IsString()
   reference_journal_code: string;

@@ -2,7 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 // Pastikan path import ini benar sesuai struktur project Anda
-import ShelveCreateModal from '~/components/ShelveCreateModal.vue'; 
+import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue'; 
 
 const props = defineProps({
     visible: Boolean,

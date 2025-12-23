@@ -1,13 +1,14 @@
 
 // src/module/user/user.controller.ts
 
-import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, BadRequestException, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiBody } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { UserRole } from 'src/common/entities/user_role/user_role.entity';
 
 @ApiTags('User Management')
 @ApiBearerAuth()
@@ -28,10 +29,11 @@ export class UserController {
 
   @Get('find-all')
   @ApiOperation({ summary: 'Get all users belonging to the current store' })
-  async findAll(
-    @GetStore() storeUuid: string,
+  findAll(
+    @GetStore() storeId: string, 
+    @Query('role') role?: UserRole
   ) {
-    return this.userService.findAll(storeUuid);
+    return this.userService.findAll(storeId, role);
   }
   
   @Get('roles')

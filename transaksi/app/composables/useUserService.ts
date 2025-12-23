@@ -2,10 +2,10 @@
 export const useUserService = () => {
     // Anggap API_BASE dari useRuntimeConfig()
     const API_BASE = useRuntimeConfig().public.apiBase; 
-
-    const getAllUsers = async () => {
-        // Asumsi endpoint: GET /user/find-all (melindungi dengan AtGuard)
-        return await useApi('/user/find-all');
+    
+    const fetchUsers = async (role?: string) => {
+        const query = role ? `?role=${role}` : '';
+        return await useApi(`/user/find-all/${query}`, { method: 'GET' });
     };
 
     const getAllRoles = async () => {
@@ -25,7 +25,7 @@ export const useUserService = () => {
     };
 
     return {
-        getAllUsers,
+        fetchUsers,
         getAllRoles,
         createUser,
         updateUser,

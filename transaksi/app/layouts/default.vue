@@ -74,7 +74,8 @@ const applyPrimaryColor = (hexColor) => {
 }
 watch(primaryColorSetting, (newColor) => applyPrimaryColor(newColor), { immediate: true }); 
 
-onMounted(() => {
+onMounted(async () => {
+    await authStore.fetchUserStores();
     if (process.client) {
         const theme = localStorage.getItem('theme');
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -95,6 +96,10 @@ const items = ref([
             { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' },
             { label: 'Produksi', icon: 'pi pi-building', route: '/production' },
             { label: 'Stok/Gudang', icon: 'pi pi-warehouse', route: '/inventory' },
+            { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' },
+            { label: 'Bank & Rekening', icon: 'pi pi-money-bill', route: '/bank' },
+            { label: 'Member', icon: 'pi pi-users', route: '/member' },
+            { label: 'Supplier', icon: 'pi pi-users', route: '/supplier' },
             { label: 'User/Pegawai', icon: 'pi pi-users', route: '/user' },
         ]
     },

@@ -10,6 +10,8 @@ import { RecipeModule } from '../recipe/recipe.module';
 import { UserModule } from '../user/user.module';
 import { ProductionModule } from '../production/production.module';
 import { ProductionFlowModule } from '../production_flow/production_flow.module';
+import { CourierModule } from '../courier/courier.module';
+import { BankModule } from '../bank/bank.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { ProductionFlowModule } from '../production_flow/production_flow.module'
     UserModule,
     ProductionModule,
     ProductionFlowModule,
+    CourierModule,
+    BankModule,
   ],
   controllers: [],
   providers: [],

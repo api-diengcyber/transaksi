@@ -4,7 +4,6 @@ import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagg
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { GetStore } from 'src/common/decorators/get-store.decorator';
-// Import DTO yang baru dibuat
 import { 
   CreateTransactionDto, 
   CreateGlobalDebtDto, 
@@ -38,7 +37,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create buy journal entry' })
   @ApiResponse({ status: 201, description: 'Buy journal created successfully' })
   async createBuy(
-    @Body() body: CreateTransactionDto, // Gunakan DTO (strukturnya mirip Sale)
+    @Body() body: CreateTransactionDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -92,7 +91,7 @@ export class JournalController {
   @Post('payment/ar')
   @ApiOperation({ summary: 'Create accounts receivable payment journal entry' })
   async createArPayment(
-    @Body() body: CreatePaymentDto, // Gunakan DTO Khusus Payment
+    @Body() body: CreatePaymentDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
@@ -130,10 +129,10 @@ export class JournalController {
     @GetStore() storeUuid: string,
   ) {
     if (!startDate || !endDate) {
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - 7);
-        return this.journalService.getChartData(start.toISOString(), end.toISOString(), storeUuid);
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      return this.journalService.getChartData(start.toISOString(), end.toISOString(), storeUuid);
     }
     return this.journalService.getChartData(startDate, endDate, storeUuid);
   }

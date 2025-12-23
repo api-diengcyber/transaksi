@@ -1,8 +1,5 @@
 // composables/useCategoryService.ts
 export const useCategoryService = () => {
-    // Pastikan global config sudah benar, atau hardcode URL untuk test
-    const config = useRuntimeConfig();
-    const API_URL = config.public.apiBaseUrl || 'http://localhost:3000'; 
 
     const getAllCategorys = async () => {
         return await useApi('/category/find-all');

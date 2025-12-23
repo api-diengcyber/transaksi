@@ -4,8 +4,8 @@ import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 // Components
-import ProductionModal from '~/components/ProductionModal.vue';
-import ProductionDetail from '~/components/ProductionDetail.vue';
+import ProductionModal from '~/components/production/ProductionModal.vue';
+import ProductionDetail from '~/components/production/ProductionDetail.vue';
 
 definePageMeta({ layout: 'default' });
 

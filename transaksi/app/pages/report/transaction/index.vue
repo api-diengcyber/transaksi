@@ -3,10 +3,10 @@ import { ref, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 // Import komponen laporan baru
-import ReportSale from '~/components/ReportSale.vue';
-import ReportBuy from '~/components/ReportBuy.vue';
-import ReportReturn from '~/components/ReportReturn.vue';
-import ReportGraph from '~/components/ReportGraph.vue';
+import ReportSale from '~/components/report/ReportSale.vue';
+import ReportBuy from '~/components/report/ReportBuy.vue';
+import ReportReturn from '~/components/report/ReportReturn.vue';
+import ReportGraph from '~/components/report/ReportGraph.vue';
 
 const route = useRoute();
 const router = useRouter();
