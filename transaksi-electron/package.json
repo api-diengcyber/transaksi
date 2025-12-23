@@ -26,6 +26,7 @@
       "bin/**/*"
     ],
     "mac": {
+      "identity": null,
       "target": "dmg",
       "icon": "resources/icon.icns"
     },
