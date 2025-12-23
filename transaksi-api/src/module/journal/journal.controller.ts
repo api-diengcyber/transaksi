@@ -30,8 +30,7 @@ export class JournalController {
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-
-      console.log(body);
+    console.log(body);
     return this.journalService.createSale(body.details, userId, storeUuid);
   }
 
@@ -73,7 +72,7 @@ export class JournalController {
   @Post('debt/ar')
   @ApiOperation({ summary: 'Create accounts receivable (Piutang) global entry' })
   async createAr(
-    @Body() body: CreateGlobalDebtDto, // Gunakan DTO Khusus Debt
+    @Body() body: CreateGlobalDebtDto,
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {

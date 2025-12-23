@@ -7,7 +7,6 @@ import {
   IsString, 
   IsUUID, 
   IsBooleanString, 
-  ValidateNested, 
   IsDateString 
 } from 'class-validator';
 
@@ -66,7 +65,6 @@ export class TransactionDetailsDto extends BaseJournalDetailsDto {
 export class CreateTransactionDto {
   @ApiProperty({ type: TransactionDetailsDto })
   @IsNotEmpty()
-  @ValidateNested()
   @Type(() => TransactionDetailsDto)
   details: TransactionDetailsDto;
 }
@@ -104,7 +102,6 @@ export class GlobalDebtDetailsDto extends BaseJournalDetailsDto {
 export class CreateGlobalDebtDto {
   @ApiProperty({ type: GlobalDebtDetailsDto })
   @IsNotEmpty()
-  @ValidateNested()
   @Type(() => GlobalDebtDetailsDto)
   details: GlobalDebtDetailsDto;
 }
@@ -142,7 +139,6 @@ export class PaymentDetailsDto extends BaseJournalDetailsDto {
 export class CreatePaymentDto {
   @ApiProperty({ type: PaymentDetailsDto })
   @IsNotEmpty()
-  @ValidateNested()
   @Type(() => PaymentDetailsDto)
   details: PaymentDetailsDto;
 }

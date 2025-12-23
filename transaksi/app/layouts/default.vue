@@ -157,7 +157,15 @@ const handleSwitchStore = (store) => {
     storeMenu.value.hide();
     targetStoreName.value = store.name;
     isSwitchingStore.value = true;
-    setTimeout(() => { authStore.switchStore(store.uuid); }, 800); 
+    setTimeout(async () => { 
+        await authStore.switchStore(store.uuid); 
+        if (process.client) {
+            window.location.reload();
+        } else {
+            isSwitchingStore.value = false;
+            router.push('/');
+        }
+    }, 800);
 };
 
 const buildHierarchy = (flatStores) => { 
