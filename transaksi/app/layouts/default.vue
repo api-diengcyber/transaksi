@@ -153,13 +153,22 @@ watch(() => route.path, (newPath) => {
 
 // --- STORE SWITCHER ---
 const storeMenu = ref();
+// layouts/default.vue
 const handleSwitchStore = (store) => {
     storeMenu.value.hide();
+    
+    // Cek agar tidak reload jika toko sama
+    if (authStore.activeStore?.uuid === store.uuid) return;
+
     targetStoreName.value = store.name;
     isSwitchingStore.value = true;
+    
     setTimeout(async () => { 
+        // Panggil switchStore (yang sudah KITA HAPUS reload-nya)
         await authStore.switchStore(store.uuid); 
+        
         if (process.client) {
+            // Reload terjadi di sini
             window.location.reload();
         } else {
             isSwitchingStore.value = false;

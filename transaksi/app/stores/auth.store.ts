@@ -10,25 +10,22 @@ export const useAuthStore = defineStore('auth', {
   }),
 
   getters: {
-    // [PERBAIKAN UTAMA DI SINI]
+    // Getter untuk meratakan struktur toko (Parent + Cabang)
     flatStores: (state) => {
       const allStores = new Map();
 
-      // Tambahkan parameter 'parent' untuk meneruskan info induk ke anak
       const traverse = (items: any[], parent: any = null) => {
         if (!items || !Array.isArray(items)) return;
 
         items.forEach(store => {
-          // Clone object agar tidak mengubah state asli secara langsung
           const enrichedStore = { ...store };
 
-          // Jika sedang memproses anak (punya parent), tandai sebagai CABANG
+          // Logika penanda Cabang vs Pusat
           if (parent) {
             enrichedStore.parentId = parent.uuid;
             enrichedStore.storeType = 'CABANG';
             enrichedStore.description = `Cabang dari ${parent.name}`;
           } else {
-            // Jika tidak punya parent, tandai sebagai PUSAT (kecuali backend bilang lain)
             if (!enrichedStore.storeType) enrichedStore.storeType = 'PUSAT';
           }
 
@@ -36,7 +33,7 @@ export const useAuthStore = defineStore('auth', {
             allStores.set(enrichedStore.uuid, enrichedStore);
           }
 
-          // Rekursif ke anak-anaknya
+          // Rekursif untuk mengambil cabang di dalamnya
           if (store.branches && Array.isArray(store.branches)) {
             traverse(store.branches, enrichedStore);
           }
@@ -66,14 +63,30 @@ export const useAuthStore = defineStore('auth', {
 
         this.stores = Array.isArray(data) ? data : [data];
 
-        // Logic Active Store (tetap sama)
-        const storeCookie = useCookie('selectedStoreId');
+        // [PERBAIKAN WAJIB]: Tambahkan opsi path: '/' agar cookie dibaca dari root
+        const cookieOptions = { path: '/', maxAge: 60 * 60 * 24 * 7 }; // Simpan 7 hari
+        const storeCookie = useCookie('selectedStoreId', cookieOptions);
+        
+        let foundStore = null;
+
+        // 1. Coba cari berdasarkan cookie yang tersimpan
         if (storeCookie.value) {
-          this.activeStore = this.flatStores.find((s: any) => s.uuid === storeCookie.value);
+          foundStore = this.flatStores.find((s: any) => s.uuid === storeCookie.value);
         }
-        if (!this.activeStore) {
-          this.activeStore = this.flatStores.find((s: any) => s.isActive) || this.flatStores[0];
+        
+        // 2. Jika tidak ketemu di cookie, cari yang ditandai isActive dari database
+        if (!foundStore) {
+          foundStore = this.flatStores.find((s: any) => s.isActive);
         }
+
+        // 3. Fallback terakhir: ambil toko pertama
+        if (!foundStore && this.flatStores.length > 0) {
+            foundStore = this.flatStores[0];
+        }
+
+        this.activeStore = foundStore;
+        
+        // Sinkronisasi ulang cookie agar path-nya benar ('/')
         if (this.activeStore) {
           storeCookie.value = this.activeStore.uuid;
         }
@@ -87,18 +100,34 @@ export const useAuthStore = defineStore('auth', {
 
     async switchStore(storeUuid: string) {
       const targetStore = this.flatStores.find((s: any) => s.uuid === storeUuid);
+      
       if (targetStore) {
         this.activeStore = targetStore;
-        const storeCookie = useCookie('selectedStoreId');
+        
+        // [PERBAIKAN WAJIB]: Simpan cookie dengan path '/' dan durasi panjang
+        const storeCookie = useCookie('selectedStoreId', { 
+            path: '/', 
+            maxAge: 60 * 60 * 24 * 7 // 7 Hari
+        });
+        
         storeCookie.value = storeUuid;
-        if (import.meta.client) window.location.reload();
+
+        // [PENTING] Hapus reload dari sini karena sudah ditangani di default.vue
+        // Biarkan default.vue yang menangani animasi loading lalu reload
       }
     },
 
     async saveStoreSettings(payload: any) {
       try {
         const response = await useApi('/store/save-setting', { method: 'POST', body: payload });
-        // Optimistic update logic...
+        
+        // Update local state setting agar langsung berubah tanpa refresh
+        if (this.activeStore && payload && Array.isArray(payload)) {
+             // Konversi array setting payload ke map/object di state jika perlu, 
+             // atau trigger fetchUserStores ulang untuk data terbaru
+             await this.fetchUserStores(); 
+        }
+        
         return response;
       } catch (error) {
         console.error('Gagal menyimpan pengaturan:', error);
@@ -116,7 +145,8 @@ export const useAuthStore = defineStore('auth', {
       this.stores = [];
       this.activeStore = null;
       this.isLoggedIn = false;
-      const storeCookie = useCookie('selectedStoreId');
+      // Hapus cookie dengan path yang sama persis
+      const storeCookie = useCookie('selectedStoreId', { path: '/' });
       storeCookie.value = null;
     }
   },
