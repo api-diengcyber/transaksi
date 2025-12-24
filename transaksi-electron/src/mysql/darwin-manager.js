@@ -95,6 +95,7 @@ class DarwinMySQLManager extends BaseMySQLManager {
             '--no-defaults',
             '--port=8889',
             `--datadir=${this.mysqlData}`,
+            `--basedir=${this.mysqlBaseDir}`,
             '--bind-address=127.0.0.1',
             '--lower-case-table-names=2',
             `--init-file=${this.initSqlPath}`
