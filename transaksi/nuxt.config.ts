@@ -2,9 +2,14 @@
 import Aura from '@primeuix/themes/aura';
 
 export default defineNuxtConfig({
-  compatibilityDate: '2024-11-01',
+  compatibilityDate: '2025-12-01',
   devtools: { enabled: false },
-  ssr: true,
+  ssr: false,
+  app: {
+    baseURL: '',
+    cdnURL: '',
+    buildAssetsDir: 'assets' // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
+  },
   router: {
     options: {
       hashMode: true
@@ -16,7 +21,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: 'http://localhost:3000'
+      apiBase: 'http://127.0.0.1:3000'
     }
   },
   modules: [
@@ -40,5 +45,12 @@ export default defineNuxtConfig({
   css: [
     'primeicons/primeicons.css',
     '~/assets/css/base.css'
-  ]
+  ],
+  experimental: {
+    payloadExtraction: false 
+  },
+  nitro: {
+    preset: 'static',
+    serveStatic: true
+  }
 })

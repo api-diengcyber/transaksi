@@ -15,7 +15,7 @@ DIR_ELECTRON="./transaksi-electron"
 DEST_API="$DIR_ELECTRON/resources/api"
 DEST_WEB="$DIR_ELECTRON/resources/app"
 
-echo "🚀 MEMULAI PROSES DEPLOYMENT KE .EXE"
+echo "🚀 MEMULAI PROSES DEPLOYMENT KE APP/EXE"
 echo "======================================="
 
 # ---------------------------------------------
@@ -25,7 +25,7 @@ echo "🧹 [1/5] Membersihkan folder resources lama..."
 rm -rf "$DEST_API"
 rm -rf "$DEST_WEB"
 # Hapus build lama di electron jika ada
-rm -rf "$DIR_ELECTRON/dist_exe"
+rm -rf "$DIR_ELECTRON/dist"
 
 mkdir -p "$DEST_API"
 mkdir -p "$DEST_WEB"
@@ -109,14 +109,14 @@ else
 fi
 
 # ---------------------------------------------
-# TAHAP 5: PACKAGING (Bikin EXE)
+# TAHAP 5: PACKAGING (Bikin APP/EXE)
 # ---------------------------------------------
-echo "📦 [5/5] Membungkus menjadi .EXE ..."
+echo "📦 [5/5] Membungkus menjadi APP/EXE ..."
 # Menjalankan perintah build yang ada di package.json electron
 npm run build
 
 echo ""
 echo "======================================="
 echo "✅ SUKSES! APLIKASI TELAH JADI."
-echo "📂 Lokasi File EXE: $DIR_ELECTRON/dist_exe"
+echo "📂 Lokasi File APP/EXE: $DIR_ELECTRON/dist"
 echo "======================================="

@@ -38,7 +38,7 @@ async function bootstrap() {
       },
       'access-token',
     )
-    .addServer('http://localhost:3000', 'Local Dev')
+    .addServer('http://127.0.0.1:3000', 'Local Dev')
     .addServer('https://api.example.com', 'Production')
     .setContact(
       'Transaksi App Support',

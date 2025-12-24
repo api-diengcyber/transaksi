@@ -7,8 +7,8 @@ Aplikasi desktop *all-in-one* yang menggabungkan kekuatan **NestJS** (Backend), 
 Aplikasi ini menggunakan arsitektur *Monolithic Desktop Bundle*:
 
 1.  **Frontend**: Nuxt 3 (Mode SPA + Hash Router).
-2.  **Backend**: NestJS (API berjalan di `localhost:3000` di background).
-3.  **Database**: MariaDB Portable (Berjalan di `localhost:3307` tanpa perlu instalasi XAMPP/MySQL di komputer user).
+2.  **Backend**: NestJS (API berjalan di `127.0.0.1:3000` di background).
+3.  **Database**: MariaDB Portable (Berjalan di `localhost:8889` tanpa perlu instalasi XAMPP/MySQL di komputer user).
 4.  **Wrapper**: Electron (Menjalankan `mysqld.exe`, `node.exe` untuk API, dan merender UI).
 
 ## 📂 Struktur Folder

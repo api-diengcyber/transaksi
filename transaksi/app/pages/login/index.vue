@@ -21,8 +21,7 @@ const handleLogin = async () => {
     loading.value = true;
     try {
         const response = await authService.login({ username: form.username, password: form.password });
-        const tokenCookie = useCookie('accessToken', { maxAge: 60 * 60 * 24 * 7, path: '/' });
-        tokenCookie.value = response.accessToken;
+        localStorage.setItem('accessToken', response.accessToken);
 
         toast.add({ severity: 'success', summary: 'Login Berhasil', detail: 'Mengalihkan ke dashboard...', life: 2000 });
         setTimeout(() => router.push('/'), 800);
@@ -116,6 +115,23 @@ const handleLogin = async () => {
                         Belum punya akun? <span class="text-surface-600 dark:text-surface-300 font-medium">Hubungi Administrator</span>
                     </p>
                 </div>
+
+                <div class="mt-8 text-center">
+                    <p class="text-sm text-surface-500 dark:text-surface-400">
+                        Belum punya akun atau toko? 
+                        <NuxtLink 
+                            to="/install" 
+                            class="text-primary-600 dark:text-primary-400 font-bold hover:underline cursor-pointer ml-1"
+                        >
+                            Buat Toko Sekarang
+                        </NuxtLink>
+                    </p>
+                    <p class="text-xs text-surface-400 mt-4 italic">
+                        Atau hubungi administrator untuk akses akun.
+                    </p>
+                </div>
+
+                
             </div>
         </div>
     </div>

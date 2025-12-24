@@ -15,12 +15,9 @@ export const useAuthService = () => {
             body: credentials
         }) as any;
 
-        // 2. Simpan Token ke Cookie
-        const accessToken = useCookie('accessToken', { maxAge: 900, path: '/' });
-        accessToken.value = response.accessToken;
-        
-        const refreshToken = useCookie('refreshToken', { maxAge: 60 * 60 * 24 * 7, path: '/' });
-        refreshToken.value = response.refreshToken;
+        // 2. Simpan Token ke Local
+        localStorage.setItem('accessToken', response.accessToken);
+        localStorage.setItem('refreshToken', response.refreshToken);
 
         await new Promise(resolve => setTimeout(resolve, 400));
 
@@ -36,21 +33,21 @@ export const useAuthService = () => {
     };
 
     const logout = async () => {
-        const accessToken = useCookie('accessToken');
+        const accessToken = localStorage.getItem('accessToken') ?? null;
         try {
-            if (accessToken.value) {
+            if (accessToken) {
                 await $fetch(`${API_BASE}/auth/logout`, {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${accessToken.value}` }
+                    headers: { Authorization: `Bearer ${accessToken}` }
                 });
             }
         } catch (e) {
             console.error('Logout error', e);
         } finally {
             // Bersihkan Cookie
-            const refreshToken = useCookie('refreshToken');
-            accessToken.value = null;
-            refreshToken.value = null;
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('selectedStoreId');
             
             // Bersihkan Pinia
             authStore.clearAuthData(); 

@@ -1,5 +1,9 @@
 
 /node_modules
-/resources/api/
-/resources/app/
+/resources/api/*
+/resources/app/*
 /dist_exe
+/dist
+/bin/mysql/darwin/*
+/bin/mysql/linux/*
+/bin/mysql/win32/*

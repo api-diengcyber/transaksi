@@ -2,9 +2,13 @@
   "name": "transaksi-app",
   "version": "1.0.0",
   "main": "src/main.js",
+  "description": "Aplikasi Kasir Elektron + NestJS + Nuxt",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "kill-port": "^2.0.0"
@@ -17,23 +21,14 @@
     "appId": "com.transaksi.app",
     "productName": "Aplikasi Transaksi",
     "directories": {
-      "output": "dist_exe"
+      "output": "dist"
     },
+    "asar": true,
     "files": [
       "src/**/*",
-      "resources/**/*",
       "package.json",
-      "bin/**/*"
+      "node_modules/**/*"
     ],
-    "mac": {
-      "identity": null,
-      "target": "dmg",
-      "icon": "resources/icon.icns"
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "resources/icon.ico"
-    },
     "extraResources": [
       {
         "from": "resources/",
@@ -45,6 +40,23 @@
         "to": "bin/",
         "filter": ["**/*"]
       }
-    ]
+    ],
+    "mac": {
+      "identity": null,
+      "target": "dmg",
+      "icon": "resources/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

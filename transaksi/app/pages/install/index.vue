@@ -36,14 +36,12 @@ const form = reactive({
 
 // --- LOGIC ---
 
-// [BARU] Handler File Upload
 const handleFileSelect = (event) => {
     const file = event.files ? event.files[0] : null;
     
     if (file && file.type.startsWith('image/')) {
         logoFile.value = file;
         
-        // Buat URL preview
         if (logoPreviewUrl.value) {
             URL.revokeObjectURL(logoPreviewUrl.value);
         }
@@ -64,9 +62,7 @@ const handleRemoveLogo = () => {
     logoPreviewUrl.value = null;
 };
 
-
 const nextStep = () => {
-    // Step 0: Validasi Toko
     if (activeStep.value === 0) {
         if (!form.name) {
             toast.add({ severity: 'error', summary: 'Error', detail: 'Nama Toko wajib diisi', life: 3000 });
@@ -81,7 +77,6 @@ const prevStep = () => {
 };
 
 const handleInstall = async () => {
-    // Validasi Step 1: User
     if (!form.username || !form.password) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Username & Password wajib diisi', life: 3000 });
         return;
@@ -93,31 +88,30 @@ const handleInstall = async () => {
 
     loading.value = true;
     try {
-        // Construct Payload GABUNGAN
         const payload = {
-            // Data Toko
             name: form.name,
             address: form.storeAddress,
             phone: form.storePhone,
-            
-            // Data User
             username: form.username,
             password: form.password,
             email: form.email,
         };
 
-        // Panggil SINGLE ENDPOINT (dengan file logo)
         const response = await installService.installStore(payload, logoFile.value);
 
-        // Response: { tokens, store, user }
-        // Simpan Token
-        const tokenCookie = useCookie('accessToken', { maxAge: 60 * 60 * 24 * 7, path: '/' });
-        const refreshTokenCookie = useCookie('refreshToken', { maxAge: 60 * 60 * 24 * 7, path: '/' });
-        tokenCookie.value = response.tokens.accessToken;
-        refreshTokenCookie.value = response.tokens.refreshToken;
+        // --- PERUBAHAN: Simpan Token ke localStorage ---
+        if (process.client) {
+            localStorage.setItem('accessToken', response.tokens.accessToken);
+            localStorage.setItem('refreshToken', response.tokens.refreshToken);
+            
+            // Simpan juga Store ID jika ada di response agar langsung sinkron
+            if (response.store?.uuid) {
+                localStorage.setItem('selectedStoreId', response.store.uuid);
+            }
+        }
 
         toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Sistem siap digunakan!', life: 3000 });
-        activeStep.value++; // Ke Step 3
+        activeStep.value++; 
 
     } catch (e) {
         console.error(e);
@@ -128,15 +122,14 @@ const handleInstall = async () => {
     }
 };
 
-// --- FUNGSI BARU UNTUK SELESAI DAN KE HALAMAN LOGIN ---
 const goToLogin = () => {
-    // 1. Hapus semua token yang tersimpan saat instalasi
-    const accessToken = useCookie('accessToken');
-    const refreshToken = useCookie('refreshToken');
-    accessToken.value = null;
-    refreshToken.value = null;
+    // --- PERUBAHAN: Bersihkan localStorage saat pindah ke Login ---
+    if (process.client) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('selectedStoreId');
+    }
 
-    // 2. Arahkan ke halaman login
     router.push('/login');
 };
 </script>
@@ -167,8 +160,6 @@ const goToLogin = () => {
                     <p class="text-sm text-surface-500 mb-6">Identitas toko untuk struk & laporan.</p>
 
                     <div class="flex flex-col gap-4">
-                        
-                        <!-- [BARU] UPLOAD LOGO -->
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Logo Toko (Opsional)</label>
                             <div class="flex items-center gap-4 p-3 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-400">
@@ -196,13 +187,11 @@ const goToLogin = () => {
                             </div>
                         </div>
 
-                        <!-- Nama Toko -->
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Nama Toko <span class="text-red-500">*</span></label>
                             <InputText v-model="form.name" class="w-full" placeholder="Contoh: Toko Maju Jaya" autofocus />
                         </div>
                         
-                        <!-- Alamat & Telepon -->
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Alamat</label>
                             <Textarea v-model="form.storeAddress" rows="2" class="w-full" placeholder="Alamat lengkap..." />
