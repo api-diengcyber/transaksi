@@ -12,9 +12,19 @@ export const useCourierService = () => {
     return await useApi(`/courier/${id}`, { method: 'DELETE' });
   };
 
-  return { 
-    getCouriers, 
-    createCourier, 
-    deleteCourier
+  const getRoutes = async () => {
+    return await useApi('/courier/routes', { method: 'GET' });
+  };
+
+  const createRoute = async (body: any) => {
+    return await useApi('/courier/routes', { method: 'POST', body });
+  };
+
+  return {
+    getCouriers,
+    createCourier,
+    deleteCourier,
+    getRoutes,
+    createRoute
   };
 };

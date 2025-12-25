@@ -6,7 +6,7 @@ import { GetStore } from '../../common/decorators/get-store.decorator';
 @Controller('courier')
 @UseGuards(AtGuard)
 export class CourierController {
-  constructor(private readonly courierService: CourierService) {}
+  constructor(private readonly courierService: CourierService) { }
 
   @Get()
   findAll(@GetStore() storeId: string) {
@@ -21,5 +21,20 @@ export class CourierController {
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.courierService.delete(id);
+  }
+
+  @UseGuards(AtGuard)
+  @Get('routes')
+  findRoutes(@GetStore() storeId: string) {
+    return this.courierService.findRoutes(storeId);
+  }
+
+  @UseGuards(AtGuard)
+  @Post('routes')
+  createRoute(
+    @Body() body: { courier_uuid: string; origin: string; destination: string; price: number },
+    @GetStore() storeId: string,
+  ) {
+    return this.courierService.createRoute(body, storeId);
   }
 }
