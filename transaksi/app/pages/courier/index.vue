@@ -45,6 +45,9 @@
                 <button @click="confirmDelete(item.uuid)" class="text-red-500 hover:bg-red-50 px-3 py-1 rounded">Hapus</button>
               </td>
             </tr>
+            <tr v-if="couriers.length === 0">
+              <td colspan="2" class="px-6 py-8 text-center text-gray-400">Belum ada data ekspedisi.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -108,14 +111,40 @@
           </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
-          <button @click="showRouteModal = false" class="px-4 py-2 text-gray-600">Batal</button>
+          <button @click="showRouteModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
           <button @click="handleCreateRoute" class="bg-primary text-white px-4 py-2 rounded-lg" :disabled="!routeForm.courier_uuid">Simpan</button>
         </div>
       </div>
     </div>
 
     <div v-if="showCourierModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-       </div>
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <h2 class="text-xl font-bold mb-4">Tambah Ekspedisi Baru</h2>
+        <div class="flex flex-col gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Nama Ekspedisi</label>
+            <input 
+              v-model="newCourierName" 
+              type="text" 
+              class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-primary/50" 
+              placeholder="Contoh: JNE, J&T, Sicepat" 
+              @keyup.enter="handleCreate"
+            />
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button @click="showCourierModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
+          <button 
+            @click="handleCreate" 
+            class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50" 
+            :disabled="!newCourierName"
+          >
+            Simpan
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -135,8 +164,8 @@ const routeForm = ref({ courier_uuid: '', origin: '', destination: '', price: 0 
 const loadData = async () => {
   try {
     const [cData, rData] = await Promise.all([getCouriers(), getRoutes()]);
-    couriers.value = cData;
-    routes.value = rData;
+    couriers.value = cData || [];
+    routes.value = rData || [];
   } catch (err) { console.error(err); }
 };
 
@@ -149,17 +178,16 @@ const handleCreateRoute = async () => {
   } catch (err) { alert("Gagal simpan rute"); }
 };
 
-
-// Handle Create
+// Handle Create Courier (DIPERBAIKI)
 const handleCreate = async () => {
   if (!newCourierName.value) return;
   try {
     await createCourier(newCourierName.value);
     newCourierName.value = ''; // Reset form
-    showRouteModal.value = false; // Tutup modal
+    showCourierModal.value = false; // Fix: Tutup modal kurir, bukan modal rute
     await loadData(); // Refresh data
   } catch (error) {
-    alert("Gagal menambah data");
+    alert("Gagal menambah data ekspedisi");
   }
 };
 

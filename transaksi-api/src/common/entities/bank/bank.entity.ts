@@ -1,7 +1,7 @@
 import { Column, Entity, PrimaryColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('banks')
-export class Bank {
+export class BankEntity {
   @PrimaryColumn('varchar', { length: 60 })
   uuid: string;
 

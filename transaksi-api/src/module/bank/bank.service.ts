@@ -1,14 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
-import { Bank } from '../../common/entities/bank/bank.entity';
+import { BankEntity } from '../../common/entities/bank/bank.entity';
 import { CreateBankDto } from './dto/create-bank.dto';
 
 @Injectable()
 export class BankService {
   constructor(
     @Inject('BANK_REPOSITORY')
-    private bankRepository: Repository<Bank>,
-  ) {}
+    private bankRepository: Repository<BankEntity>,
+  ) { }
 
   async findAll(storeId: string) {
     return this.bankRepository.find({
