@@ -12,6 +12,7 @@ import { ProductionModule } from '../production/production.module';
 import { ProductionFlowModule } from '../production_flow/production_flow.module';
 import { CourierModule } from '../courier/courier.module';
 import { BankModule } from '../bank/bank.module';
+import { AccountModule } from '../account/account.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BankModule } from '../bank/bank.module';
     ProductionFlowModule,
     CourierModule,
     BankModule,
+    AccountModule,
   ],
   controllers: [],
   providers: [],

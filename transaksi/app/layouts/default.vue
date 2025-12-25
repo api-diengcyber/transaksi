@@ -101,6 +101,7 @@ const items = ref([
             { label: 'Member', icon: 'pi pi-users', route: '/member' },
             { label: 'Supplier', icon: 'pi pi-users', route: '/supplier' },
             { label: 'User/Pegawai', icon: 'pi pi-users', route: '/user' },
+            { label: 'Akun', icon: 'pi pi-list', route: '/account' },
         ]
     },
     { 

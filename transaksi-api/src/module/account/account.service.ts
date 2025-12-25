@@ -1,6 +1,8 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { AccountEntity, AccountCategory } from 'src/common/entities/account/account.entity';
+import { CreateAccountDto } from './dto/create-account.dto';
+import { UpdateAccountDto } from './dto/update-account.dto';
 
 const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
@@ -11,25 +13,18 @@ export class AccountService {
         private accountRepository: Repository<AccountEntity>,
     ) { }
 
-    // Dipanggil saat Install Store / Create Branch
+    // --- FITUR YANG SUDAH ADA ---
+
     async initializeStandardAccounts(storeUuid: string) {
+        // ... (kode inisialisasi yang sudah ada biarkan saja) ...
         const defaults = [
-            // ASSETS (Harta) - Kepala 1
             { code: '1-1001', name: 'Kas Tunai', category: AccountCategory.ASSET, normal: 'DEBIT' },
             { code: '1-1002', name: 'Bank BCA', category: AccountCategory.ASSET, normal: 'DEBIT' },
             { code: '1-2001', name: 'Piutang Usaha', category: AccountCategory.ASSET, normal: 'DEBIT' },
-
-            // LIABILITIES (Kewajiban) - Kepala 2
             { code: '2-1001', name: 'Hutang Usaha', category: AccountCategory.LIABILITY, normal: 'CREDIT' },
-
-            // EQUITY (Modal) - Kepala 3
             { code: '3-1001', name: 'Modal Pemilik', category: AccountCategory.EQUITY, normal: 'CREDIT' },
-
-            // REVENUE (Pendapatan) - Kepala 4
             { code: '4-1001', name: 'Pendapatan Penjualan', category: AccountCategory.REVENUE, normal: 'CREDIT' },
             { code: '4-2001', name: 'Pendapatan Lain-lain', category: AccountCategory.REVENUE, normal: 'CREDIT' },
-
-            // EXPENSE (Beban) - Kepala 6
             { code: '6-1001', name: 'Beban Pembelian Stok', category: AccountCategory.EXPENSE, normal: 'DEBIT' },
             { code: '6-2001', name: 'Beban Operasional', category: AccountCategory.EXPENSE, normal: 'DEBIT' },
             { code: '6-2002', name: 'Beban Gaji', category: AccountCategory.EXPENSE, normal: 'DEBIT' },
@@ -53,5 +48,64 @@ export class AccountService {
             where: { storeUuid },
             order: { code: 'ASC' }
         });
+    }
+
+    // --- TAMBAHAN FITUR BARU (CRUD) ---
+
+    // 1. Tambah Akun Baru
+    async create(storeUuid: string, dto: CreateAccountDto) {
+        // Cek apakah kode akun sudah ada di toko ini
+        const exist = await this.accountRepository.findOne({
+            where: { storeUuid, code: dto.code }
+        });
+        if (exist) throw new BadRequestException(`Kode akun ${dto.code} sudah digunakan.`);
+
+        const newAccount = this.accountRepository.create({
+            uuid: `${storeUuid}-ACC-${generateLocalUuid()}-${dto.code}`,
+            storeUuid,
+            ...dto,
+            isSystem: false // Akun buatan user bukan sistem
+        });
+
+        return this.accountRepository.save(newAccount);
+    }
+
+    // 2. Ambil satu akun
+    async findOne(storeUuid: string, uuid: string) {
+        const account = await this.accountRepository.findOne({
+            where: { storeUuid, uuid }
+        });
+        if (!account) throw new NotFoundException('Akun tidak ditemukan');
+        return account;
+    }
+
+    // 3. Update Akun
+    async update(storeUuid: string, uuid: string, dto: UpdateAccountDto) {
+        const account = await this.findOne(storeUuid, uuid);
+
+        // Jika kode diganti, cek duplikat lagi
+        if (dto.code && dto.code !== account.code) {
+            const exist = await this.accountRepository.findOne({
+                where: { storeUuid, code: dto.code }
+            });
+            if (exist) throw new BadRequestException(`Kode akun ${dto.code} sudah digunakan.`);
+        }
+
+        Object.assign(account, dto);
+        return this.accountRepository.save(account);
+    }
+
+    // 4. Hapus Akun
+    async remove(storeUuid: string, uuid: string) {
+        const account = await this.findOne(storeUuid, uuid);
+
+        if (account.isSystem) {
+            throw new BadRequestException('Akun bawaan sistem tidak dapat dihapus.');
+        }
+
+        // Opsional: Cek apakah akun sudah dipakai di Jurnal sebelum dihapus
+        // logic ini butuh inject JournalRepository, bisa ditambahkan nanti.
+
+        return this.accountRepository.remove(account);
     }
 }
