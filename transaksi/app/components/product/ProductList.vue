@@ -1,60 +1,60 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'; // Pastikan 'computed' di-import
+import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 const emit = defineEmits(['create', 'edit']);
 
-// Pastikan useProductService, useToast, dan useConfirm tersedia di konteks ini
+// Pastikan service-service ini di-inject/import dengan benar di project Anda
 const productService = useProductService();
 const toast = useToast();
 const confirm = useConfirm();
 
-// --- STATE UNTUK LAZY LOADING & SEARCH ---
+// --- STATE ---
 const products = ref([]);
 const loading = ref(true);
 const totalRecords = ref(0);
-const searchInput = ref(''); // Input teks pencarian
+const searchInput = ref('');
 
-// Parameter state untuk API call (page, limit, search term)
+// Parameter untuk Lazy Loading (Server-side pagination)
 const lazyParams = ref({
     page: 1,
     limit: 10, 
     search: null,
 });
-// --- END STATE ---
 
-// HITUNG OFFSET (INDEX BARIS PERTAMA)
-// Ini adalah properti PENTING yang memberitahu PrimeVue di halaman mana kita berada.
+// Menghitung offset baris pertama untuk paginator PrimeVue
 const firstRow = computed(() => (lazyParams.value.page - 1) * lazyParams.value.limit);
 
 // --- ACTIONS ---
+
 const fetchProducts = async () => {
     loading.value = true;
     try {
         const { page, limit, search } = lazyParams.value;
 
-        // Memanggil API dengan parameter pagination dan search
+        // Panggil API
         const response = await productService.getAllProducts(page, limit, search);
         
+        // Transformasi data agar struktur lebih flat & aman dibaca template
         products.value = (response.data || []).map(p => ({
             ...p,
             prices: p.prices || p.price || [],
             units: p.units || [],
             shelve: p.shelve || [],
-            // Mapping Kategori dari relasi productCategory
-            categories: (p.productCategory || []).map(pc => pc.category?.name).filter(Boolean)
+            // Ambil nama kategori saja untuk display
+            categoryNames: (p.productCategory || []).map(pc => pc.category?.name).filter(Boolean)
         }));
 
-        console.log('Fetched Products:', products.value);
-
-        // Mengambil metadata dari respons backend
-        // *** PASTIKAN response.meta.total memiliki nilai > 10 agar paginasi muncul ***
-        totalRecords.value = response.meta.total;
-        lazyParams.value.page = response.meta.page; // Update halaman dari meta response
+        // Set total records untuk pagination
+        totalRecords.value = response.meta?.total || response.meta?.total_data || 0;
+        
+        // Sinkronisasi halaman jika API mengembalikan halaman yang berbeda
+        if(response.meta?.page) lazyParams.value.page = response.meta.page;
 
     } catch (err) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data produk', life: 3000 });
+        console.error(err);
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memuat data produk.', life: 3000 });
     } finally {
         loading.value = false;
     }
@@ -62,27 +62,28 @@ const fetchProducts = async () => {
 
 const confirmDelete = (prod) => {
     confirm.require({
-        message: `Hapus produk ${prod.name}?`,
+        message: `Apakah Anda yakin ingin menghapus produk "${prod.name}"? Tindakan ini tidak dapat dibatalkan.`,
         header: 'Konfirmasi Hapus',
         icon: 'pi pi-exclamation-triangle',
         acceptClass: 'p-button-danger',
+        acceptIcon: 'pi pi-trash',
+        rejectIcon: 'pi pi-times',
         accept: async () => {
             try {
                 await productService.deleteProduct(prod.uuid);
-                toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Produk dihapus', life: 3000 });
-                // Setelah delete, panggil ulang data
-                refresh(); 
+                toast.add({ severity: 'success', summary: 'Terhapus', detail: `Produk ${prod.name} berhasil dihapus.`, life: 3000 });
+                refresh(); // Refresh tabel
             } catch (err) {
-                toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus', life: 3000 });
+                toast.add({ severity: 'error', summary: 'Gagal', detail: err.message || 'Gagal menghapus produk.', life: 3000 });
             }
         }
     });
 };
 
-// --- HANDLER PAGINASI (DIPANGGIL OLEH DATATABLE) ---
+// --- EVENTS ---
+
 const onPage = (event) => {
-    // event.first adalah offset (index baris pertama), event.rows adalah limit
-    const newPage = (event.first / event.rows) + 1; 
+    const newPage = (event.first / event.rows) + 1;
     const newLimit = event.rows;
     
     if (newPage !== lazyParams.value.page || newLimit !== lazyParams.value.limit) {
@@ -92,71 +93,85 @@ const onPage = (event) => {
     }
 };
 
-// --- HANDLER PENCARIAN (DIPANGGIL OLEH TOMBOL/ENTER) ---
 const onSearch = () => {
-    // Reset halaman ke 1 ketika melakukan pencarian baru
-    lazyParams.value.page = 1;
+    lazyParams.value.page = 1; // Reset ke halaman 1 saat search
     lazyParams.value.search = searchInput.value;
     fetchProducts();
-}
+};
+
+const refresh = () => {
+    // Reset pencarian & kembali ke awal
+    searchInput.value = '';
+    lazyParams.value = { page: 1, limit: 10, search: null };
+    fetchProducts();
+};
 
 // --- HELPERS ---
+
 const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
-const getPricesForUnit = (all, uid) => all.filter(p => p.unitUuid === uid);
-const getCurrentStock = (unit) => {
-    return unit.currentStock || 0; 
+
+// Filter harga berdasarkan unit tertentu
+const getPricesForUnit = (allPrices, unitUuid) => {
+    if (!allPrices) return [];
+    return allPrices.filter(p => p.unitUuid === unitUuid);
 };
+
+// Ambil list nama rak unik
 const getUniqueShelves = (product) => {
     if (!product.shelve || !Array.isArray(product.shelve)) return [];
-    const names = product.shelve
-        .map(ps => ps.shelve?.name)
-        .filter(name => !!name);    
+    const names = product.shelve.map(ps => ps.shelve?.name).filter(Boolean);    
     return [...new Set(names)];
+};
+
+// Warna badge stok
+const getStockSeverity = (stock) => {
+    if (stock <= 0) return 'danger';    // Merah (Habis)
+    if (stock < 10) return 'warning';   // Kuning (Menipis)
+    return 'success';                   // Hijau (Aman)
 };
 
 onMounted(() => {
     fetchProducts();
 });
 
-const refresh = () => {
-    // Reset semua state saat refresh dipanggil dari luar
-    searchInput.value = '';
-    lazyParams.value.page = 1;
-    lazyParams.value.search = null;
-    lazyParams.value.limit = 10;
-    fetchProducts();
-};
-
 defineExpose({ refresh });
 </script>
 
----
-
 <template>
-    <div class="animate-fade-in">
-        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-            <div class="relative flex gap-2 w-full md:w-96">
+    <div class="animate-fade-in flex flex-col h-full">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4">
+            <div class="relative w-full md:w-96 group">
+                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-primary-500 transition-colors z-10"></i>
                 <InputText 
                     v-model="searchInput" 
-                    placeholder="Cari Nama Produk / Barcode..." 
-                    class="w-full pl-3 !rounded-full shadow-sm"
+                    placeholder="Cari Produk / Scan Barcode..." 
+                    class="w-full pl-10 !rounded-full shadow-sm hover:shadow-md focus:shadow-md transition-all border-surface-200 dark:border-surface-700 dark:bg-surface-800"
                     @keydown.enter="onSearch"
                 />
-                <Button 
-                    icon="pi pi-search" 
-                    @click="onSearch" 
-                    severity="secondary" 
-                    rounded
-                    aria-label="Cari"
-                />
             </div>
-            <div class="flex gap-2">
-                <Button label="Export" icon="pi pi-file-excel" severity="success" text />
-                <Button label="Tambah Produk" icon="pi pi-plus" severity="primary" @click="emit('create')" raised rounded />
+
+            <div class="flex gap-2 self-end md:self-auto">
+                <Button 
+                    label="Refresh" 
+                    icon="pi pi-refresh" 
+                    severity="secondary" 
+                    text 
+                    rounded 
+                    @click="refresh" 
+                    v-tooltip.bottom="'Muat ulang data'"
+                />
+                <Button 
+                    label="Produk Baru" 
+                    icon="pi pi-plus" 
+                    severity="primary" 
+                    rounded 
+                    raised
+                    @click="emit('create')" 
+                />
             </div>
         </div>
 
-        <div class="card bg-surface-0 dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden">
+        <div class="card bg-surface-0 dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 shadow-sm overflow-hidden flex-1 flex flex-col">
              
              <DataTable 
                 :value="products" 
@@ -165,117 +180,112 @@ defineExpose({ refresh });
                 paginator 
                 :rows="lazyParams.limit"
                 :totalRecords="totalRecords" 
-                :first="firstRow" @page="onPage" 
+                :first="firstRow" 
+                @page="onPage" 
                 dataKey="uuid" 
                 stripedRows 
-                tableStyle="min-width: 90rem" 
-                class="text-sm datatable-dark-safe dark:text-surface-100" 
-                :rowsPerPageOptions="[10, 25, 50]"
-                currentPageReportTemplate="Menampilkan {first} hingga {last} dari {totalRecords} produk"
+                tableStyle="min-width: 80rem" 
+                class="text-sm flex-1"
+                :rowsPerPageOptions="[5, 10, 25, 50]"
                 paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+                currentPageReportTemplate="{first} - {last} dari {totalRecords}"
              >
                 <template #empty>
-                    <div class="flex flex-col items-center justify-center py-12 text-surface-400 dark:text-surface-600">
-                        <i class="pi pi-inbox text-5xl mb-3 opacity-30"></i>
-                        <p>Belum ada data produk.</p>
+                    <div class="flex flex-col items-center justify-center py-16 text-surface-400 dark:text-surface-500">
+                        <div class="bg-surface-50 dark:bg-surface-800 p-6 rounded-full mb-4">
+                            <i class="pi pi-box text-4xl opacity-50"></i>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-1">Tidak ada produk ditemukan</h3>
+                        <p class="text-sm opacity-80">Coba kata kunci lain atau tambahkan produk baru.</p>
+                        <Button label="Buat Produk Baru" icon="pi pi-plus" text class="mt-4" @click="emit('create')" />
                     </div>
                 </template>
 
-                <Column field="name" header="Informasi Produk" sortable style="width: 18%" class="align-top">
-                    <template #body="slotProps">
+                <template #loading>
+                    <div class="py-12 flex justify-center">
+                        <i class="pi pi-spin pi-spinner text-4xl text-primary-500"></i>
+                    </div>
+                </template>
+
+                <Column header="Produk" style="width: 25%" class="align-top">
+                    <template #body="{ data }">
                         <div class="flex gap-3 py-2">
-                            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/30 flex items-center justify-center text-blue-600 font-bold text-xl shadow-sm border border-blue-100 dark:border-blue-800 shrink-0">
-                                {{ slotProps.data.name.charAt(0).toUpperCase() }}
+                            <div class="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border border-primary-100 dark:border-primary-800 flex items-center justify-center font-bold text-lg shrink-0 select-none">
+                                {{ data.name.charAt(0).toUpperCase() }}
                             </div>
-                            <div>
-                                <div class="font-bold text-base text-surface-800 dark:text-surface-100 leading-tight mb-1">{{ slotProps.data.name }}</div>
-                                <div class="text-xs text-surface-500 dark:text-surface-400 bg-surface-100 dark:bg-surface-400 px-2 py-0.5 rounded-full inline-block">{{ slotProps.data.units.length }} Varian Satuan</div>
+                            
+                            <div class="flex flex-col gap-1">
+                                <span class="font-bold text-surface-800 dark:text-surface-100 text-[15px] leading-snug">
+                                    {{ data.name }}
+                                </span>
+                                
+                                <div class="flex flex-wrap gap-1">
+                                    <template v-if="data.categoryNames.length">
+                                        <Tag v-for="cat in data.categoryNames" :key="cat" :value="cat" severity="info" class="!text-[10px] !px-1.5 !py-0.5 !font-medium bg-blue-50 text-blue-700 border border-blue-100" />
+                                    </template>
+                                    <span v-else class="text-xs text-surface-400 italic">Tanpa Kategori</span>
+                                </div>
                             </div>
                         </div>
                     </template>
                 </Column>
 
-                <Column header="Kategori" style="width: 10%" class="align-top">
-                    <template #body="slotProps">
-                        <div class="flex flex-wrap gap-1.5 py-2">
-                            <template v-if="slotProps.data.categories && slotProps.data.categories.length > 0">
-                                <span v-for="cat in slotProps.data.categories" :key="cat" 
-                                        class="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-100 dark:border-orange-800 rounded text-[11px] font-medium">
-                                    <i class="pi pi-tag text-[9px]"></i>
-                                    {{ cat }}
-                                </span>
+                <Column header="Lokasi Rak" style="width: 15%" class="align-top">
+                    <template #body="{ data }">
+                         <div class="flex flex-wrap gap-1.5 py-2">
+                            <template v-if="getUniqueShelves(data).length > 0">
+                                <Tag v-for="shelf in getUniqueShelves(data)" :key="shelf" icon="pi pi-map-marker" :value="shelf" severity="warning" class="!text-[10px] !bg-orange-50 !text-orange-700 !border-orange-100" />
                             </template>
-                            <span v-else class="text-xs text-surface-400 dark:text-surface-600 italic flex items-center gap-1 mt-1">
-                                <i class="pi pi-minus text-[10px]"></i> Non-Kategori
+                            <span v-else class="text-xs text-surface-400 flex items-center gap-1 opacity-70">
+                                <i class="pi pi-minus-circle"></i> -
                             </span>
                         </div>
                     </template>
                 </Column>
 
-                <Column header="Lokasi Rak" style="width: 12%" class="align-top">
-                    <template #body="slotProps">
-                        <div class="flex flex-wrap gap-1.5 py-2">
-                            <template v-if="getUniqueShelves(slotProps.data).length > 0">
-                                <span v-for="shelfName in getUniqueShelves(slotProps.data)" :key="shelfName" 
-                                        class="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-800 rounded text-[11px] font-medium">
-                                    <i class="pi pi-map-marker text-[9px]"></i>
-                                    {{ shelfName }}
-                                </span>
-                            </template>
-                            <span v-else class="text-xs text-surface-400 dark:text-surface-600 italic flex items-center gap-1 mt-1">
-                                <i class="pi pi-minus-circle text-[10px]"></i> Belum diatur
-                            </span>
-                        </div>
-                    </template>
-                </Column>
-
-                <Column header="Detail Varian (Satuan, Harga, Stok)" style="width: 50%" class="align-top">
-                    <template #body="slotProps">
-                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 py-2">
-                            <div v-for="u in slotProps.data.units" :key="u.uuid" 
-                                 class="relative bg-surface-50 dark:bg-surface-400 border rounded-lg p-3 flex flex-col gap-2 hover:shadow-md transition-all" 
-                                 :class="u.uuid === slotProps.data.defaultUnitUuid 
-                                    ? 'border-blue-300 ring-1 ring-blue-100 dark:ring-blue-900' 
-                                    : 'border-surface-200 dark:border-surface-700'">
-                                
-                                <div v-if="u.uuid === slotProps.data.defaultUnitUuid" class="absolute top-0 right-0">
-                                    <span class="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-bl-lg rounded-tr-lg font-bold shadow-sm dark:bg-blue-800">DEFAULT</span>
+                <Column header="Daftar Satuan & Harga" style="width: 50%" class="align-top">
+                    <template #body="{ data }">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 py-1">
+                            <div 
+                                v-for="unit in data.units" 
+                                :key="unit.uuid" 
+                                class="relative bg-surface-0 dark:bg-surface-800 border rounded-xl p-3 hover:shadow-md transition-all group"
+                                :class="unit.uuid === data.defaultUnitUuid ? 'border-primary-300 ring-1 ring-primary-100 dark:ring-primary-900/50' : 'border-surface-200 dark:border-surface-700'"
+                            >
+                                <div v-if="unit.uuid === data.defaultUnitUuid" class="absolute -top-2 -right-1">
+                                    <span class="bg-primary-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-sm uppercase tracking-wider">Utama</span>
                                 </div>
-                                
-                                <div class="flex justify-between items-center">
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-bold text-sm text-surface-800 dark:text-surface-100">{{ u.unitName }}</span>
-                                        <span class="text-[10px] text-surface-500 dark:text-surface-400 bg-surface-0 dark:bg-surface-400 px-1 rounded border border-surface-200 dark:border-surface-700">x{{ u.unitMultiplier }}</span>
+
+                                <div class="flex justify-between items-start mb-2 border-b border-surface-100 dark:border-surface-700 pb-2">
+                                    <div class="flex flex-col">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-bold text-sm text-surface-800 dark:text-surface-100">{{ unit.unitName }}</span>
+                                            <span class="text-[10px] text-surface-500 bg-surface-100 dark:bg-surface-700 px-1.5 rounded border border-surface-200 dark:border-surface-600">x{{ unit.unitMultiplier }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-1 mt-0.5 text-[11px] text-surface-500 font-mono">
+                                            <i class="pi pi-barcode text-[9px]"></i>
+                                            <span>{{ unit.barcode || '-' }}</span>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-surface-500 dark:text-surface-400 uppercase font-bold">Stok:</span>
-                                        <span class="text-sm font-black" :class="getCurrentStock(u) > 0 ? 'text-surface-800 dark:text-surface-200' : 'text-red-500 dark:text-red-400'">
-                                            {{ getCurrentStock(u) }}
-                                        </span>
+                                    
+                                    <div class="text-right">
+                                        <Tag :value="unit.currentStock || 0" :severity="getStockSeverity(unit.currentStock)" class="!text-[11px] !font-black !px-2" />
+                                        <div class="text-[9px] text-surface-400 mt-0.5">Stok Saat Ini</div>
                                     </div>
                                 </div>
-                                
-                                <div class="flex items-center gap-2 text-xs text-surface-600 dark:text-surface-300 bg-surface-0 dark:bg-surface-400 p-1.5 rounded border border-dashed border-surface-200 dark:border-surface-700">
-                                    <i class="pi pi-barcode text-surface-400 dark:text-surface-500"></i>
-                                    <span class="font-mono truncate" :title="u.barcode || 'Tanpa Barcode'">{{ u.barcode || 'Tanpa Barcode' }}</span>
-                                </div>
-                                
-                                <div class="space-y-1 pt-1 border-t border-surface-200 dark:border-surface-700">
-                                    <div v-for="p in getPricesForUnit(slotProps.data.prices, u.uuid)" :key="p.uuid" class="flex flex-col border-b last:border-b-0 border-surface-100 dark:border-surface-800 pb-1 pt-0.5">
-                                        
-                                        <div class="flex justify-between text-xs items-center">
-                                            <span class="text-surface-600 dark:text-surface-300 font-semibold">{{ p.name || 'Umum' }}</span>
-                                            <span class="font-bold text-primary-600 dark:text-primary-400 text-sm">{{ formatCurrency(p.price) }}</span>
-                                        </div>
 
-                                        <div v-if="p.minWholesaleQty > 0" class="flex justify-between text-[10px] text-green-600 dark:text-green-400 items-center">
-                                            <span class="font-medium flex items-center gap-1">
-                                                <i class="pi pi-box"></i> Min. Grosir:
-                                            </span>
-                                            <span class="font-bold">
-                                                {{ p.minWholesaleQty }} {{ u.unitName }}
+                                <div class="space-y-1.5">
+                                    <div v-for="price in getPricesForUnit(data.prices, unit.uuid)" :key="price.uuid" class="flex justify-between items-center text-xs">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-surface-600 dark:text-surface-300 font-medium">{{ price.name || 'Umum' }}</span>
+                                            <span v-if="price.minWholesaleQty > 0" class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100" v-tooltip.top="'Minimal pembelian grosir'">
+                                                Min: {{ price.minWholesaleQty }}
                                             </span>
                                         </div>
+                                        <span class="font-bold text-surface-900 dark:text-surface-100 font-mono">{{ formatCurrency(price.price) }}</span>
+                                    </div>
+                                    <div v-if="getPricesForUnit(data.prices, unit.uuid).length === 0" class="text-[10px] text-red-400 italic">
+                                        Harga belum diatur
                                     </div>
                                 </div>
                             </div>
@@ -283,90 +293,92 @@ defineExpose({ refresh });
                     </template>
                 </Column>
 
-                <Column header="" style="width: 10%" class="align-top">
-                    <template #body="slotProps">
-                        <div class="flex flex-col gap-2 py-2 justify-center h-full">
-                            <Button icon="pi pi-pencil" text rounded severity="info" v-tooltip.left="'Edit'" @click="emit('edit', slotProps.data)" />
-                            <Button icon="pi pi-trash" text rounded severity="danger" v-tooltip.left="'Hapus'" @click="confirmDelete(slotProps.data)" />
+                <Column style="width: 10%" class="align-top">
+                    <template #body="{ data }">
+                        <div class="flex flex-col gap-2 py-2 items-center">
+                            <Button 
+                                icon="pi pi-pencil" 
+                                severity="secondary" 
+                                text 
+                                rounded 
+                                size="small"
+                                v-tooltip.left="'Edit Produk'" 
+                                @click="emit('edit', data)" 
+                                class="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                            />
+                            <Button 
+                                icon="pi pi-trash" 
+                                severity="secondary" 
+                                text 
+                                rounded 
+                                size="small"
+                                v-tooltip.left="'Hapus Produk'" 
+                                @click="confirmDelete(data)" 
+                                class="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                            />
                         </div>
                     </template>
                 </Column>
-            </DataTable>
-             </div>
+
+             </DataTable>
+        </div>
     </div>
 </template>
 
----
-
 <style scoped>
-/* Mengatasi latar belakang tabel utama */
+/* Styling Custom untuk DataTable agar lebih bersih */
 :deep(.p-datatable) {
-    /* Menjadikan latar belakang transparent dan menghapus latar belakang PrimeVue */
     background: transparent !important;
-    border-color: transparent !important;
 }
 
-/* Mengatasi latar belakang header */
+/* Header Tabel */
 :deep(.p-datatable-thead > tr > th) {
-    background-color: var(--p-surface-50) !important; /* Light Mode default */
-    color: var(--p-text-color) !important;
-    border-color: var(--p-surface-200) !important;
+    background-color: var(--p-surface-50) !important;
+    color: var(--p-surface-600) !important;
+    font-weight: 700 !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--p-surface-200) !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
 }
 
-/* Memaksa warna header di Dark Mode */
+/* Dark Mode Header */
 .dark :deep(.p-datatable-thead > tr > th) {
     background-color: var(--p-surface-900) !important;
-    color: var(--p-surface-100) !important;
-    border-color: var(--p-surface-800) !important;
+    color: var(--p-surface-400) !important;
+    border-bottom-color: var(--p-surface-800) !important;
 }
 
-/* Mengatasi latar belakang baris */
+/* Body Cell Alignment */
+:deep(.p-datatable-tbody > tr > td) {
+    vertical-align: top;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--p-surface-100);
+}
+.dark :deep(.p-datatable-tbody > tr > td) {
+    border-bottom-color: var(--p-surface-800);
+}
+
+/* Row Hover Effect */
 :deep(.p-datatable-tbody > tr) {
-    background-color: var(--p-surface-0) !important; /* Light Mode default (putih) */
-    color: var(--p-text-color) !important;
-    border-color: var(--p-surface-200) !important;
-}
-
-/* Mengatasi warna baris ganjil/genap (striped rows) */
-:deep(.p-datatable-tbody .p-row-even) {
-    background-color: var(--p-surface-50) !important; /* Light Mode striped */
-}
-
-/* Memaksa warna baris di Dark Mode */
-.dark :deep(.p-datatable-tbody > tr) {
-    background-color: var(--p-surface-900) !important; /* Default Dark Row */
-}
-.dark :deep(.p-datatable-tbody .p-row-even) {
-    background-color: var(--p-surface-950) !important; /* Striped Dark Row (Genap) */
-}
-/* Memastikan warna baris ganjil di Dark Mode juga benar */
-.dark :deep(.p-datatable-tbody .p-row-odd) {
-     background-color: var(--p-surface-900) !important; /* Striped Dark Row (Ganjil) */
-}
-
-/* HOVER ROW FIX */
-.dark :deep(.p-datatable-tbody > tr:hover) {
-    background-color: var(--p-surface-800) !important; 
+    transition: background-color 0.2s;
 }
 :deep(.p-datatable-tbody > tr:hover) {
-    background-color: var(--p-surface-100) !important; 
+    background-color: var(--p-surface-50) !important;
+}
+.dark :deep(.p-datatable-tbody > tr:hover) {
+    background-color: var(--p-surface-800) !important;
 }
 
-/* Penyesuaian agar isi tabel rata atas */
-:deep(.p-datatable .p-datatable-tbody > tr > td) {
-    vertical-align: top;
-    border-color: var(--p-surface-200); /* Border Light */
-}
-.dark :deep(.p-datatable .p-datatable-tbody > tr > td) {
-    border-color: var(--p-surface-800); /* Border Dark */
-}
-
-
+/* Animasi Masuk */
 .animate-fade-in {
-    animation: fadeIn 0.3s ease-in-out;
+    animation: fadeIn 0.4s ease-out;
 }
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 </style>

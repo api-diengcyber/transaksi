@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, reactive, watch } from 'vue';
+import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useAuthStore } from '~/stores/auth.store';
 import { useStoreService } from '~/composables/useStoreService';
@@ -15,6 +15,8 @@ const courierService = useCourierService();
 const bankService = useBankService();
 const authStore = useAuthStore();
 const toast = useToast();
+
+const emit = defineEmits(['open-create-modal']);
 
 // --- STATE UTAMA ---
 const products = ref([]); 
@@ -112,26 +114,30 @@ const monthlyInstallment = computed(() => {
 // --- VALIDASI ---
 const canCheckout = computed(() => {
     if (cart.value.length === 0) return false;
+    if (processing.value) return false;
     
-    // 1. Inter Store
-    if (isInterStore.value) return grandTotal.value > 0 && !!selectedTargetStore.value;
+    // 1. Inter Store (Kirim ke Toko Lain)
+    if (isInterStore.value) {
+        return grandTotal.value > 0 && !!selectedTargetStore.value;
+    }
 
     // 2. Ekspedisi
     if (shipping.enable && (!shipping.courierUuid || !shipping.routeUuid)) return false;
 
-    // 3. Bank Check
+    // 3. Bank Check (Jika metode sub adalah Transfer)
     if (isBankPayment.value && !payment.bankUuid) return false;
 
-    // 4. Metode Bayar
+    // 4. Metode Bayar Utama
     if (payment.mainMethod === 'TUNAI') {
-        return amountPaid.value >= grandTotal.value;
+        // Harus bayar lunas atau lebih
+        return amountPaid.value >= (grandTotal.value - 100); // Toleransi 100 perak
     } 
     else if (payment.mainMethod === 'KREDIT') {
-        // Customer Name jadi OPTIONAL, hanya wajib Jatuh Tempo
+        // Customer Name & Jatuh Tempo Wajib
+        // (Customer name opsional jika 'Umum', tapi untuk kredit sebaiknya diisi. Disini kita izinkan kosong akan jadi 'Umum')
         return grandTotal.value > 0 && !!payment.dueDate;
     }
     else if (payment.mainMethod === 'CICILAN') {
-        // Customer Name jadi OPTIONAL
         return grandTotal.value > 0 && !!payment.dueDate && payment.installmentCount > 0;
     }
     
@@ -160,13 +166,13 @@ watch(() => payment.mainMethod, (val) => {
     
     if (val === 'TUNAI') {
         payment.amount = grandTotal.value;
-        // JANGAN reset customerName agar user tidak perlu ketik ulang
     } else {
         payment.amount = 0; 
-        payment.dueDate = new Date();
+        payment.dueDate = new Date(); // Default jatuh tempo hari ini (bisa diubah user)
     }
 });
 
+// Reset Ekspedisi
 watch(() => shipping.courierUuid, (newVal) => {
     shipping.routeUuid = null; shipping.cost = 0;
     if (newVal) availableRoutes.value = allRoutes.value.filter(r => r.courier?.uuid === newVal || r.courier_uuid === newVal);
@@ -177,6 +183,7 @@ watch(() => shipping.routeUuid, (newVal) => {
     shipping.cost = route ? Number(route.price) : 0;
 });
 
+// Auto update nominal bayar jika metode TUNAI dan total berubah
 watch(grandTotal, (newVal) => {
     if (payment.mainMethod === 'TUNAI' && !isInterStore.value) {
         payment.amount = newVal;
@@ -194,6 +201,7 @@ const processCheckout = async () => {
         if (payment.mainMethod === 'TUNAI') {
             finalPaymentMethod = payment.subMethod === 'BANK' ? 'TRANSFER' : 'CASH';
         } else {
+            // Untuk Kredit/Cicilan, jurnalnya tetap tercatat, metodenya CREDIT
             finalPaymentMethod = 'CREDIT';
         }
 
@@ -229,6 +237,7 @@ const processCheckout = async () => {
                 : ''
         };
 
+        // Flatten items untuk backend
         cart.value.forEach((item, index) => {
             payload[`product_uuid#${index}`] = item.productUuid;
             payload[`unit_uuid#${index}`] = item.unitUuid;
@@ -247,7 +256,7 @@ const processCheckout = async () => {
         toast.add({ severity: 'success', summary: 'Sukses', detail: msg, life: 3000 });
         
         resetState();
-        await loadProducts();
+        await loadProducts(); // Refresh stok
 
     } catch (e) {
         console.error("Checkout Error:", e);
@@ -274,78 +283,161 @@ const resetState = () => {
     shipping.courierUuid = null;
     shipping.routeUuid = null;
     shipping.cost = 0;
+    
     showPaymentModal.value = false; 
-    currentPage.value = 1;
+    // Tidak reset halaman agar kasir tetap di posisi produk terakhir
 };
 
-// ... Functions lainnya (Sama) ...
+// --- CART FUNCTIONS ---
 const openPaymentModal = () => {
     if (cart.value.length === 0) {
         toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk terlebih dahulu', life: 2000 });
         return;
     }
-    if (payment.mainMethod === 'TUNAI' && !payment.amount) {
+    // Set default amount jika Tunai
+    if (payment.mainMethod === 'TUNAI') {
         payment.amount = grandTotal.value;
     }
     showPaymentModal.value = true;
 };
+
 const addToCart = (product, specificUnit = null) => {
     let selectedUnit = specificUnit;
-    if (!selectedUnit) selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
-    if (!selectedUnit) { toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk error (tanpa satuan)', life: 3000 }); return; }
+    
+    // Fallback unit
+    if (!selectedUnit) {
+        selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
+    }
+    
+    if (!selectedUnit) { 
+        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk error (tanpa satuan)', life: 3000 }); 
+        return; 
+    }
+
+    // Cari harga untuk unit ini
     const unitPrices = product.prices.filter(p => p.unitUuid === selectedUnit.uuid);
     const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
     const finalPrice = defaultPriceObj ? defaultPriceObj.price : 0;
+
     const existingItem = cart.value.find(item => item.productUuid === product.uuid && item.unitUuid === selectedUnit.uuid);
-    if (existingItem) existingItem.qty++;
-    else cart.value.push({ productUuid: product.uuid, name: product.name, unitUuid: selectedUnit.uuid, unitName: selectedUnit.unitName, price: finalPrice, qty: 1, selectedPriceObj: defaultPriceObj, availableUnits: product.units, allPrices: product.prices });
-    setTimeout(() => { const cartEl = document.getElementById('cart-items-container'); if(cartEl) cartEl.scrollTop = cartEl.scrollHeight; }, 50);
+    
+    if (existingItem) {
+        existingItem.qty++;
+    } else {
+        cart.value.push({ 
+            productUuid: product.uuid, 
+            name: product.name, 
+            unitUuid: selectedUnit.uuid, 
+            unitName: selectedUnit.unitName, 
+            price: finalPrice, 
+            qty: 1, 
+            selectedPriceObj: defaultPriceObj, 
+            availableUnits: product.units, 
+            allPrices: product.prices 
+        });
+    }
+
+    // Auto scroll ke bawah keranjang
+    nextTick(() => { 
+        const cartEl = document.getElementById('cart-items-container'); 
+        if(cartEl) cartEl.scrollTop = cartEl.scrollHeight; 
+    });
 };
+
 const changeCartItemUnit = (item, newUnitUuid) => {
     const newUnit = item.availableUnits.find(u => u.uuid === newUnitUuid);
     if (!newUnit) return;
+    
     item.unitUuid = newUnit.uuid;
     item.unitName = newUnit.unitName;
+    
+    // Update harga sesuai unit baru
     const unitPrices = item.allPrices.filter(p => p.unitUuid === newUnit.uuid);
     const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
+    
     item.selectedPriceObj = defaultPriceObj;
     item.price = defaultPriceObj ? defaultPriceObj.price : 0;
 };
-const changeCartItemPriceTier = (item, newPriceObj) => { item.selectedPriceObj = newPriceObj; item.price = newPriceObj.price; };
+
+const changeCartItemPriceTier = (item, newPriceObj) => { 
+    if(newPriceObj) {
+        item.selectedPriceObj = newPriceObj; 
+        item.price = newPriceObj.price; 
+    }
+};
+
 const removeFromCart = (index) => { cart.value.splice(index, 1); };
-const onSearchKeydown = (event) => { if (event.key === 'Enter') { currentPage.value = 1; loadProducts(); } };
-const fetchCategories = async () => { try { const data = await categoryService.getAllCategorys(); categories.value = data || []; } catch (e) { console.error(e); } };
+
+// --- FILTERING & LOADING ---
+const onSearchKeydown = (event) => { 
+    if (event.key === 'Enter') { 
+        currentPage.value = 1; 
+        loadProducts(); 
+    } 
+};
+
+const fetchCategories = async () => { 
+    try { 
+        const data = await categoryService.getAllCategorys(); 
+        categories.value = data || []; 
+    } catch (e) { console.error(e); } 
+};
+
 const loadProducts = async () => {
-    loading.value = true; products.value = []; 
+    loading.value = true; 
+    products.value = []; 
     try {
         const response = await productService.getAllProducts(currentPage.value, limit, searchQuery.value.toLowerCase().trim(), selectedCategoryUuids.value.join(','));
         const productsArray = response?.data || [];
-        products.value = productsArray.map(p => ({ ...p, prices: p.prices || p.price || [], units: p.units || [], categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) }));
+        
+        products.value = productsArray.map(p => ({ 
+            ...p, 
+            prices: p.prices || p.price || [], 
+            units: p.units || [], 
+            categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) 
+        }));
+        
         totalPages.value = response?.meta?.totalPage || response?.meta?.total_page || 1;
         totalProducts.value = response?.meta?.total || 0;
+        
         handleLocalFiltering(true); 
     } catch (error) { console.error(error); } finally { loading.value = false; }
 };
-const changePage = (newPage) => { if (newPage >= 1 && newPage <= totalPages.value) { currentPage.value = newPage; loadProducts(); } };
+
+const changePage = (newPage) => { 
+    if (newPage >= 1 && newPage <= totalPages.value) { 
+        currentPage.value = newPage; 
+        loadProducts(); 
+    } 
+};
+
 const handleLocalFiltering = (isApiLoad = false) => {
     let result = products.value;
     const query = searchQuery.value.toLowerCase().trim();
+    
     if (query) {
+        // Coba cari barcode exact match
         const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
         if (exactProduct) {
             const matchedUnit = exactProduct.units.find(u => u.barcode === query);
             addToCart(exactProduct, matchedUnit);
             searchQuery.value = ''; 
             toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
-            filteredProducts.value = products.value; return; 
+            // Setelah add, jangan ubah filtered list agar user tetap melihat list sebelumnya
+            return; 
         }
-        if (!isApiLoad) result = result.filter(p => p.name.toLowerCase().includes(query) || p.units.some(u => u.barcode?.includes(query)));
+        
+        if (!isApiLoad) {
+            result = result.filter(p => p.name.toLowerCase().includes(query) || p.units.some(u => u.barcode?.includes(query)));
+        }
     }
     filteredProducts.value = result;
 };
+
 watch(selectedCategoryUuids, () => { currentPage.value = 1; loadProducts(); });
 watch(searchQuery, () => { handleLocalFiltering(); });
 
+// --- UTILS ---
 const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 const getDefaultUnitStock = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.currentStock || 0; 
 const getDefaultUnitName = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.unitName;
@@ -356,40 +448,110 @@ const getStockColor = (qty) => {
 };
 
 onMounted(async () => {
-    await fetchCategories(); await loadProducts();
-    try { const stores = await storeService.getMyStore(); const currentStoreUuid = authStore.user?.activeStoreUuid || authStore.activeStore.uuid; if (stores && Array.isArray(stores)) myStores.value = stores.filter(s => s.uuid !== currentStoreUuid); } catch (e) { console.error(e); }
-    try { const cData = await courierService.getCouriers(); couriers.value = cData || []; const rData = await courierService.getRoutes(); allRoutes.value = rData || []; } catch (e) { console.error(e); }
-    try { const bData = await bankService.getAllBanks(); banks.value = bData || []; } catch (e) { console.error(e); }
-    window.addEventListener('keydown', (e) => { if (e.key === 'F2') document.getElementById('search-input-sale')?.focus(); });
+    await fetchCategories(); 
+    await loadProducts();
+    
+    try { 
+        const stores = await storeService.getMyStore(); 
+        const currentStoreUuid = authStore.user?.activeStoreUuid || authStore.activeStore.uuid; 
+        if (stores && Array.isArray(stores)) {
+            myStores.value = stores.filter(s => s.uuid !== currentStoreUuid); 
+        }
+    } catch (e) { console.error(e); }
+    
+    try { 
+        const cData = await courierService.getCouriers(); couriers.value = cData || []; 
+        const rData = await courierService.getRoutes(); allRoutes.value = rData || []; 
+    } catch (e) { console.error(e); }
+    
+    try { 
+        const bData = await bankService.getAllBanks(); banks.value = bData || []; 
+    } catch (e) { console.error(e); }
+    
+    window.addEventListener('keydown', (e) => { 
+        if (e.key === 'F2') {
+            e.preventDefault();
+            document.getElementById('search-input-sale')?.focus(); 
+        }
+    });
 });
+
 const refreshData = async () => { currentPage.value = 1; await loadProducts(); }
 defineExpose({ refreshData });
 </script>
 
 <template>
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
+        
         <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
             <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
                 <div class="w-full md:w-48">
-                    <MultiSelect v-model="selectedCategoryUuids" :options="categories" optionLabel="name" optionValue="uuid" placeholder="Filter Kategori" display="chip" :maxSelectedLabels="1" class="w-full !h-10 !text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 " :pt="{ label: { class: '!py-2 !px-3' } }"><template #option="slotProps"><div class="flex align-items-center text-surface-700 dark:text-surface-200"><i class="pi pi-tag mr-2 text-orange-500 text-xs"></i><span class="text-sm">{{ slotProps.option.name }}</span></div></template></MultiSelect>
+                    <MultiSelect 
+                        v-model="selectedCategoryUuids" 
+                        :options="categories" 
+                        optionLabel="name" 
+                        optionValue="uuid" 
+                        placeholder="Filter Kategori" 
+                        display="chip" 
+                        :maxSelectedLabels="1" 
+                        class="w-full !h-10 !text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700" 
+                        :pt="{ label: { class: '!py-2 !px-3' } }"
+                    >
+                        <template #option="slotProps">
+                            <div class="flex align-items-center text-surface-700 dark:text-surface-200">
+                                <i class="pi pi-tag mr-2 text-orange-500 text-xs"></i>
+                                <span class="text-sm">{{ slotProps.option.name }}</span>
+                            </div>
+                        </template>
+                    </MultiSelect>
                 </div>
                 <div class="relative flex-1">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 text-sm"></i>
-                    <input id="search-input-sale" v-model="searchQuery" type="text" placeholder="Cari Produk / Scan Barcode... (F2)" class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm h-10" @keydown="onSearchKeydown" @input="handleLocalFiltering" autocomplete="off" />
+                    <input 
+                        id="search-input-sale" 
+                        v-model="searchQuery" 
+                        type="text" 
+                        placeholder="Cari Produk / Scan Barcode... (F2)" 
+                        class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm h-10" 
+                        @keydown="onSearchKeydown" 
+                        @input="handleLocalFiltering" 
+                        autocomplete="off" 
+                    />
                 </div>
-                <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Produk Baru'" @click="$emit('open-create-modal')" />
+                <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Produk Baru'" @click="emit('open-create-modal')" />
             </div>
+
             <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin flex flex-col">
                 <div v-if="loading" class="flex-1 flex justify-center items-center"><ProgressSpinner style="width: 40px; height: 40px" /></div>
+                
                 <div v-else-if="filteredProducts.length > 0" class="flex-1">
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                        <div v-for="prod in filteredProducts" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-3 cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none flex flex-col justify-between h-28">
-                            <div><div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">{{ prod.name }}</div><div class="flex gap-1 mt-1"><span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span><span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">{{ getDefaultUnitName(prod) }}</span></div></div>
-                            <div class="flex justify-between items-end mt-2"><span class="text-[9px] text-surface-400 truncate max-w-[50%]">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span><span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span></div>
+                        <div 
+                            v-for="prod in filteredProducts" 
+                            :key="prod.uuid" 
+                            @click="addToCart(prod)" 
+                            class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-3 cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none flex flex-col justify-between h-28"
+                        >
+                            <div>
+                                <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">{{ prod.name }}</div>
+                                <div class="flex gap-1 mt-1">
+                                    <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span>
+                                    <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">{{ getDefaultUnitName(prod) }}</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-end mt-2">
+                                <span class="text-[9px] text-surface-400 truncate max-w-[50%]">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
+                                <span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div v-else class="flex-1 flex flex-col items-center justify-center text-surface-400 dark:text-surface-600 gap-2 opacity-60"><i class="pi pi-box text-4xl"></i><span class="text-xs">Produk tidak ditemukan</span></div>
+                
+                <div v-else class="flex-1 flex flex-col items-center justify-center text-surface-400 dark:text-surface-600 gap-2 opacity-60">
+                    <i class="pi pi-box text-4xl"></i>
+                    <span class="text-xs">Produk tidak ditemukan</span>
+                </div>
+
                 <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-400 z-10">
                     <Button icon="pi pi-chevron-left" label="Sebelumnya" size="small" text :disabled="currentPage === 1" @click="changePage(currentPage - 1)" class="!text-xs" />
                     <span class="text-xs font-medium text-surface-600 dark:text-surface-400">Halaman <span class="font-bold text-primary-600">{{ currentPage }}</span> dari {{ totalPages }} <span class="text-[10px] ml-1">({{ totalProducts }} total)</span></span>
@@ -400,13 +562,26 @@ defineExpose({ refreshData });
 
         <div class="w-full lg:w-[420px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
             <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-400/50 flex justify-between items-center">
-                <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div><span class="font-bold text-sm text-surface-700 dark:text-surface-200">Keranjang</span></div><Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div>
+                    <span class="font-bold text-sm text-surface-700 dark:text-surface-200">Keranjang</span>
+                </div>
+                <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
             </div>
+
             <div id="cart-items-container" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-400/30">
-                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3"><div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center"><i class="pi pi-shopping-cart text-2xl opacity-40"></i></div><p class="text-xs">Belum ada item</p></div>
+                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
+                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center"><i class="pi pi-shopping-cart text-2xl opacity-40"></i></div>
+                    <p class="text-xs">Belum ada item</p>
+                </div>
+                
                 <div v-for="(item, index) in cart" :key="index" class="group dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-2.5 hover:border-primary-300 dark:hover:border-primary-600 transition-all shadow-sm relative">
-                    <button class="absolute -top-2 -right-2 dark:bg-surface-900 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)"><i class="pi pi-times text-[10px] font-bold"></i></button>
+                    <button class="absolute -top-2 -right-2 dark:bg-surface-900 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
+                        <i class="pi pi-times text-[10px] font-bold"></i>
+                    </button>
+                    
                     <div class="mb-2 pr-4"><div class="text-sm font-bold text-surface-800 dark:text-surface-100 line-clamp-1" :title="item.name">{{ item.name }}</div></div>
+                    
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex flex-col gap-2 flex-1">
                              <div class="flex gap-2">
@@ -416,12 +591,17 @@ defineExpose({ refreshData });
                             <InputNumber v-model="item.price" mode="currency" currency="IDR" locale="id-ID" class="!h-7 w-full" inputClass="!text-xs !h-7 !py-0 !px-2 !font-mono !text-right !rounded-lg !bg-surface-50 dark:!bg-surface-700 !border-surface-200 dark:!border-surface-600 focus:!border-primary-500 focus:!ring-1" :min="0" @input="item.selectedPriceObj = null" />
                         </div>
                         <div class="flex flex-col items-end gap-1.5">
-                            <div class="flex items-center bg-surface-100 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-600 h-7"><button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"><i class="pi pi-minus text-[9px] font-bold"></i></button><input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" /><button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-r-lg transition text-primary-600" @click="item.qty++"><i class="pi pi-plus text-[9px] font-bold"></i></button></div>
+                            <div class="flex items-center bg-surface-100 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
+                                <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"><i class="pi pi-minus text-[9px] font-bold"></i></button>
+                                <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" />
+                                <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-r-lg transition text-primary-600" @click="item.qty++"><i class="pi pi-plus text-[9px] font-bold"></i></button>
+                            </div>
                             <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-400 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">{{ formatCurrency(item.price * item.qty) }}</div>
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="p-4 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
                 <div v-if="taxEnabled" class="space-y-1 border-b border-dashed border-surface-300 dark:border-surface-600 pb-2 mb-2">
                     <div class="flex justify-between items-center text-xs text-surface-500 dark:text-surface-400"><span>Subtotal</span><span>{{ formatCurrency(cartSubtotal) }}</span></div>
@@ -638,3 +818,21 @@ defineExpose({ refreshData });
         </div>
     </div>
 </template>
+
+<style scoped>
+/* Custom Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 20px;
+}
+.custom-tiny-dropdown :deep(.p-dropdown-label) {
+    padding: 0 0.5rem !important;
+}
+</style>

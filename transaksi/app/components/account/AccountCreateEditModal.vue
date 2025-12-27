@@ -1,3 +1,68 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+
+const props = defineProps<{
+  isOpen: boolean;
+  accountData?: any;
+}>();
+
+const emit = defineEmits(['close', 'refresh']);
+const { create, update } = useAccountService(); // Pastikan composable ini tersedia
+
+const isLoading = ref(false);
+const isEdit = ref(false);
+
+const form = ref({
+  code: '',
+  name: '',
+  category: 'ASSET',
+  normalBalance: 'DEBIT',
+});
+
+// Reset form saat modal dibuka
+watch(
+  () => props.isOpen,
+  (val) => {
+    if (val) {
+      if (props.accountData) {
+        isEdit.value = true;
+        // Copy object agar tidak merubah data asli di parent sebelum save
+        form.value = { ...props.accountData };
+      } else {
+        isEdit.value = false;
+        form.value = {
+          code: '',
+          name: '',
+          category: 'ASSET',
+          normalBalance: 'DEBIT',
+        };
+      }
+    }
+  }
+);
+
+const closeModal = () => {
+  emit('close');
+};
+
+const onSubmit = async () => {
+  try {
+    isLoading.value = true;
+    if (isEdit.value && props.accountData?.uuid) {
+      await update(props.accountData.uuid, form.value);
+    } else {
+      await create(form.value);
+    }
+    emit('refresh');
+    closeModal();
+  } catch (error: any) {
+    alert(error?.response?._data?.message || 'Terjadi kesalahan saat menyimpan');
+  } finally {
+    isLoading.value = false;
+  }
+};
+</script>
+
 <template>
   <TransitionRoot appear :show="isOpen" as="template">
     <Dialog as="div" @close="closeModal" class="relative z-50">
@@ -33,14 +98,17 @@
 
               <form @submit.prevent="onSubmit" class="space-y-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700">Kode Akun</label>
-                  <input
-                    v-model="form.code"
-                    type="text"
-                    required
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
-                    placeholder="Contoh: 1-1001"
-                  />
+                  <label class="block text-sm font-medium text-gray-700">Kode Akun (Alpha-Numeric)</label>
+                  <div class="relative mt-1 rounded-md shadow-sm">
+                    <input
+                      v-model="form.code"
+                      type="text"
+                      required
+                      class="block w-full rounded-md border-gray-300 pl-3 pr-10 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 font-mono"
+                      placeholder="Cth: 1-1001 atau A-001"
+                    />
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500">Gunakan format angka atau huruf untuk sub-level.</p>
                 </div>
 
                 <div>
@@ -103,67 +171,3 @@
     </Dialog>
   </TransitionRoot>
 </template>
-
-<script setup lang="ts">
-import { ref, watch } from 'vue';
-
-const props = defineProps<{
-  isOpen: boolean;
-  accountData?: any;
-}>();
-
-const emit = defineEmits(['close', 'refresh']);
-const { create, update } = useAccountService();
-
-const isLoading = ref(false);
-const isEdit = ref(false);
-
-const form = ref({
-  code: '',
-  name: '',
-  category: 'ASSET',
-  normalBalance: 'DEBIT',
-});
-
-// Reset form saat modal dibuka
-watch(
-  () => props.isOpen,
-  (val) => {
-    if (val) {
-      if (props.accountData) {
-        isEdit.value = true;
-        form.value = { ...props.accountData };
-      } else {
-        isEdit.value = false;
-        form.value = {
-          code: '',
-          name: '',
-          category: 'ASSET',
-          normalBalance: 'DEBIT',
-        };
-      }
-    }
-  }
-);
-
-const closeModal = () => {
-  emit('close');
-};
-
-const onSubmit = async () => {
-  try {
-    isLoading.value = true;
-    if (isEdit.value && props.accountData?.uuid) {
-      await update(props.accountData.uuid, form.value);
-    } else {
-      await create(form.value);
-    }
-    emit('refresh');
-    closeModal();
-  } catch (error: any) {
-    alert(error?.response?._data?.message || 'Terjadi kesalahan');
-  } finally {
-    isLoading.value = false;
-  }
-};
-</script>

@@ -101,7 +101,6 @@ const items = ref([
             { label: 'Member', icon: 'pi pi-users', route: '/member' },
             { label: 'Supplier', icon: 'pi pi-users', route: '/supplier' },
             { label: 'User/Pegawai', icon: 'pi pi-users', route: '/user' },
-            { label: 'Akun', icon: 'pi pi-list', route: '/account' },
         ]
     },
     { 
@@ -109,8 +108,12 @@ const items = ref([
         icon: 'pi pi-box',
         key: 'transaksi',
         items: [
-            { label: 'Transaksi', icon: 'pi pi-wallet', route: '/transaction' },
-            { label: 'Piutang / Hutang', icon: 'pi pi-money-bill', route: '/arap' },
+            { label: 'Penjualan', icon: 'pi pi-wallet', route: '/sale' },
+            { label: 'Pembelian', icon: 'pi pi-wallet', route: '/buy' },
+            { label: 'Retur barang', icon: 'pi pi-wallet', route: '/return' },
+            { label: 'Piutang', icon: 'pi pi-money-bill', route: '/ar' },
+            { label: 'Hutang', icon: 'pi pi-money-bill', route: '/ap' },
+            { label: 'Akun', icon: 'pi pi-list', route: '/account' },
             { label: 'Jurnal', icon: 'pi pi-book', route: '/arap' }, 
         ]
     },
@@ -119,8 +122,12 @@ const items = ref([
         icon: 'pi pi-chart-bar', 
         key: 'report',
         items: [
-             { label: 'Transaksi', icon: 'pi pi-chart-line', route: '/report/transaction' },
-             { label: 'Piutang / Hutang', icon: 'pi pi-chart-line', route: '/report/arap' },
+             { label: 'Analisa POS', icon: 'pi pi-chart-line', route: '/report/graph' },
+             { label: 'Penjualan', icon: 'pi pi-chart-line', route: '/report/sale' },
+             { label: 'Pembelian', icon: 'pi pi-chart-line', route: '/report/buy' },
+             { label: 'Retur barang', icon: 'pi pi-chart-line', route: '/report/return' },
+             { label: 'Piutang', icon: 'pi pi-chart-line', route: '/report/ar' },
+             { label: 'Hutang', icon: 'pi pi-chart-line', route: '/report/ap' },
              { label: 'Produk / Stok', icon: 'pi pi-chart-line', route: '/report/arap' },
              { label: 'Produksi', icon: 'pi pi-chart-line', route: '/report/arap' },
         ]
