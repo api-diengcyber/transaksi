@@ -89,47 +89,47 @@ const items = ref([
     { label: 'Dashboard', icon: 'pi pi-home', route: '/', key: 'dashboard' },
     { 
         label: 'Manajemen', 
-        icon: 'pi pi-briefcase',
+        icon: 'pi pi-briefcase', // Representasi bisnis/manajemen
         key: 'manajemen',
         items: [
-            { label: 'Produk', icon: 'pi pi-box', route: '/product' },
-            { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' },
-            { label: 'Produksi', icon: 'pi pi-building', route: '/production' },
-            { label: 'Stok/Gudang', icon: 'pi pi-warehouse', route: '/inventory' },
-            { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' },
-            { label: 'Bank & Rekening', icon: 'pi pi-money-bill', route: '/bank' },
-            { label: 'Member', icon: 'pi pi-users', route: '/member' },
-            { label: 'Supplier', icon: 'pi pi-users', route: '/supplier' },
-            { label: 'User/Pegawai', icon: 'pi pi-users', route: '/user' },
+            { label: 'Produk', icon: 'pi pi-box', route: '/product' }, // Box barang
+            { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, // Layout meja/grid
+            { label: 'Produksi', icon: 'pi pi-cog', route: '/production' }, // Gear/Proses produksi
+            { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, // Database stok
+            { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, // Truk pengiriman
+            { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, // Gedung bank/Institusi
+            { label: 'Member', icon: 'pi pi-user', route: '/member' }, // User personal
+            { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, // Buku alamat rekanan
+            { label: 'User/Pegawai', icon: 'pi pi-id-card', route: '/user' }, // Kartu identitas pegawai
         ]
     },
     { 
         label: 'Menu', 
-        icon: 'pi pi-box',
+        icon: 'pi pi-shopping-cart', // Icon transaksi umum
         key: 'transaksi',
         items: [
-            { label: 'Penjualan', icon: 'pi pi-wallet', route: '/sale' },
-            { label: 'Pembelian', icon: 'pi pi-wallet', route: '/buy' },
-            { label: 'Retur barang', icon: 'pi pi-wallet', route: '/return' },
-            { label: 'Piutang', icon: 'pi pi-money-bill', route: '/ar' },
-            { label: 'Hutang', icon: 'pi pi-money-bill', route: '/ap' },
-            { label: 'Akun', icon: 'pi pi-list', route: '/account' },
-            { label: 'Jurnal', icon: 'pi pi-book', route: '/arap' }, 
+            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/sale' }, // Keranjang belanja
+            { label: 'Pembelian', icon: 'pi pi-shopping-bag', route: '/buy' }, // Tas belanja (kulakan)
+            { label: 'Retur barang', icon: 'pi pi-refresh', route: '/return' }, // Panah putar balik
+            { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, // Panah masuk (uang masuk)
+            { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, // Panah keluar (uang keluar)
+            { label: 'Akun', icon: 'pi pi-tags', route: '/account' }, // Tag akun/kategori
+            { label: 'Jurnal', icon: 'pi pi-book', route: '/arap' }, // Buku pembukuan
         ]
     },
     { 
         label: 'Laporan', 
-        icon: 'pi pi-chart-bar', 
+        icon: 'pi pi-chart-bar', // Grafik batang umum
         key: 'report',
         items: [
-             { label: 'Analisa POS', icon: 'pi pi-chart-line', route: '/report/graph' },
-             { label: 'Penjualan', icon: 'pi pi-chart-line', route: '/report/sale' },
-             { label: 'Pembelian', icon: 'pi pi-chart-line', route: '/report/buy' },
-             { label: 'Retur barang', icon: 'pi pi-chart-line', route: '/report/return' },
-             { label: 'Piutang', icon: 'pi pi-chart-line', route: '/report/ar' },
-             { label: 'Hutang', icon: 'pi pi-chart-line', route: '/report/ap' },
-             { label: 'Produk / Stok', icon: 'pi pi-chart-line', route: '/report/arap' },
-             { label: 'Produksi', icon: 'pi pi-chart-line', route: '/report/arap' },
+             { label: 'Produk / Stok', icon: 'pi pi-file', route: '/report/arap' }, // File laporan umum
+             { label: 'Produksi', icon: 'pi pi-sliders-h', route: '/report/arap' }, // Slider kontrol produksi
+             { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph' }, // Diagram lingkaran analisa
+             { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale' }, // Persentase profit
+             { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy' }, // Dompet pengeluaran
+             { label: 'Retur barang', icon: 'pi pi-replay', route: '/report/return' }, // Replay history
+             { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar' }, // Data excel/angka
+             { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap' }, // Dokumen tagihan
         ]
     },
 ]);
@@ -400,7 +400,7 @@ const isRouteActive = (item) => {
                         </div>
                         <Button :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" text rounded severity="tertiary" class="!w-10 !h-10 text-white hover:bg-surface-0" @click="toggleDarkMode" />
                         <div class="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-surface-0 rounded-full transition-colors" @click="toggleProfile" aria-haspopup="true" aria-controls="profile_menu">
-                            <span class="hidden md:block text-sm text-white font-medium mr-1">Halo, {{ authStore.user?.username || 'User' }}</span>
+                            <span class="hidden md:block text-sm text-white hover:text-gray-900 font-medium mr-1">Halo, {{ authStore.user?.username || 'User' }}</span>
                             <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-surface-0 !text-primary-600 font-bold" shape="circle" />
                             <i class="pi pi-chevron-down text-primary-100 text-xs hidden sm:block"></i>
                         </div>

@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 import { AccountCategory } from 'src/common/entities/account/account.entity';
 
 export class CreateAccountDto {
@@ -11,6 +11,10 @@ export class CreateAccountDto {
     @IsString()
     @Length(1, 100)
     name: string;
+
+    @IsOptional()
+    @IsString()
+    parentUuid?: string;
 
     @IsNotEmpty()
     @IsEnum(AccountCategory)

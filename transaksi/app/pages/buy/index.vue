@@ -1,14 +1,17 @@
 <script setup>
-import { ref, computed, onMounted, reactive, watch } from 'vue';
+import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import { useAuthStore } from '~/stores/auth.store'; // Import Auth Store
 import ProductCreateModal from '~/components/product/ProductCreateModal.vue'; 
 
+// --- SERVICES ---
 const productService = useProductService();
 const journalService = useJournalService();
 const categoryService = useCategoryService(); 
+const authStore = useAuthStore(); // Init Store
 const toast = useToast();
 
-// --- STATE PAGINATION & PRODUCT ---
+// --- STATE UTAMA ---
 const products = ref([]);
 const filteredProducts = ref([]);
 const cart = ref([]);
@@ -16,17 +19,22 @@ const searchQuery = ref('');
 const loading = ref(true);
 const processing = ref(false);
 const showCreateModal = ref(false); 
+const showPurchaseModal = ref(false); // State untuk Modal Checkout
+
+// --- VIEW STATE (BARU) ---
+const viewMode = ref('grid'); // 'grid' | 'list'
+const gridColumns = ref(4);   // 3 | 4 | 5
 
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]); 
 
-// [PAGINASI] State
+// --- PAGINATION ---
 const currentPage = ref(1);
-const limit = 16; // Jumlah produk per halaman
+const limit = 16; 
 const totalPages = ref(1);
 const totalProducts = ref(0);
 
-// State khusus Pembelian
+// --- STATE TRANSAKSI ---
 const purchaseInfo = reactive({
     supplier: '',
     referenceNo: '',
@@ -36,29 +44,57 @@ const purchaseInfo = reactive({
 });
 
 // --- COMPUTED ---
-
 const grandTotal = computed(() => {
     return cart.value.reduce((total, item) => {
         return total + (item.buyPrice * item.qty);
     }, 0);
 });
 
+const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
+
 const isCreditBuy = computed(() => purchaseInfo.paymentMethod === 'CREDIT'); 
 
 const canCheckout = computed(() => {
     if (cart.value.length === 0 || grandTotal.value <= 0) return false;
+    // Validasi tambahan bisa ditaruh di sini
+    return true;
+});
+
+const canProcessTransaction = computed(() => {
+    // Validasi di dalam Modal
+    if (processing.value) return false;
     if (isCreditBuy.value && !purchaseInfo.dueDate) return false;
     return true;
 });
 
-const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
+// Helper Tanggal Header
+const currentDate = computed(() => {
+    return new Date().toLocaleDateString('id-ID', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+});
+
+// Helper Grid Class Dinamis
+const gridContainerClass = computed(() => {
+    if (viewMode.value === 'list') {
+        return 'flex flex-col gap-2';
+    }
+    // Mobile selalu 2 kolom, Desktop sesuai setting
+    if (gridColumns.value === 3) return 'grid grid-cols-2 md:grid-cols-3 gap-3';
+    if (gridColumns.value === 5) return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3';
+    // Default 4
+    return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3';
+});
 
 // --- ACTIONS ---
 
 const onSearchKeydown = (event) => {
     if (event.key === 'Enter') {
-        currentPage.value = 1; // Reset halaman ke 1 saat pencarian baru
-        loadProducts(); // Panggil API search
+        currentPage.value = 1;
+        loadProducts();
     }
 };
 
@@ -71,34 +107,18 @@ const fetchCategories = async () => {
     }
 };
 
-// [UPDATED] Load Products dengan Paginasi dan Filter Kategori/Search via API
 const loadProducts = async () => {
     loading.value = true;
-    products.value = []; // Reset tampilan saat loading
-
+    products.value = [];
     try {
         const currentQuery = searchQuery.value.toLowerCase().trim();
         const categoryUuids = selectedCategoryUuids.value.join(','); 
         
-        // Panggil API dengan parameter page, limit, query, dan categoryUuids
-        // ASUMSI: productService.getAllProducts(page, limit, query, categoryUuids)
-        const response = await productService.getAllProducts(
-            currentPage.value, 
-            limit, 
-            currentQuery, 
-            categoryUuids 
-        ); 
-        
-        // Cek struktur respons untuk mendapatkan data dan meta
+        const response = await productService.getAllProducts(currentPage.value, limit, currentQuery, categoryUuids); 
         const data = response?.data || response || []; 
         
-        // Ambil data paginasi dari meta
         totalPages.value = response?.meta?.totalPage || response?.meta?.total_page || 1;
         totalProducts.value = response?.meta?.total || 0;
-        
-        if (!Array.isArray(data)) {
-            throw new Error("Format data produk dari server tidak valid.");
-        }
         
         products.value = data.map(p => ({
             ...p,
@@ -107,28 +127,15 @@ const loadProducts = async () => {
             categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean)
         }));
         
-        handleSearch(true); // Panggil handleSearch setelah API load
-        
+        handleLocalFiltering(true);
     } catch (error) {
-        console.error("Gagal memuat produk dari API:", error); 
-        const errorDetail = error.message || 'Terjadi kesalahan jaringan atau server.';
-        
-        toast.add({ 
-            severity: 'error', 
-            summary: 'Error', 
-            detail: `Gagal memuat produk: ${errorDetail}`, 
-            life: 5000 
-        });
-        
-        products.value = []; 
-        filteredProducts.value = [];
-        
+        console.error("Gagal memuat produk:", error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data produk.', life: 3000 });
     } finally {
         loading.value = false;
     }
 };
 
-// [BARU] Fungsi Navigasi Halaman
 const changePage = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages.value) {
         currentPage.value = newPage;
@@ -136,27 +143,22 @@ const changePage = (newPage) => {
     }
 };
 
-
-// [UPDATED] handleSearch hanya untuk filter instant dan scan barcode
-const handleSearch = (isApiLoad = false) => {
+const handleLocalFiltering = (isApiLoad = false) => {
     let result = products.value;
     const query = searchQuery.value.toLowerCase().trim();
     
-    // Scan Barcode (Prioritas Tinggi)
     if (query) {
+        // Scan Barcode Logic
         const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
         if (exactProduct) {
             const matchedUnit = exactProduct.units.find(u => u.barcode === query);
             addToCart(exactProduct, matchedUnit);
             searchQuery.value = ''; 
-            toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name} ditambahkan`, life: 1500 });
-            // Tidak perlu memanggil loadProducts lagi, cukup reset filteredProducts
+            toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
             filteredProducts.value = products.value; 
             return; 
         }
 
-        // Filter Teks Lokal (Hanya untuk instant search di halaman yang sedang dimuat)
-        // Jika isApiLoad=true, pencarian teks sudah ditangani API (di onSearchKeydown)
         if (!isApiLoad) { 
             result = result.filter(p => 
                 p.name.toLowerCase().includes(query) || 
@@ -164,32 +166,21 @@ const handleSearch = (isApiLoad = false) => {
             );
         }
     }
-
     filteredProducts.value = result;
 };
 
-// Watchers
-watch(selectedCategoryUuids, () => {
-    currentPage.value = 1; // Reset ke halaman 1 saat kategori berubah
-    loadProducts();
-});
+// --- WATCHERS ---
+watch(selectedCategoryUuids, () => { currentPage.value = 1; loadProducts(); });
+watch(searchQuery, () => { handleLocalFiltering(false); });
 
-watch(searchQuery, () => {
-    // Saat mengetik, lakukan filtering instan lokal, bukan memanggil API (kecuali Enter)
-    handleSearch(false);
-});
+// --- CART LOGIC ---
 
-
-// Helper untuk mendapatkan Stok Unit Default
-const getDefaultUnitStock = (prod) => {
-    const defaultUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
-    return defaultUnit?.currentStock || 0; 
-};
-
-// Helper untuk mendapatkan Nama Unit Default
-const getDefaultUnitName = (prod) => {
-    const defaultUnit = prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0];
-    return defaultUnit?.unitName;
+const openPurchaseModal = () => {
+    if (cart.value.length === 0) {
+        toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk terlebih dahulu', life: 2000 });
+        return;
+    }
+    showPurchaseModal.value = true;
 };
 
 const addToCart = (product, specificUnit = null) => {
@@ -218,10 +209,10 @@ const addToCart = (product, specificUnit = null) => {
             availableUnits: product.units
         });
         
-        setTimeout(() => {
+        nextTick(() => {
             const cartEl = document.getElementById('cart-items-container-buy');
             if(cartEl) cartEl.scrollTop = cartEl.scrollHeight;
-        }, 50);
+        });
     }
 };
 
@@ -237,7 +228,7 @@ const removeFromCart = (index) => {
 };
 
 const onProductCreated = async (newProduct) => {
-    currentPage.value = 1; // Muat ulang halaman pertama
+    currentPage.value = 1;
     await loadProducts();
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
     if (fullProduct) {
@@ -246,8 +237,10 @@ const onProductCreated = async (newProduct) => {
     }
 };
 
+// --- TRANSACTION ---
+
 const processPurchase = async () => {
-    if (!canCheckout.value) return;
+    if (!canProcessTransaction.value) return;
 
     processing.value = true;
     try {
@@ -277,19 +270,10 @@ const processPurchase = async () => {
 
         await journalService.createBuyTransaction(payload);
         
-        if (isCreditBuy.value) {
-            toast.add({ severity: 'info', summary: 'Hutang Dicatat', detail: `Pembelian kredit sebesar ${formatCurrency(grandTotal.value)} berhasil dicatat.`, life: 5000 });
-        } else {
-             toast.add({ severity: 'success', summary: 'Stok Masuk', detail: 'Data pembelian berhasil disimpan', life: 5000 });
-        }
+        const msg = isCreditBuy.value ? 'Pembelian Kredit Berhasil Dicatat' : 'Stok Masuk Berhasil Disimpan';
+        toast.add({ severity: 'success', summary: 'Sukses', detail: msg, life: 3000 });
         
-        cart.value = [];
-        purchaseInfo.supplier = '';
-        purchaseInfo.referenceNo = '';
-        purchaseInfo.notes = '';
-        purchaseInfo.paymentMethod = 'CASH';
-        purchaseInfo.dueDate = null;
-        currentPage.value = 1; // Reset ke halaman 1
+        resetState();
         await loadProducts(); 
 
     } catch (e) {
@@ -300,376 +284,333 @@ const processPurchase = async () => {
     }
 };
 
-const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+const resetState = () => {
+    cart.value = [];
+    purchaseInfo.supplier = '';
+    purchaseInfo.referenceNo = '';
+    purchaseInfo.notes = '';
+    purchaseInfo.paymentMethod = 'CASH';
+    purchaseInfo.dueDate = null;
+    showPurchaseModal.value = false;
 };
 
+// --- UTILS ---
+const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+const getDefaultUnitStock = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.currentStock || 0; 
+const getDefaultUnitName = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.unitName;
 const getStockColor = (qty) => {
-    if (qty <= 0) return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-    if (qty < 10) return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800';
-    return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
+    if (qty <= 0) return 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+    if (qty < 10) return 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
+    return 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800';
 };
 
 onMounted(async () => {
     await fetchCategories(); 
     await loadProducts();
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'F2') document.getElementById('search-input-buy')?.focus();
+        if (e.key === 'F2') {
+            e.preventDefault();
+            document.getElementById('search-input-buy')?.focus();
+        }
     });
 });
 
-const refreshData = async () => {
-    currentPage.value = 1; // Pastikan refresh memuat ulang halaman 1
-    await loadProducts();
-}
+const refreshData = async () => { currentPage.value = 1; await loadProducts(); }
 defineExpose({ refreshData });
 </script>
 
 <template>
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
-        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-2xl shadow border border-surface-200 dark:border-surface-800 h-full overflow-hidden">
-            <div class="p-4 border-b border-surface-100 dark:border-surface-800 flex flex-col gap-3 bg-surface-50/30 dark:bg-surface-400/50">
-                <div class="flex justify-between items-center">
-                    <div class="flex items-center gap-2.5 text-orange-600 dark:text-orange-400">
-                        <div class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shadow-sm">
-                            <i class="pi pi-download text-lg"></i>
-                        </div>
-                        <div class="flex flex-col">
-                            <h2 class="font-black text-sm uppercase tracking-wide leading-none text-surface-800 dark:text-surface-100">Stok Masuk</h2>
-                            <span class="text-[10px] text-surface-500 mt-1 font-medium">Pilih produk untuk restock</span>
-                        </div>
+        
+        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+            
+            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                        <i class="pi pi-download text-xl"></i>
                     </div>
-                    <Button label="Produk Baru" icon="pi pi-plus" size="small" outlined severity="warning" class="!text-[11px] !py-1.5 !px-3 !rounded-lg" @click="showCreateModal = true" />
+                    <div>
+                        <h1 class="text-lg font-bold text-surface-800 dark:text-surface-100 leading-tight">
+                            {{ authStore.activeStore?.name || 'Stok Masuk / Pembelian' }}
+                        </h1>
+                        <p class="text-xs text-surface-500 dark:text-surface-300">
+                            Operator: <span class="font-medium text-surface-700 dark:text-surface-200">{{ authStore.user?.name || 'Admin' }}</span>
+                        </p>
+                    </div>
                 </div>
-                
-                <div class="flex flex-col md:flex-row gap-2">
-                    <div class="w-full md:w-48">
-                        <MultiSelect 
-                            v-model="selectedCategoryUuids" 
-                            :options="categories" 
-                            optionLabel="name" 
-                            optionValue="uuid" 
-                            placeholder="Filter Kategori" 
-                            display="chip" 
-                            :maxSelectedLabels="1" 
-                            class="w-full !h-[38px] !text-xs dark:bg-surface-400 !border-orange-200 dark:!border-surface-700"
-                            :pt="{ label: { class: '!py-2 !px-3' } }"
-                        >
-                            <template #option="slotProps">
-                                <div class="flex align-items-center text-surface-700 dark:text-surface-200">
-                                    <i class="pi pi-tag mr-2 text-orange-500 text-xs"></i>
-                                    <span class="text-xs">{{ slotProps.option.name }}</span>
-                                </div>
-                            </template>
-                        </MultiSelect>
-                    </div>
-
-                    <div class="relative group flex-1">
-                        <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm group-focus-within:text-orange-500 transition-colors"></i>
-                        <input 
-                            id="search-input-buy"
-                            v-model="searchQuery" 
-                            type="text"
-                            placeholder="Cari nama produk atau scan barcode... (Enter untuk cari di database, F2)" 
-                            class="w-full pl-9 pr-4 py-2.5 text-xs font-medium dark:bg-surface-400 border border-surface-200 dark:border-surface-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition-all shadow-sm h-[38px]"
-                            @keydown="onSearchKeydown" 
-                            @input="handleSearch"
-                            autocomplete="off"
-                        />
+                <div class="hidden md:block text-right">
+                    <div class="text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-0.5">Hari ini</div>
+                    <div class="text-sm font-bold text-surface-700 dark:text-surface-200">
+                        {{ currentDate }}
                     </div>
                 </div>
             </div>
-            
-            <div class="flex-1 overflow-y-auto p-4 bg-surface-50 dark:bg-surface-400 scrollbar-thin flex flex-col">
-                <div v-if="loading" class="flex justify-center py-20">
-                    <ProgressSpinner style="width: 35px; height: 35px" strokeWidth="4" />
-                </div>
 
-                <div v-else-if="filteredProducts.length > 0" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 flex-1">
-                    <div 
-                        v-for="prod in filteredProducts" 
-                        :key="prod.uuid"
-                        @click="addToCart(prod)"
-                        class="group relative dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-700 p-3 cursor-pointer hover:border-orange-400 dark:hover:border-orange-600 hover:shadow-md transition-all duration-200 flex flex-col justify-between h-[110px] select-none"
+            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
+                <div class="w-full md:w-48">
+                    <MultiSelect 
+                        v-model="selectedCategoryUuids" 
+                        :options="categories" 
+                        optionLabel="name" 
+                        optionValue="uuid" 
+                        placeholder="Filter Kategori" 
+                        display="chip" 
+                        :maxSelectedLabels="1" 
+                        class="w-full !h-10 !text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700" 
+                        :pt="{ label: { class: '!py-2 !px-3' } }"
                     >
-                        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <i class="pi pi-plus-circle text-orange-500 text-lg rounded-full"></i>
-                        </div>
-
-                        <div class="flex flex-col h-full justify-between">
-                            <div>
-                                <div class="font-bold text-xs text-surface-700 dark:text-surface-200 leading-snug line-clamp-2 mb-2 group-hover:text-orange-700 transition-colors">
-                                    {{ prod.name }}
-                                </div>
+                        <template #option="slotProps">
+                            <div class="flex align-items-center text-surface-700 dark:text-surface-200">
+                                <i class="pi pi-tag mr-2 text-orange-500 text-xs"></i>
+                                <span class="text-sm">{{ slotProps.option.name }}</span>
                             </div>
-                            
-                            <div class="flex items-end justify-between">
-                                <div class="flex flex-col gap-1 w-full">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-[9px] text-surface-400 truncate max-w-[70%]">
-                                            {{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}
-                                        </span>
-                                    </div>
-
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-surface-400 font-medium mr-1">Sisa:</span>
-                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border w-fit" 
-                                              :class="getStockColor(getDefaultUnitStock(prod))">
-                                            {{ getDefaultUnitStock(prod) }} {{ getDefaultUnitName(prod) }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        </template>
+                    </MultiSelect>
                 </div>
                 
-                <div v-else class="h-full flex flex-col items-center justify-center text-surface-400 gap-3 opacity-70 flex-1">
-                    <div class="w-16 h-16 bg-surface-200 dark:bg-surface-400 rounded-full flex items-center justify-center">
-                         <i class="pi pi-search text-2xl"></i>
-                    </div>
-                    <span class="text-xs font-medium">Produk tidak ditemukan</span>
-                </div>
-                
-                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-400">
-                    <Button 
-                        icon="pi pi-chevron-left" 
-                        label="Sebelumnya"
-                        size="small" 
-                        text 
-                        :disabled="currentPage === 1"
-                        @click="changePage(currentPage - 1)"
-                        class="!text-xs"
+                <div class="relative flex-1">
+                    <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 text-sm"></i>
+                    <input 
+                        id="search-input-buy" 
+                        v-model="searchQuery" 
+                        type="text" 
+                        placeholder="Cari Produk / Scan Barcode... (F2)" 
+                        class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all shadow-sm h-10" 
+                        @keydown="onSearchKeydown" 
+                        @input="handleLocalFiltering" 
+                        autocomplete="off" 
                     />
+                </div>
+
+                <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
+                    <button 
+                        v-tooltip.bottom="'Tampilan List'"
+                        @click="viewMode = 'list'"
+                        class="w-8 h-full rounded flex items-center justify-center transition"
+                        :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                    >
+                        <i class="pi pi-list text-sm"></i>
+                    </button>
+                    <button 
+                        v-tooltip.bottom="'Tampilan Grid'"
+                        @click="viewMode = 'grid'"
+                        class="w-8 h-full rounded flex items-center justify-center transition"
+                        :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                    >
+                        <i class="pi pi-th-large text-sm"></i>
+                    </button>
                     
-                    <span class="text-xs font-medium text-surface-600 dark:text-surface-400">
-                        Halaman <span class="font-bold text-orange-600">{{ currentPage }}</span> dari {{ totalPages }}
-                        <span class="text-[10px] ml-1">({{ totalProducts }} total)</span>
-                    </span>
+                    <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l border-surface-300 dark:border-surface-600 pl-1">
+                        <button v-for="col in [3, 4, 5]" :key="col" @click="gridColumns = col" 
+                             class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center"
+                             :class="gridColumns === col ? 'bg-white dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                        >
+                            {{ col }}
+                        </button>
+                    </div>
+                </div>
 
-                    <Button 
-                        label="Selanjutnya"
-                        icon="pi pi-chevron-right" 
-                        iconPos="right"
-                        size="small" 
-                        text 
-                        :disabled="currentPage === totalPages"
-                        @click="changePage(currentPage + 1)"
-                        class="!text-xs"
-                    />
+                <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="warning" outlined v-tooltip.bottom="'Produk Baru'" @click="showCreateModal = true" />
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin flex flex-col">
+                <div v-if="loading" class="flex-1 flex justify-center items-center"><ProgressSpinner style="width: 40px; height: 40px" /></div>
+                
+                <div v-else-if="filteredProducts.length > 0" class="flex-1">
+                    
+                    <div :class="gridContainerClass">
+                        <div 
+                            v-for="prod in filteredProducts" 
+                            :key="prod.uuid" 
+                            @click="addToCart(prod)" 
+                            class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-orange-400 hover:shadow-md transition-all active:scale-95 select-none"
+                            :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'"
+                        >
+                            <template v-if="viewMode === 'grid'">
+                                <div>
+                                    <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-orange-600 transition-colors">{{ prod.name }}</div>
+                                    <div class="flex gap-1 mt-1">
+                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span>
+                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">{{ getDefaultUnitName(prod) }}</span>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-end mt-2">
+                                    <span class="text-[9px] text-surface-400 truncate max-w-[100%]">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
+                                </div>
+                            </template>
+
+                            <template v-else>
+                                <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                                    <div class="w-10 h-10 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-400 shrink-0">
+                                        <i class="pi pi-box"></i>
+                                    </div>
+                                    <div class="flex flex-col overflow-hidden">
+                                        <div class="text-sm font-bold text-surface-700 dark:text-surface-200 truncate group-hover:text-orange-600 transition-colors">{{ prod.name }}</div>
+                                        <div class="flex gap-1.5 items-center mt-0.5">
+                                            <span class="text-[9px] font-medium px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">{{ getDefaultUnitStock(prod) }} {{ getDefaultUnitName(prod) }}</span>
+                                            <span class="text-[10px] text-surface-400 truncate hidden sm:inline">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end shrink-0">
+                                    <i class="pi pi-plus-circle text-orange-500 text-lg opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                
+                <div v-else class="flex-1 flex flex-col items-center justify-center text-surface-400 dark:text-surface-600 gap-2 opacity-60">
+                    <i class="pi pi-search text-4xl"></i>
+                    <span class="text-xs">Produk tidak ditemukan</span>
+                </div>
+
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-400 z-10">
+                    <Button icon="pi pi-chevron-left" label="Sebelumnya" size="small" text :disabled="currentPage === 1" @click="changePage(currentPage - 1)" class="!text-xs" />
+                    <span class="text-xs font-medium text-surface-600 dark:text-surface-400">Halaman <span class="font-bold text-orange-600">{{ currentPage }}</span> dari {{ totalPages }} <span class="text-[10px] ml-1">({{ totalProducts }} total)</span></span>
+                    <Button label="Selanjutnya" icon="pi pi-chevron-right" iconPos="right" size="small" text :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)" class="!text-xs" />
                 </div>
             </div>
         </div>
 
-        <div class="w-[380px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
-            <div class="p-3 px-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50 dark:bg-surface-400/50">
+        <div class="w-full lg:w-[420px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-400/50 flex justify-between items-center">
                 <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                        <span class="font-bold text-xs">{{ totalItems }}</span>
-                    </div>
+                    <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div>
                     <span class="font-bold text-sm text-surface-700 dark:text-surface-200">Item Masuk</span>
                 </div>
-                <Button 
-                    v-if="cart.length > 0" 
-                    icon="pi pi-trash" 
-                    text 
-                    rounded
-                    severity="danger" 
-                    size="small" 
-                    class="!w-8 !h-8" 
-                    v-tooltip.bottom="'Kosongkan'"
-                    @click="cart = []" 
-                />
+                <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
             </div>
 
             <div id="cart-items-container-buy" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-400/30">
-                <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-2 opacity-60">
-                    <i class="pi pi-inbox text-4xl mb-1"></i>
-                    <p class="text-xs font-medium">Belum ada barang dipilih</p>
+                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
+                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center"><i class="pi pi-inbox text-2xl opacity-40"></i></div>
+                    <p class="text-xs">Belum ada item dipilih</p>
                 </div>
-
-                <div v-for="(item, index) in cart" :key="index + '_' + item.unitUuid" 
-                     class="dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-700 p-3 shadow-sm hover:border-orange-300 dark:hover:border-orange-700 transition-all group relative">
-                    
-                    <button class="absolute -top-2 -right-2 w-6 h-6 dark:bg-surface-400 border border-surface-200 dark:border-surface-600 rounded-full shadow-sm flex items-center justify-center text-surface-400 hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100 z-10 transform scale-90 group-hover:scale-100" 
-                            @click="removeFromCart(index)">
+                
+                <div v-for="(item, index) in cart" :key="index" class="group dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-2.5 hover:border-orange-300 dark:hover:border-orange-600 transition-all shadow-sm relative">
+                    <button class="absolute -top-2 -right-2 dark:bg-surface-900 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
                         <i class="pi pi-times text-[10px] font-bold"></i>
                     </button>
-
-                    <div class="mb-3 pr-4">
-                        <div class="font-bold text-xs text-surface-800 dark:text-surface-100 leading-relaxed">
-                            {{ item.name }}
-                        </div>
-                    </div>
-
-                    <div class="flex items-end gap-3">
-                        <div class="flex-1 flex flex-col gap-2">
-                            <div class="inline-flex items-center h-7 bg-surface-100 dark:bg-surface-400 rounded-lg px-2 border border-surface-200 dark:border-surface-700 w-fit">
-                                <span class="text-[9px] text-surface-400 font-bold uppercase mr-2 tracking-wide">Satuan</span>
-                                <Dropdown 
-                                    v-model="item.unitUuid" 
-                                    :options="item.availableUnits" 
-                                    optionLabel="unitName" 
-                                    optionValue="uuid" 
-                                    class="custom-pill-dropdown !h-5 !border-none !bg-transparent !shadow-none min-w-[60px] !items-center"
-                                    :pt="{ 
-                                        input: { class: '!p-0 !text-[11px] font-bold text-surface-700 dark:!text-surface-200' }, 
-                                        trigger: { class: '!w-4 text-surface-400' }
-                                    }"
-                                    @change="(e) => changeCartItemUnit(item, e.value)"
-                                />
+                    
+                    <div class="mb-2 pr-4"><div class="text-sm font-bold text-surface-800 dark:text-surface-100 line-clamp-1" :title="item.name">{{ item.name }}</div></div>
+                    
+                    <div class="flex items-end gap-2">
+                        <div class="flex-1 flex flex-col gap-1.5">
+                             <div class="flex gap-2 items-center">
+                                <Dropdown v-model="item.unitUuid" :options="item.availableUnits" optionLabel="unitName" optionValue="uuid" class="custom-tiny-dropdown !h-6 !w-24 !bg-surface-50 dark:!bg-surface-700 !border-surface-200 dark:!border-surface-600 !shadow-none !rounded-lg !flex !items-center" :pt="{ input: { class: '!py-0 !px-2 !text-[10px] !font-bold !text-surface-700 dark:!text-surface-200' }, trigger: { class: '!w-5 !text-surface-400' }, panel: { class: '!text-xs' }, item: { class: '!py-1.5 !px-3 !text-xs' } }" @change="(e) => changeCartItemUnit(item, e.value)" />
                             </div>
-
-                            <div class="flex items-center border border-surface-200 dark:border-surface-700 rounded-lg dark:bg-surface-400 h-8 px-2 focus-within:ring-1 focus-within:ring-orange-400 focus-within:border-orange-400 transition-all">
-                                <span class="text-[10px] font-bold text-surface-400 mr-1">@Rp</span>
-                                <InputNumber 
-                                    v-model="item.buyPrice" 
-                                    mode="currency" currency="IDR" locale="id-ID" 
-                                    class="w-full !h-full" 
-                                    inputClass="!text-xs !h-full !p-0 !font-mono !font-bold !text-orange-600 dark:!text-orange-400 !bg-transparent !border-none focus:!ring-0"
-                                    placeholder="0" :min="0" 
-                                />
+                            <div class="relative">
+                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-surface-400">Rp</span>
+                                <InputNumber v-model="item.buyPrice" mode="currency" currency="IDR" locale="id-ID" class="!h-7 w-full" inputClass="!text-xs !h-7 !py-0 !pl-6 !pr-2 !font-mono !font-bold !text-orange-600 !rounded-lg !bg-surface-50 dark:!bg-surface-700 !border-surface-200 dark:!border-surface-600 focus:!border-orange-500 focus:!ring-1" :min="0" placeholder="Harga Beli" />
                             </div>
                         </div>
-
-                        <div class="flex flex-col items-end justify-between h-full gap-2">
-                            <div class="flex items-center bg-surface-100 dark:bg-surface-400 rounded-lg border border-surface-200 dark:border-surface-700 h-7 shadow-sm">
-                                <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:hover:text-red-500 rounded-l-lg transition-colors" 
-                                        @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
-                                    <i class="pi pi-minus text-[9px] font-bold"></i>
-                                </button>
+                        <div class="flex flex-col items-end gap-1.5">
+                            <div class="flex items-center bg-surface-100 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
+                                <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"><i class="pi pi-minus text-[9px] font-bold"></i></button>
                                 <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" />
-                                <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:hover:text-primary-600 rounded-r-lg transition-colors" 
-                                        @click="item.qty++">
-                                    <i class="pi pi-plus text-[9px] font-bold"></i>
-                                </button>
+                                <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-r-lg transition text-orange-600" @click="item.qty++"><i class="pi pi-plus text-[9px] font-bold"></i></button>
                             </div>
-
-                            <div class="text-[11px] font-black text-surface-700 dark:text-surface-300 bg-surface-100 dark:bg-surface-400 px-2 py-0.5 rounded border border-surface-200 dark:border-surface-700">
-                                {{ formatCurrency(item.buyPrice * item.qty) }}
-                            </div>
+                            <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-400 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">{{ formatCurrency(item.buyPrice * item.qty) }}</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 bg-surface-50 dark:bg-surface-400 border-t border-surface-200 dark:border-surface-700 shrink-0">
+            <div class="p-4 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
                 <div class="flex justify-between items-end">
-                    <span class="text-xs text-surface-500 uppercase font-bold tracking-wider mb-1">Total Estimasi</span>
-                    <span class="text-2xl font-black text-surface-900 dark:text-white tracking-tight">{{ formatCurrency(grandTotal) }}</span>
+                    <span class="text-sm text-surface-500 dark:text-surface-400 uppercase font-bold tracking-wider mb-1">Total Estimasi</span>
+                    <span class="text-2xl font-black text-surface-900 dark:text-white">{{ formatCurrency(grandTotal) }}</span>
                 </div>
+                <Button label="Lanjut Proses" icon="pi pi-arrow-right" iconPos="right" class="w-full !h-12 !text-base !font-bold" severity="warning" @click="openPurchaseModal" :disabled="!canCheckout" />
             </div>
-        </div>
-
-        <div class="w-[320px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-2xl shadow border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0">
-             <div class="p-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50/30 dark:bg-surface-400/50">
-                 <h2 class="font-bold text-sm text-surface-700 dark:text-surface-200 flex items-center gap-2">
-                     <div class="w-6 h-6 rounded-md bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                        <i class="pi pi-file-edit text-orange-600 dark:text-orange-400 text-xs"></i>
-                     </div>
-                     Data Dokumen
-                 </h2>
-             </div>
-             
-             <div class="p-4 flex-1 flex flex-col gap-5 overflow-y-auto scrollbar-thin">
-                 <div class="space-y-1">
-                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Supplier</label>
-                     <div class="relative">
-                        <i class="pi pi-building text-surface-400 text-xs absolute top-1/2 -translate-y-1/2 left-3"></i>
-                        <InputText v-model="purchaseInfo.supplier" placeholder="Nama Supplier / Toko" 
-                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30 focus:!transition-colors" />
-                     </div>
-                 </div>
-
-                 <div class="space-y-1">
-                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">No. Referensi</label>
-                     <div class="relative">
-                        <i class="pi pi-hashtag text-surface-400 text-xs absolute top-1/2 -translate-y-1/2 left-3"></i>
-                        <InputText v-model="purchaseInfo.referenceNo" placeholder="No. Faktur / Nota" 
-                            class="w-full !pl-9 !py-2.5 !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30 focus:!transition-colors" />
-                     </div>
-                 </div>
-
-                <div class="space-y-1">
-                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Metode Bayar</label>
-                     <SelectButton v-model="purchaseInfo.paymentMethod" 
-                        :options="[{label: 'Cash/Transfer', value: 'CASH'}, {label: 'Kredit (Hutang)', value: 'CREDIT'}]"
-                        optionLabel="label" optionValue="value"
-                        class="w-full"
-                        :pt="{ 
-                            button: ({ context }) => ({ 
-                                class: [
-                                    '!text-xs !py-2', 
-                                    context.instance.value === 'CREDIT' 
-                                        ? '!bg-red-500/10 !text-red-500 !border-red-500/50' 
-                                        : '!bg-emerald-500/10 !text-emerald-500 !border-emerald-500/50',
-                                    'dark:!bg-surface-800 dark:!border-surface-700 dark:!text-surface-200'
-                                ] 
-                            }) 
-                        }"
-                    />
-                 </div>
-                 
-                 <div v-if="isCreditBuy" class="space-y-1">
-                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Jatuh Tempo <span class="text-red-400">*</span></label>
-                     <Calendar 
-                        v-model="purchaseInfo.dueDate" 
-                        dateFormat="dd/mm/yy" 
-                        :minDate="new Date()" 
-                        :manualInput="false" 
-                        showIcon 
-                        class="w-full" 
-                        inputClass="!text-xs !py-2.5 !h-11 !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30" 
-                        :class="{ 'p-invalid': isCreditBuy && !purchaseInfo.dueDate && cart.length > 0 }"
-                    />
-                 </div>
-
-
-                 <div class="space-y-1 flex-1 flex flex-col">
-                     <label class="text-[10px] font-bold text-surface-400 uppercase tracking-wide ml-1">Catatan</label>
-                     <Textarea 
-                        v-model="purchaseInfo.notes" 
-                        placeholder="Keterangan tambahan..." 
-                        class="w-full !text-xs !rounded-xl !bg-surface-50 dark:!bg-surface-800 !border-surface-200 dark:!border-surface-700 focus:!border-orange-400 focus:!ring-1 focus:!ring-orange-500/30 !p-3 resize-none flex-1" />
-                 </div>
-             </div>
-
-             <div class="p-4 bg-surface-200 dark:bg-surface-400 relative z-10 border-t border-surface-200 dark:border-surface-800">
-                <Button 
-                    :label="isCreditBuy ? 'CATAT HUTANG' : 'SIMPAN STOK'" 
-                    icon="pi pi-check-circle" 
-                    iconPos="right"
-                    class="w-full font-bold !py-3 !text-sm !bg-orange-500 hover:!bg-orange-600 !border-none !text-white shadow-lg shadow-orange-900/30 active:translate-y-0.5 transition-all !rounded-xl" 
-                    :disabled="!canCheckout" 
-                    :loading="processing" 
-                    @click="processPurchase" 
-                />
-             </div>
         </div>
 
         <ProductCreateModal v-model:visible="showCreateModal" @product-created="onProductCreated" />
     </div>
+
+    <div v-if="showPurchaseModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
+        <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div class="flex justify-between items-center p-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
+                <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100">Rincian Pembelian</h3>
+                <button @click="showPurchaseModal = false" class="text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 transition">
+                    <i class="pi pi-times text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-5 overflow-y-auto scrollbar-thin space-y-4">
+                
+                <div class="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800">
+                    <span class="text-xs uppercase text-surface-500 dark:text-surface-400 tracking-widest font-bold">Total Belanja</span>
+                    <div class="text-3xl font-black text-orange-700 dark:text-orange-400 mt-1">
+                        {{ formatCurrency(grandTotal) }}
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-surface-500 uppercase">Supplier / Toko</label>
+                        <InputText v-model="purchaseInfo.supplier" placeholder="Nama Supplier (Opsional)..." class="w-full !text-sm" />
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-surface-500 uppercase">No. Referensi / Nota</label>
+                        <InputText v-model="purchaseInfo.referenceNo" placeholder="Nomor Faktur..." class="w-full !text-sm" />
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-surface-500 uppercase">Metode Pembayaran</label>
+                        <SelectButton v-model="purchaseInfo.paymentMethod" 
+                            :options="[{label: 'Lunas (Cash/Transfer)', value: 'CASH'}, {label: 'Hutang (Kredit)', value: 'CREDIT'}]"
+                            optionLabel="label" optionValue="value"
+                            class="w-full"
+                            :pt="{ button: { class: '!text-xs !py-3 flex-1' } }"
+                        />
+                    </div>
+
+                    <div v-if="isCreditBuy" class="space-y-1 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800 animate-fade-in-down">
+                        <label class="text-xs font-bold text-red-600 dark:text-red-400 uppercase">Jatuh Tempo <span class="text-red-500">*</span></label>
+                        <Calendar v-model="purchaseInfo.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="w-full" inputClass="!text-xs" placeholder="Pilih Tanggal..." />
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-surface-500 uppercase">Catatan</label>
+                        <Textarea v-model="purchaseInfo.notes" rows="2" placeholder="Catatan tambahan..." class="w-full !text-sm resize-none" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 flex gap-3">
+                <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPurchaseModal = false" />
+                <Button 
+                    :label="isCreditBuy ? 'Simpan Hutang' : 'Simpan Stok'" 
+                    :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" 
+                    class="flex-[2]"
+                    :severity="isCreditBuy ? 'danger' : 'success'"
+                    :loading="processing" 
+                    :disabled="!canProcessTransaction"
+                    @click="processPurchase"
+                />
+            </div>
+        </div>
+    </div>
 </template>
 
 <style scoped>
-/* Scrollbar Halus (sesuaikan untuk mode gelap) */
-.scrollbar-thin::-webkit-scrollbar { width: 6px; }
-.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { 
-    background: #e5e7eb; /* surface-200 */
-    border-radius: 4px; 
+/* Custom Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
 }
-.dark .scrollbar-thin::-webkit-scrollbar-thumb { 
-    background: #374151; /* surface-700 */
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #4b5563; }
-
-/* Override PrimeVue Dropdown agar rapih */
-:deep(.custom-pill-dropdown .p-dropdown-label) {
-    padding: 0 !important;
-    display: flex;
-    align-items: center;
-    white-space: nowrap;
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 20px;
+}
+.custom-tiny-dropdown :deep(.p-dropdown-label) {
+    padding: 0 0.5rem !important;
 }
 </style>

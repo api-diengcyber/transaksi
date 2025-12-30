@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryColumn, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryColumn, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { StoreEntity } from '../store/store.entity';
 
 export enum AccountCategory {
@@ -18,10 +18,10 @@ export class AccountEntity {
     storeUuid: string;
 
     @Column({ length: 20 })
-    code: string; // Contoh: '1-1001', '4-0001'
+    code: string; 
 
     @Column({ length: 100 })
-    name: string; // Contoh: 'Kas Besar', 'Pendapatan Jasa'
+    name: string; 
 
     @Column({
         type: 'enum',
@@ -44,4 +44,14 @@ export class AccountEntity {
     @ManyToOne(() => StoreEntity, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'store_uuid' })
     store: StoreEntity;
+
+    @Column({ name: 'parent_uuid', nullable: true, length: 60 })
+    parentUuid: string;
+
+    @ManyToOne(() => AccountEntity, (account) => account.children, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'parent_uuid' })
+    parent: AccountEntity;
+
+    @OneToMany(() => AccountEntity, (account) => account.parent)
+    children: AccountEntity[];
 }

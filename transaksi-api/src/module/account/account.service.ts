@@ -52,23 +52,22 @@ export class AccountService {
 
     // --- TAMBAHAN FITUR BARU (CRUD) ---
 
-    // 1. Tambah Akun Baru
     async create(storeUuid: string, dto: CreateAccountDto) {
-        // Cek apakah kode akun sudah ada di toko ini
-        const exist = await this.accountRepository.findOne({
-            where: { storeUuid, code: dto.code }
-        });
-        if (exist) throw new BadRequestException(`Kode akun ${dto.code} sudah digunakan.`);
+    const exist = await this.accountRepository.findOne({
+        where: { storeUuid, code: dto.code }
+    });
+    if (exist) throw new BadRequestException(`Kode akun ${dto.code} sudah digunakan.`);
 
-        const newAccount = this.accountRepository.create({
-            uuid: `${storeUuid}-ACC-${generateLocalUuid()}-${dto.code}`,
-            storeUuid,
-            ...dto,
-            isSystem: false // Akun buatan user bukan sistem
-        });
+    const newAccount = this.accountRepository.create({
+        uuid: `${storeUuid}-ACC-${generateLocalUuid()}-${dto.code}`,
+        storeUuid,
+        ...dto,
+        parentUuid: dto.parentUuid || "", // Pastikan tersimpan
+        isSystem: false
+    });
 
-        return this.accountRepository.save(newAccount);
-    }
+    return this.accountRepository.save(newAccount);
+}
 
     // 2. Ambil satu akun
     async findOne(storeUuid: string, uuid: string) {
@@ -79,19 +78,27 @@ export class AccountService {
         return account;
     }
 
-    // 3. Update Akun
+
+    // Update method update
     async update(storeUuid: string, uuid: string, dto: UpdateAccountDto) {
         const account = await this.findOne(storeUuid, uuid);
 
-        // Jika kode diganti, cek duplikat lagi
         if (dto.code && dto.code !== account.code) {
             const exist = await this.accountRepository.findOne({
                 where: { storeUuid, code: dto.code }
             });
             if (exist) throw new BadRequestException(`Kode akun ${dto.code} sudah digunakan.`);
         }
+        
+        // Cegah akun menjadi parent bagi dirinya sendiri
+        if (dto.parentUuid && dto.parentUuid === uuid) {
+            throw new BadRequestException('Akun tidak bisa menjadi parent bagi dirinya sendiri.');
+        }
 
         Object.assign(account, dto);
+        // Pastikan jika parentUuid dikirim null/undefined dihandle dengan benar jika ingin menghapus relasi
+        if (dto.parentUuid === null) account.parentUuid = "";
+
         return this.accountRepository.save(account);
     }
 

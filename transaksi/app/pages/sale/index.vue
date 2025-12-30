@@ -27,6 +27,10 @@ const loading = ref(true);
 const processing = ref(false);
 const showPaymentModal = ref(false);
 
+// --- VIEW STATE (BARU) ---
+const viewMode = ref('grid'); // 'grid' | 'list'
+const gridColumns = ref(4); // 3 | 4 | 5
+
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]);
 
@@ -111,6 +115,29 @@ const monthlyInstallment = computed(() => {
     return (remainingDebt.value + totalFee) / payment.installmentCount;
 });
 
+// --- DATE HELPER FOR TITLE ---
+const currentDate = computed(() => {
+    return new Date().toLocaleDateString('id-ID', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+});
+
+// --- GRID CLASS HELPER (BARU) ---
+const gridContainerClass = computed(() => {
+    if (viewMode.value === 'list') {
+        return 'flex flex-col gap-2';
+    }
+    // Logic untuk grid columns
+    // Mobile selalu 2 kolom, tablet 3 kolom, desktop sesuai setting
+    if (gridColumns.value === 3) return 'grid grid-cols-2 md:grid-cols-3 gap-3';
+    if (gridColumns.value === 5) return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3';
+    // Default 4
+    return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3';
+});
+
 // --- VALIDASI ---
 const canCheckout = computed(() => {
     if (cart.value.length === 0) return false;
@@ -133,8 +160,6 @@ const canCheckout = computed(() => {
         return amountPaid.value >= (grandTotal.value - 100); // Toleransi 100 perak
     } 
     else if (payment.mainMethod === 'KREDIT') {
-        // Customer Name & Jatuh Tempo Wajib
-        // (Customer name opsional jika 'Umum', tapi untuk kredit sebaiknya diisi. Disini kita izinkan kosong akan jadi 'Umum')
         return grandTotal.value > 0 && !!payment.dueDate;
     }
     else if (payment.mainMethod === 'CICILAN') {
@@ -484,6 +509,29 @@ defineExpose({ refreshData });
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
         
         <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+            
+            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                        <i class="pi pi-shop text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-surface-800 dark:text-surface-100 leading-tight">
+                            {{ authStore.activeStore?.name || 'Point of Sales' }}
+                        </h1>
+                        <p class="text-xs text-surface-500 dark:text-surface-300">
+                            Kasir: <span class="font-medium text-surface-700 dark:text-surface-200">{{ authStore.user?.name || 'Staff' }}</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="hidden md:block text-right">
+                    <div class="text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-0.5">Hari ini</div>
+                    <div class="text-sm font-bold text-surface-700 dark:text-surface-200">
+                        {{ currentDate }}
+                    </div>
+                </div>
+            </div>
+
             <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
                 <div class="w-full md:w-48">
                     <MultiSelect 
@@ -505,6 +553,7 @@ defineExpose({ refreshData });
                         </template>
                     </MultiSelect>
                 </div>
+                
                 <div class="relative flex-1">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 text-sm"></i>
                     <input 
@@ -518,6 +567,35 @@ defineExpose({ refreshData });
                         autocomplete="off" 
                     />
                 </div>
+
+                <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
+                    <button 
+                        v-tooltip.bottom="'Tampilan List'"
+                        @click="viewMode = 'list'"
+                        class="w-8 h-full rounded flex items-center justify-center transition"
+                        :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                    >
+                        <i class="pi pi-list text-sm"></i>
+                    </button>
+                    <button 
+                        v-tooltip.bottom="'Tampilan Grid'"
+                        @click="viewMode = 'grid'"
+                        class="w-8 h-full rounded flex items-center justify-center transition"
+                        :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                    >
+                        <i class="pi pi-th-large text-sm"></i>
+                    </button>
+                    
+                    <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l border-surface-300 dark:border-surface-600 pl-1">
+                        <button v-for="col in [3, 4, 5]" :key="col" @click="gridColumns = col" 
+                             class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center"
+                             :class="gridColumns === col ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                        >
+                            {{ col }}
+                        </button>
+                    </div>
+                </div>
+
                 <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Produk Baru'" @click="emit('open-create-modal')" />
             </div>
 
@@ -525,26 +603,53 @@ defineExpose({ refreshData });
                 <div v-if="loading" class="flex-1 flex justify-center items-center"><ProgressSpinner style="width: 40px; height: 40px" /></div>
                 
                 <div v-else-if="filteredProducts.length > 0" class="flex-1">
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    
+                    <div :class="gridContainerClass">
+                        
                         <div 
                             v-for="prod in filteredProducts" 
                             :key="prod.uuid" 
                             @click="addToCart(prod)" 
-                            class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-3 cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none flex flex-col justify-between h-28"
+                            class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none"
+                            :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'"
                         >
-                            <div>
-                                <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">{{ prod.name }}</div>
-                                <div class="flex gap-1 mt-1">
-                                    <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span>
-                                    <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">{{ getDefaultUnitName(prod) }}</span>
+                            
+                            <template v-if="viewMode === 'grid'">
+                                <div>
+                                    <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">{{ prod.name }}</div>
+                                    <div class="flex gap-1 mt-1">
+                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span>
+                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">{{ getDefaultUnitName(prod) }}</span>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="flex justify-between items-end mt-2">
-                                <span class="text-[9px] text-surface-400 truncate max-w-[50%]">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
-                                <span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span>
-                            </div>
+                                <div class="flex justify-between items-end mt-2">
+                                    <span class="text-[9px] text-surface-400 truncate max-w-[50%]">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
+                                    <span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span>
+                                </div>
+                            </template>
+
+                            <template v-else>
+                                <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                                    <div class="w-10 h-10 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-400 shrink-0">
+                                        <i class="pi pi-box"></i>
+                                    </div>
+                                    <div class="flex flex-col overflow-hidden">
+                                        <div class="text-sm font-bold text-surface-700 dark:text-surface-200 truncate group-hover:text-primary-600 transition-colors">{{ prod.name }}</div>
+                                        <div class="flex gap-1.5 items-center mt-0.5">
+                                            <span class="text-[9px] font-medium px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">{{ getDefaultUnitStock(prod) }} {{ getDefaultUnitName(prod) }}</span>
+                                            <span class="text-[10px] text-surface-400 truncate hidden sm:inline">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end shrink-0">
+                                    <span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span>
+                                    <i class="pi pi-plus-circle text-primary-500 text-lg opacity-0 group-hover:opacity-100 transition-opacity mt-1"></i>
+                                </div>
+                            </template>
+
                         </div>
                     </div>
+
                 </div>
                 
                 <div v-else class="flex-1 flex flex-col items-center justify-center text-surface-400 dark:text-surface-600 gap-2 opacity-60">
@@ -612,7 +717,7 @@ defineExpose({ refreshData });
             </div>
         </div>
     </div>
-
+    
     <div v-if="showPaymentModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
         <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             
