@@ -20,6 +20,11 @@ export class AccountController {
         return this.accountService.getAllAccounts(storeUuid);
     }
 
+    @Get('categories')
+    getCategories() {
+        return this.accountService.getAccountCategories();
+    }
+
     @Get(':uuid')
     findOne(@GetStore() storeUuid: string, @Param('uuid') uuid: string) {
         return this.accountService.findOne(storeUuid, uuid);

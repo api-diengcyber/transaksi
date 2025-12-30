@@ -8,11 +8,12 @@ import {
   DialogTitle,
 } from '@headlessui/vue';
 
-// 1. Terima prop availableAccounts
+// 1. Terima prop categories dari parent
 const props = defineProps<{
   isOpen: boolean;
   accountData?: any;
-  availableAccounts?: any[]; // List semua akun untuk dropdown
+  availableAccounts?: any[]; 
+  categories?: any[]; // Array of { value: string, label: string }
 }>();
 
 const emit = defineEmits(['close', 'refresh']);
@@ -26,41 +27,37 @@ const form = ref({
   name: '',
   category: 'ASSET',
   normalBalance: 'DEBIT',
-  parentUuid: '', // Pastikan field ini ada
+  parentUuid: '', 
 });
 
-// Filter Opsi Parent:
-// - Hanya tampilkan akun dengan kategori yang SAMA
-// - Jangan tampilkan diri sendiri (jika sedang edit)
+// Filter Opsi Parent
 const parentOptions = computed(() => {
   if (!props.availableAccounts) return [];
   
   return props.availableAccounts.filter(acc => {
     const isSameCategory = acc.category === form.value.category;
-    // Jika edit, pastikan tidak memilih diri sendiri sebagai parent
     const isNotSelf = isEdit.value ? acc.uuid !== props.accountData?.uuid : true;
     return isSameCategory && isNotSelf;
   });
 });
 
-// Watcher untuk mengisi form saat modal dibuka
 watch(
   () => props.isOpen,
   (val) => {
     if (val) {
       if (props.accountData) {
         isEdit.value = true;
-        // 2. PERBAIKAN UTAMA: Pastikan parentUuid diambil
         form.value = { 
           ...props.accountData,
-          parentUuid: props.accountData.parentUuid || '' // Default ke string kosong jika null
+          parentUuid: props.accountData.parentUuid || '' 
         };
       } else {
         isEdit.value = false;
         form.value = {
           code: '',
           name: '',
-          category: 'ASSET',
+          // Default ke kategori pertama jika ada, atau 'ASSET'
+          category: props.categories?.[0]?.value || 'ASSET',
           normalBalance: 'DEBIT',
           parentUuid: '',
         };
@@ -69,7 +66,6 @@ watch(
   }
 );
 
-// Reset parent jika kategori berubah (karena parent harus satu kategori)
 watch(() => form.value.category, (newVal, oldVal) => {
   if (newVal !== oldVal) {
     form.value.parentUuid = '';
@@ -84,7 +80,6 @@ const onSubmit = async () => {
   try {
     isLoading.value = true;
     
-    // Convert string kosong kembali ke null untuk API
     const payload = {
       ...form.value,
       parentUuid: form.value.parentUuid === '' ? null : form.value.parentUuid
@@ -153,11 +148,13 @@ const onSubmit = async () => {
                         v-model="form.category"
                         class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
                       >
-                        <option value="ASSET">Harta (ASSET)</option>
-                        <option value="LIABILITY">Kewajiban (LIABILITY)</option>
-                        <option value="EQUITY">Modal (EQUITY)</option>
-                        <option value="REVENUE">Pendapatan (REVENUE)</option>
-                        <option value="EXPENSE">Beban (EXPENSE)</option>
+                        <option 
+                          v-for="cat in categories" 
+                          :key="cat.value" 
+                          :value="cat.value"
+                        >
+                          {{ cat.label }}
+                        </option>
                       </select>
                       <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
                         <i class="pi pi-chevron-down text-xs"></i>

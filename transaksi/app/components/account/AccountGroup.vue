@@ -24,7 +24,7 @@ const onRootChange = (event: any, groupName: string) => {
 </script>
 
 <template>
-  <div class="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-100 overflow-hidden flex flex-col h-full transition-all hover:shadow-lg">
+  <div class="bg-surface-0 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-100 overflow-hidden flex flex-col h-full transition-all hover:shadow-lg">
     <div :class="`bg-${color}-50/50 border-b border-${color}-100/50 p-4 flex justify-between items-center backdrop-blur-sm`">
       <div class="flex items-center gap-3">
         <div :class="`p-1.5 rounded-lg bg-${color}-100 text-${color}-600`">

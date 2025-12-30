@@ -26,7 +26,7 @@ const onChildChange = (event: any) => {
 <template>
   <div class="relative">
     <div 
-      class="group relative bg-white border border-gray-100 hover:border-indigo-300 rounded-xl p-2.5 transition-all duration-200 hover:shadow-md cursor-move flex items-center justify-between mb-2"
+      class="group relative bg-surface-0 border border-gray-100 hover:border-indigo-300 rounded-xl p-2.5 transition-all duration-200 hover:shadow-md cursor-move flex items-center justify-between mb-2"
     >
       <div class="flex items-center gap-3 overflow-hidden flex-1">
         <button 
@@ -53,7 +53,7 @@ const onChildChange = (event: any) => {
         </div>
       </div>
 
-      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 absolute right-2 bg-white/90 pl-2 backdrop-blur-[1px] shadow-[-8px_0_12px_rgba(255,255,255,1)]">
+      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 absolute right-2 bg-surface-0/90 pl-2 backdrop-blur-[1px] shadow-[-8px_0_12px_rgba(255,255,255,1)]">
         <button @click.stop="$emit('edit', element)" class="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit">
           <i class="pi pi-pencil text-xs"></i>
         </button>

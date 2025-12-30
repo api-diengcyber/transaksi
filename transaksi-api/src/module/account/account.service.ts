@@ -12,8 +12,16 @@ export class AccountService {
         @Inject('ACCOUNT_REPOSITORY')
         private accountRepository: Repository<AccountEntity>,
     ) { }
-
-    // --- FITUR YANG SUDAH ADA ---
+    
+    getAccountCategories() {
+        return [
+            { value: AccountCategory.ASSET, label: 'Harta (ASSET)' },
+            { value: AccountCategory.LIABILITY, label: 'Kewajiban (LIABILITY)' },
+            { value: AccountCategory.EQUITY, label: 'Modal (EQUITY)' },
+            { value: AccountCategory.REVENUE, label: 'Pendapatan (REVENUE)' },
+            { value: AccountCategory.EXPENSE, label: 'Beban (EXPENSE)' },
+        ];
+    }
 
     async initializeStandardAccounts(storeUuid: string) {
         // ... (kode inisialisasi yang sudah ada biarkan saja) ...
@@ -62,7 +70,7 @@ export class AccountService {
         uuid: `${storeUuid}-ACC-${generateLocalUuid()}-${dto.code}`,
         storeUuid,
         ...dto,
-        parentUuid: dto.parentUuid || "", // Pastikan tersimpan
+        parentUuid: dto.parentUuid || null, // Pastikan tersimpan
         isSystem: false
     });
 
@@ -97,7 +105,7 @@ export class AccountService {
 
         Object.assign(account, dto);
         // Pastikan jika parentUuid dikirim null/undefined dihandle dengan benar jika ingin menghapus relasi
-        if (dto.parentUuid === null) account.parentUuid = "";
+        if (dto.parentUuid === null) account.parentUuid = null;
 
         return this.accountRepository.save(account);
     }

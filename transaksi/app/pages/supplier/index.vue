@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-6">
     <div class="flex justify-between items-center">
       <div>
-        <h1 class="text-2xl font-bold">Manajemen Supplier</h1>
+        <h1 class="text-2xl font-bold">Supplier</h1>
         <p class="text-gray-500">Daftar supplier terdaftar di sistem (User Role: SUPPLIER)</p>
       </div>
       <button 

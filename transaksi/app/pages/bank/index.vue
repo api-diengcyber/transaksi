@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-6">
     <div class="flex justify-between items-center">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800">Manajemen Bank</h1>
+        <h1 class="text-2xl font-bold text-gray-800">Bank & Rekening</h1>
         <p class="text-gray-500">Daftar rekening bank toko untuk penerimaan pembayaran</p>
       </div>
       <button 

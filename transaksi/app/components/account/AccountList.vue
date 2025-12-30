@@ -9,24 +9,18 @@ export interface Account {
   parentUuid: string | null;
   code: string;
   name: string;
-  category: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  category: string; // Dinamis (string), bukan enum hardcoded lagi
   normalBalance: 'DEBIT' | 'CREDIT';
   isSystem: boolean;
   children?: Account[]; 
   [key: string]: any; 
 }
 
-type AccountMap = {
-  [key: string]: Account[];
-  ASSET: Account[];
-  LIABILITY: Account[];
-  EQUITY: Account[];
-  REVENUE: Account[];
-  EXPENSE: Account[];
-}
+// Gunakan Record<string, Account[]> agar bisa menampung key kategori apapun secara dinamis
+type AccountMap = Record<string, Account[]>;
 
 // --- LOGIC ---
-const { getAll, remove, update } = useAccountService();
+const { getAll, remove, update, getCategories } = useAccountService();
 
 const rawAccounts = ref<Account[]>([]);
 const loading = ref(false);
@@ -34,14 +28,45 @@ const isModalOpen = ref(false);
 const selectedAccount = ref<Account | null>(null);
 const searchQuery = ref('');
 
-const groupedAccounts = ref<AccountMap>({
-  ASSET: [], LIABILITY: [], EQUITY: [], REVENUE: [], EXPENSE: []
-});
+// State untuk menyimpan daftar kategori dari API
+const categories = ref<any[]>([]);
+
+// Inisialisasi awal
+const groupedAccounts = ref<AccountMap>({});
+
+// 1. Fetch Categories terlebih dahulu
+const fetchCategories = async () => {
+  try {
+    const res: any = await getCategories();
+    categories.value = res || [];
+    
+    // Inisialisasi container untuk setiap kategori yang didapat dari API
+    const groups: AccountMap = {};
+    categories.value.forEach((cat: any) => {
+      groups[cat.value] = [];
+    });
+    groupedAccounts.value = groups;
+  } catch (error) {
+    console.error('Gagal mengambil kategori', error);
+    // Fallback static jika API gagal
+    categories.value = [
+      { value: 'ASSET', label: 'Harta (ASSET)' },
+      { value: 'LIABILITY', label: 'Kewajiban (LIABILITY)' },
+      { value: 'EQUITY', label: 'Modal (EQUITY)' },
+      { value: 'REVENUE', label: 'Pendapatan (REVENUE)' },
+      { value: 'EXPENSE', label: 'Beban (EXPENSE)' }
+    ];
+    // Re-init groups fallback
+    const groups: AccountMap = {};
+    categories.value.forEach((cat: any) => groups[cat.value] = []);
+    groupedAccounts.value = groups;
+  }
+};
 
 const fetchAccounts = async () => {
   loading.value = true;
   try {
-    const res = await getAll();
+    const res: any = await getAll();
     rawAccounts.value = Array.isArray(res) ? res : [];
     distributeAccounts();
   } catch (error) {
@@ -89,9 +114,19 @@ const buildTree = (accounts: Account[]) => {
 };
 
 const distributeAccounts = () => {
-  groupedAccounts.value = { 
-    ASSET: [], LIABILITY: [], EQUITY: [], REVENUE: [], EXPENSE: [] 
-  };
+  // Reset groups: Pastikan setiap key kategori ada isinya array kosong
+  const newGroups: AccountMap = {};
+  
+  if (categories.value.length > 0) {
+      categories.value.forEach((cat: any) => {
+        newGroups[cat.value] = [];
+      });
+  } else {
+     // Fallback reset keys standar jika categories belum terload
+     ['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE'].forEach(k => newGroups[k] = []);
+  }
+  
+  groupedAccounts.value = newGroups;
   
   const filtered = rawAccounts.value.filter(acc => 
     (acc.name?.toLowerCase() || '').includes(searchQuery.value.toLowerCase()) || 
@@ -100,10 +135,19 @@ const distributeAccounts = () => {
 
   const treeRoots = buildTree(filtered);
 
+  // --- PERBAIKAN LOGIC PUSH (TS Safe) ---
   treeRoots.forEach(acc => {
-    if (acc.category && groupedAccounts.value[acc.category]) {
-      groupedAccounts.value[acc.category].push(acc);
+    const category = acc.category;
+    if (!category) return;
+
+    // 1. Cek apakah array untuk kategori ini ada di groupedAccounts
+    if (!groupedAccounts.value[category]) {
+      // Jika belum ada (misal kategori baru yg tdk ada di list categories), inisialisasi
+      groupedAccounts.value[category] = [];
     }
+
+    // 2. Gunakan non-null assertion (!) karena kita sudah pastikan array-nya ada di langkah sebelumnya
+    groupedAccounts.value[category]!.push(acc);
   });
 };
 
@@ -159,18 +203,19 @@ const deleteAccount = async (uuid: string) => {
   }
 };
 
-onMounted(() => {
-  fetchAccounts();
+onMounted(async () => {
+  await fetchCategories();
+  await fetchAccounts();
 });
 </script>
 
 <template>
   <div class="h-full flex flex-col relative">
     
-    <div class="sticky top-0 z-30 -mx-4 px-4 pb-4 pt-2 bg-gray-50/80 backdrop-blur-md border-b border-gray-200/50 mb-6 transition-all duration-300">
-      <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="sticky top-0 z-30 -mx-4 px-4 pb-4 pt-2 backdrop-blur-md border-b border-gray-200/50 mb-6 transition-all duration-300">
+      <div class="bg-surface-0 p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <h2 class="text-xl font-bold flex items-center gap-2">
             <span class="bg-indigo-100 text-indigo-600 p-2 rounded-xl">
               <i class="pi pi-sitemap text-lg"></i>
             </span>
@@ -185,7 +230,7 @@ onMounted(() => {
               v-model="searchQuery" 
               type="text" 
               placeholder="Cari akun..." 
-              class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all outline-none"
+              class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-surface-0 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all outline-none"
             >
             <span class="absolute left-3 top-3 text-gray-400 group-focus-within:text-indigo-500 transition-colors">
               <i class="pi pi-search"></i>
@@ -193,7 +238,7 @@ onMounted(() => {
           </div>
           <button
             @click="openCreateModal"
-            class="inline-flex items-center px-5 py-2.5 bg-gray-900 hover:bg-gray-800 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-gray-200"
+            class="inline-flex items-center px-5 py-2.5 bg-primary hover:bg-primary-800 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all"
           >
             <i class="pi pi-plus mr-2"></i> Baru
           </button>
@@ -209,12 +254,12 @@ onMounted(() => {
     <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start pb-20">
       
       <div class="flex flex-col gap-6">
-        <div class="bg-gradient-to-br from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-xl shadow-blue-200 text-white flex justify-between items-center relative overflow-hidden group">
+        <div class="bg-gradient-to-br from-blue-600 to-indigo-600 p-4 rounded-2xl text-white flex justify-between items-center relative overflow-hidden group">
           <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
             <i class="pi pi-wallet text-[100px]"></i>
           </div>
           <div class="flex items-center gap-4 relative z-10">
-            <div class="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+            <div class="bg-surface-0/20 p-3 rounded-xl backdrop-blur-sm">
               <i class="pi pi-arrow-up-right text-white text-xl"></i>
             </div>
             <div>
@@ -228,7 +273,7 @@ onMounted(() => {
           title="HARTA / ASSETS (1-xxxx)" 
           color="blue" 
           icon="pi-wallet"
-          :list="groupedAccounts.ASSET"
+          :list="groupedAccounts['ASSET'] || []"
           group-name="ASSET"
           @edit="editAccount"
           @remove="deleteAccount"
@@ -239,7 +284,7 @@ onMounted(() => {
           title="BEBAN / EXPENSES (5-xxxx)" 
           color="red" 
           icon="pi-shopping-bag"
-          :list="groupedAccounts.EXPENSE"
+          :list="groupedAccounts['EXPENSE'] || []"
           group-name="EXPENSE"
           @edit="editAccount"
           @remove="deleteAccount"
@@ -248,12 +293,12 @@ onMounted(() => {
       </div>
 
       <div class="flex flex-col gap-6">
-        <div class="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-2xl shadow-xl shadow-emerald-200 text-white flex justify-between items-center relative overflow-hidden">
+        <div class="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-2xl text-white flex justify-between items-center relative overflow-hidden">
           <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
             <i class="pi pi-money-bill text-[100px]"></i>
           </div>
           <div class="flex items-center gap-4 relative z-10">
-            <div class="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+            <div class="bg-surface-0/20 p-3 rounded-xl backdrop-blur-sm">
               <i class="pi pi-arrow-down-left text-white text-xl"></i>
             </div>
             <div>
@@ -267,7 +312,7 @@ onMounted(() => {
           title="KEWAJIBAN / LIABILITIES (2-xxxx)" 
           color="yellow" 
           icon="pi-exclamation-circle"
-          :list="groupedAccounts.LIABILITY"
+          :list="groupedAccounts['LIABILITY'] || []"
           group-name="LIABILITY"
           @edit="editAccount"
           @remove="deleteAccount"
@@ -278,7 +323,7 @@ onMounted(() => {
           title="MODAL / EQUITY (3-xxxx)" 
           color="purple" 
           icon="pi-building"
-          :list="groupedAccounts.EQUITY"
+          :list="groupedAccounts['EQUITY'] || []"
           group-name="EQUITY"
           @edit="editAccount"
           @remove="deleteAccount"
@@ -289,7 +334,7 @@ onMounted(() => {
           title="PENDAPATAN / REVENUE (4-xxxx)" 
           color="emerald" 
           icon="pi-dollar"
-          :list="groupedAccounts.REVENUE"
+          :list="groupedAccounts['REVENUE'] || []"
           group-name="REVENUE"
           @edit="editAccount"
           @remove="deleteAccount"
@@ -302,6 +347,7 @@ onMounted(() => {
       :is-open="isModalOpen"
       :account-data="selectedAccount"
       :available-accounts="rawAccounts" 
+      :categories="categories"
       @close="isModalOpen = false"
       @refresh="fetchAccounts"
     />
@@ -309,7 +355,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Custom Scrollbar untuk area draggable jika panjang */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

@@ -114,7 +114,7 @@ const items = ref([
             { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, // Panah masuk (uang masuk)
             { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, // Panah keluar (uang keluar)
             { label: 'Akun', icon: 'pi pi-tags', route: '/account' }, // Tag akun/kategori
-            { label: 'Jurnal', icon: 'pi pi-book', route: '/arap' }, // Buku pembukuan
+            { label: 'Jurnal', icon: 'pi pi-book', route: '/journal' }, // Buku pembukuan
         ]
     },
     { 
@@ -122,8 +122,8 @@ const items = ref([
         icon: 'pi pi-chart-bar', // Grafik batang umum
         key: 'report',
         items: [
-             { label: 'Produk / Stok', icon: 'pi pi-file', route: '/report/arap' }, // File laporan umum
-             { label: 'Produksi', icon: 'pi pi-sliders-h', route: '/report/arap' }, // Slider kontrol produksi
+             { label: 'Produk / Stok', icon: 'pi pi-file', route: '#' }, // File laporan umum
+             { label: 'Produksi', icon: 'pi pi-sliders-h', route: '#' }, // Slider kontrol produksi
              { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph' }, // Diagram lingkaran analisa
              { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale' }, // Persentase profit
              { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy' }, // Dompet pengeluaran

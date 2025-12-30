@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
+// Asumsi auto-import nuxt/composables
 const journalService = useJournalService();
 const productService = useProductService();
 const toast = useToast();
@@ -17,34 +18,31 @@ const filters = ref({
 
 // --- COMPUTED STATS ---
 const stats = computed(() => {
-    // Filter hanya transaksi NON-RETURN untuk menghitung total pengeluaran kotor
+    // Filter hanya transaksi BUY (bukan retur) untuk menghitung total pengeluaran kotor
     const grossPurchases = transactions.value.filter(t => t.type === 'BUY' && !t.isReturn);
-    // Menggunakan Math.abs karena total retur negatif
+    
+    // Total pengeluaran kotor (sebelum retur)
     const total = grossPurchases.reduce((a, b) => a + Math.abs(b.total), 0); 
+    
+    // Total transaksi (BUY + RT_BUY)
     const count = transactions.value.length;
-    const average = count > 0 ? total / count : 0;
     
     // Hitung Total Hutang (Hutang hanya dicatat saat BUY kredit)
     const totalHutang = transactions.value
-        .filter(t => t.isCredit && t.type === 'BUY')
+        .filter(t => t.isCredit && t.type === 'BUY' && !t.isReturn)
         .reduce((sum, t) => sum + Math.abs(t.total), 0);
-    
-    const supplierMap = {};
-    transactions.value.filter(t => t.type === 'BUY').forEach(t => { 
-        supplierMap[t.supplier] = (supplierMap[t.supplier] || 0) + 1;
-    });
-    const topSupplier = Object.keys(supplierMap).reduce((a, b) => supplierMap[a] > supplierMap[b] ? a : b, '-');
 
+    // Hitung total nota retur
     const totalReturnNotes = transactions.value.filter(t => t.isReturn).length;
 
-    return { total, count, average, topSupplier, totalHutang, totalReturnNotes };
+    return { total, count, totalHutang, totalReturnNotes };
 });
 
 // --- LOAD DATA ---
 const loadData = async () => {
     loading.value = true;
     try {
-        // 1. Fetch data produk untuk productsMap (Mapping Nama Produk)
+        // 1. Fetch data produk untuk productsMap (Mapping Nama Produk & Unit)
         const productsResponse = await productService.getAllProducts().catch(e => {
             console.error("Error fetching products:", e);
             return [];
@@ -65,10 +63,7 @@ const loadData = async () => {
         const safeBuyData = Array.isArray(buyResponse) ? buyResponse : buyResponse?.data || [];
         const safeReturnBuyData = Array.isArray(returnBuyResponse) ? returnBuyResponse : returnBuyResponse?.data || [];
 
-        const rawData = [
-            ...safeBuyData, 
-            ...safeReturnBuyData
-        ];
+        const rawData = [...safeBuyData, ...safeReturnBuyData];
         
         // 3. Map Data Safely
         transactions.value = rawData
@@ -77,10 +72,9 @@ const loadData = async () => {
             
             const journalDetails = journal.details || [];
             
+            // Convert Array of Key-Value to Object Map
             const detailsMap = journalDetails.reduce((acc, curr) => {
-                if (curr && curr.key) {
-                    acc[curr.key] = curr.value;
-                }
+                if (curr && curr.key) acc[curr.key] = curr.value;
                 return acc;
             }, {});
 
@@ -129,7 +123,7 @@ const loadData = async () => {
 
     } catch (e) {
         console.error("Gagal total memuat data pembelian:", e);
-        toast.add({ severity: 'error', summary: 'Error', detail: `Gagal memuat data pembelian: ${e.message || 'Cek koneksi API'}`, life: 5000 });
+        toast.add({ severity: 'error', summary: 'Error', detail: `Gagal memuat data: ${e.message}`, life: 5000 });
         transactions.value = [];
     } finally {
         loading.value = false;
@@ -148,70 +142,107 @@ const formatDate = (dateString) => {
     });
 };
 
-onMounted(() => {
-    loadData();
-});
-
 const refreshData = async () => {
     await loadData();
 }
+
+onMounted(() => {
+    loadData();
+});
 
 defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-400">
+    <div class="flex flex-col h-full bg-surface-50 dark:bg-surface-900 transition-colors duration-300">
         
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-            <div class="p-4 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
-                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i class="pi pi-wallet text-6xl text-orange-500"></i>
+        <div class="mb-8">
+            <h1 class="text-2xl md:text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Laporan Pembelian</h1>
+            <p class="text-surface-500 dark:text-surface-400 mt-1 text-sm">Rekapitulasi pengeluaran stok, retur ke supplier, dan hutang usaha.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+            <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+                <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <div class="bg-orange-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
-                <p class="text-surface-500 text-xs font-bold uppercase tracking-wider mb-1">Total Pengeluaran Kotor</p>
-                <h3 class="text-2xl font-black text-surface-800 dark:text-surface-100">{{ formatCurrency(stats.total) }}</h3>
-                <p class="text-xs text-green-600 mt-2 font-medium flex items-center"><i class="pi pi-arrow-up mr-1 text-[10px]"></i> Akumulasi Total Pembelian</p>
+                <div class="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Pengeluaran Kotor</p>
+                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ formatCurrency(stats.total) }}</h3>
+                    </div>
+                    <div class="bg-orange-50 dark:bg-orange-500/10 p-2.5 rounded-xl text-orange-600 dark:text-orange-400">
+                        <i class="pi pi-wallet text-xl"></i>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-orange-600 dark:text-orange-400 font-medium bg-orange-50 dark:bg-orange-500/10 w-fit px-2 py-1 rounded-lg">
+                    <i class="pi pi-arrow-up text-[10px]"></i>
+                    <span>Total Belanja Stok</span>
+                </div>
             </div>
 
-            <div class="p-4 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
-                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i class="pi pi-receipt text-6xl text-blue-500"></i>
+            <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+                <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <div class="bg-blue-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
-                <p class="text-surface-500 text-xs font-bold uppercase tracking-wider mb-1">Total Transaksi</p>
-                <h3 class="text-2xl font-black text-surface-800 dark:text-surface-100">{{ stats.count }} <span class="text-base font-normal text-surface-400">Nota</span></h3>
-                <p class="text-xs text-blue-500 mt-2 font-medium">Termasuk retur pembelian</p>
+                <div class="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Total Transaksi</p>
+                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ stats.count }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
+                    </div>
+                    <div class="bg-blue-50 dark:bg-blue-500/10 p-2.5 rounded-xl text-blue-600 dark:text-blue-400">
+                        <i class="pi pi-receipt text-xl"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-surface-500 dark:text-surface-400">Termasuk retur pembelian</p>
             </div>
 
-             <div class="p-4 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
-                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i class="pi pi-file-excel text-6xl text-red-500"></i>
+            <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+                <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <div class="bg-rose-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
-                <p class="text-surface-500 text-xs font-bold uppercase tracking-wider mb-1">Total Retur Pembelian</p>
-                <h3 class="text-xl font-black text-surface-800 dark:text-surface-100">{{ stats.totalReturnNotes }} <span class="text-sm font-normal text-surface-400">Nota</span></h3>
-                <p class="text-xs text-red-500 mt-2 font-medium">Pengurangan Pengeluaran</p>
+                <div class="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Retur Pembelian</p>
+                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ stats.totalReturnNotes }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
+                    </div>
+                    <div class="bg-rose-50 dark:bg-rose-500/10 p-2.5 rounded-xl text-rose-600 dark:text-rose-400">
+                        <i class="pi pi-undo text-xl"></i>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-500/10 w-fit px-2 py-1 rounded-lg">
+                    <i class="pi pi-arrow-down text-[10px]"></i>
+                    <span>Barang Dikembalikan</span>
+                </div>
             </div>
 
-            <div class="p-4 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 relative overflow-hidden group">
-                <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                    <i class="pi pi-arrow-down-left text-6xl text-purple-500"></i>
+             <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+                <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <div class="bg-purple-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
-                <p class="text-surface-500 text-xs font-bold uppercase tracking-wider mb-1">Total Hutang</p>
-                <h3 class="text-2xl font-black text-surface-800 dark:text-surface-100">{{ formatCurrency(stats.totalHutang) }}</h3>
-                <p class="text-xs text-purple-500 mt-2 font-medium">Pembelian Kredit Belum Lunas</p>
+                <div class="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Hutang Usaha</p>
+                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ formatCurrency(stats.totalHutang) }}</h3>
+                    </div>
+                    <div class="bg-purple-50 dark:bg-purple-500/10 p-2.5 rounded-xl text-purple-600 dark:text-purple-400">
+                        <i class="pi pi-book text-xl"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-surface-500 dark:text-surface-400">Pembelian Kredit Belum Lunas</p>
             </div>
         </div>
 
-        <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1">
+        <div class="bg-white dark:bg-surface-800 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700 flex-1 flex flex-col overflow-hidden">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-50/50 dark:bg-surface-400">
-                <div class="w-full sm:w-auto">
-                    <IconField iconPosition="left">
-                        <InputIcon class="pi pi-search text-surface-400" />
-                        <InputText v-model="filters['global'].value" placeholder="Cari Supplier, Kode..." class="w-full sm:w-80 !rounded-lg pl-10" />
-                    </IconField>
+            <div class="p-4 border-b border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0 dark:bg-surface-800">
+                <div class="w-full sm:w-auto relative">
+                    <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
+                    <InputText v-model="filters['global'].value" placeholder="Cari Supplier, Kode, Ref..." class="w-full sm:w-80 !pl-10 !rounded-xl" size="small" />
                 </div>
                 <div class="flex gap-2">
-                     <Button label="Filter Tanggal" icon="pi pi-calendar" severity="secondary" text size="small" />
-                     <Button label="Export" icon="pi pi-file-excel" severity="success" text size="small" />
+                     <Button label="Refresh" icon="pi pi-refresh" severity="secondary" text size="small" @click="refreshData" />
+                     <Button label="Export" icon="pi pi-file-excel" severity="secondary" outlined size="small" />
                 </div>
             </div>
 
@@ -223,32 +254,32 @@ defineExpose({ refreshData });
                 paginator :rows="10" :rowsPerPageOptions="[10,20,50]"
                 :filters="filters"
                 stripedRows
-                tableStyle="min-width: 60rem"
                 rowHover
-                class="text-sm"
+                class="flex-1 custom-table"
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-12 text-surface-400">
-                        <i class="pi pi-inbox text-4xl mb-2 opacity-50"></i>
-                        <p>Belum ada data pembelian.</p>
+                        <div class="bg-surface-50 dark:bg-surface-700 p-4 rounded-full mb-3">
+                            <i class="pi pi-inbox text-4xl opacity-50"></i>
+                        </div>
+                        <p class="font-medium">Belum ada data pembelian.</p>
                     </div>
                 </template>
 
                 <Column expander style="width: 3rem" />
 
-                <Column field="code" header="Info Transaksi" sortable>
+                <Column field="code" header="Transaksi" sortable>
                     <template #body="slotProps">
                         <div class="flex flex-col py-1">
-                             <span class="font-bold font-mono text-xs"
-                                :class="slotProps.data.isReturn ? 'text-red-700 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'"
+                             <span class="font-bold font-mono text-sm tracking-tight"
+                                :class="slotProps.data.isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-orange-600 dark:text-orange-400'"
                             >
                                 {{ slotProps.data.code }}
                             </span>
-                            <div class="flex items-center gap-1 text-surface-500 text-[11px] mt-0.5">
-                                <i class="pi pi-calendar text-[9px]"></i>
+                            <div class="flex items-center gap-1.5 text-surface-500 text-[11px] mt-1">
+                                <i class="pi pi-calendar text-[10px]"></i>
                                 <span>{{ formatDate(slotProps.data.date) }}</span>
                             </div>
-                            <Tag v-if="slotProps.data.isCredit" value="Hutang" severity="danger" rounded class="!text-[9px] mt-1 !font-extrabold !px-1.5 w-fit" />
                         </div>
                     </template>
                 </Column>
@@ -256,34 +287,32 @@ defineExpose({ refreshData });
                 <Column field="supplier" header="Supplier" sortable>
                      <template #body="slotProps">
                         <div class="flex items-center gap-2">
-                            <div class="w-8 h-8 rounded-full bg-surface-100 dark:bg-surface-400 flex items-center justify-center text-surface-500 font-bold text-xs">
-                                {{ slotProps.data.supplier.charAt(0).toUpperCase() }}
-                            </div>
-                            <div>
-                                <div class="font-bold text-surface-700 dark:text-surface-200">{{ slotProps.data.supplier }}</div>
-                                <div v-if="slotProps.data.refNo !== '-'" class="text-[10px] text-surface-500 bg-surface-100 dark:bg-surface-400 px-1.5 py-0.5 rounded inline-block mt-0.5">
-                                    Ref: {{ slotProps.data.refNo }}
-                                </div>
+                             <Avatar :label="slotProps.data.supplier ? slotProps.data.supplier.charAt(0).toUpperCase() : 'S'" shape="circle" size="small" class="!bg-surface-200 dark:!bg-surface-700 !text-surface-600 dark:!text-surface-300 !text-xs" />
+                            <div class="flex flex-col">
+                                <span class="font-medium text-surface-700 dark:text-surface-200 text-sm">{{ slotProps.data.supplier }}</span>
+                                <span v-if="slotProps.data.refNo !== '-'" class="text-[10px] text-surface-500 font-mono">Ref: {{ slotProps.data.refNo }}</span>
                             </div>
                         </div>
                     </template>
                 </Column>
                 
-                 <Column field="method" header="Pembayaran / Status" sortable>
+                 <Column field="method" header="Status" sortable>
                     <template #body="slotProps">
-                        <Tag 
-                            :value="slotProps.data.isReturn ? 'RETUR' : slotProps.data.isCredit ? 'KREDIT' : 'CASH'" 
-                            :severity="slotProps.data.isReturn ? 'danger' : slotProps.data.isCredit ? 'info' : 'success'" 
-                            rounded 
-                            class="!text-[10px] !font-extrabold !px-2 uppercase" 
-                        />
-                         <div v-if="slotProps.data.isCredit" class="text-[10px] text-surface-500 mt-1">J.Tempo: {{ slotProps.data.dueDate ? new Date(slotProps.data.dueDate).toLocaleDateString('id-ID') : '-' }}</div>
+                        <div class="flex flex-col gap-1 items-start">
+                            <Tag 
+                                :value="slotProps.data.isReturn ? 'RETUR' : slotProps.data.isCredit ? 'KREDIT' : 'TUNAI'" 
+                                :severity="slotProps.data.isReturn ? 'danger' : slotProps.data.isCredit ? 'warn' : 'success'" 
+                                rounded 
+                                class="!text-[10px] !font-bold !px-2 uppercase tracking-wide" 
+                            />
+                            <span v-if="slotProps.data.isCredit" class="text-[10px] text-orange-500 font-medium">Jatuh Tempo: {{ slotProps.data.dueDate ? new Date(slotProps.data.dueDate).toLocaleDateString('id-ID') : '-' }}</span>
+                        </div>
                     </template>
                 </Column>
 
                 <Column field="notes" header="Catatan">
                     <template #body="slotProps">
-                        <span v-if="slotProps.data.notes" class="text-xs text-surface-600 dark:text-surface-300 italic max-w-[200px] truncate block" :title="slotProps.data.notes">
+                        <span v-if="slotProps.data.notes" class="text-xs text-surface-600 dark:text-surface-300 italic max-w-[150px] truncate block" :title="slotProps.data.notes">
                             "{{ slotProps.data.notes }}"
                         </span>
                         <span v-else class="text-surface-400 text-xs">-</span>
@@ -292,50 +321,51 @@ defineExpose({ refreshData });
 
                 <Column field="items.length" header="Item" sortable class="text-center">
                     <template #body="slotProps">
-                         <Badge :value="slotProps.data.items.length" :severity="slotProps.data.isReturn ? 'danger' : 'warning'" class="!min-w-[1.5rem] !h-[1.5rem]" />
+                        <span class="inline-flex items-center justify-center bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-300 text-xs font-bold px-2.5 py-1 rounded-md min-w-[2rem]">
+                            {{ slotProps.data.items.length }}
+                         </span>
                     </template>
                 </Column>
 
                 <Column field="total" header="Total Bayar" sortable class="text-right">
                     <template #body="slotProps">
-                        <span class="font-black text-sm"
-                            :class="slotProps.data.isReturn ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'"
+                        <span class="font-bold text-sm"
+                            :class="slotProps.data.isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-surface-900 dark:text-surface-0'"
                         >
-                            {{ formatCurrency(Math.abs(slotProps.data.total)) }}
-                            <i v-if="slotProps.data.isReturn" class="pi pi-minus-circle text-[10px] ml-1"></i>
+                            {{ slotProps.data.isReturn ? '-' : '' }}{{ formatCurrency(Math.abs(slotProps.data.total)) }}
                         </span>
                     </template>
                 </Column>
 
                 <Column style="width: 4rem; text-align: center">
                     <template #body>
-                        <Button icon="pi pi-ellipsis-v" text rounded severity="secondary" size="small" />
+                        <Button icon="pi pi-print" text rounded severity="secondary" size="small" class="hover:bg-surface-100 dark:hover:bg-surface-700" v-tooltip.left="'Cetak Bukti'" />
                     </template>
                 </Column>
 
                 <template #expansion="slotProps">
-                    <div class="p-4 bg-surface-50 dark:bg-surface-400 border-t border-b border-surface-200 dark:border-surface-800 shadow-inner">
-                        <div class="flex items-center gap-2 mb-3 ml-1">
-                            <i class="pi pi-box text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 p-1.5 rounded-md"></i>
+                    <div class="p-4 bg-surface-50 dark:bg-surface-800/50 border-y border-surface-200 dark:border-surface-700">
+                        <div class="flex items-center gap-2 mb-3">
+                            <i class="pi pi-box text-orange-500"></i>
                             <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Rincian Barang {{ slotProps.data.isReturn ? 'Dikembalikan' : 'Masuk' }}</h5>
                         </div>
                         
-                        <div class="rounded-lg border border-surface-200 dark:border-surface-700 overflow-hidden">
+                        <div class="rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden bg-white dark:bg-surface-800 shadow-sm max-w-4xl">
                             <DataTable :value="slotProps.data.items" size="small" class="text-xs">
-                                <Column field="productName" header="Produk">
+                                <Column field="productName" header="Nama Produk">
                                     <template #body="i">
                                         <span class="font-medium text-surface-700 dark:text-surface-200">{{ i.data.productName }}</span>
                                     </template>
                                 </Column>
                                 <Column field="unitName" header="Satuan" style="width: 100px">
                                     <template #body="i">
-                                        <span class="bg-surface-100 dark:bg-surface-400 px-2 py-0.5 rounded text-[10px] font-bold text-surface-600 dark:text-surface-300">{{ i.data.unitName }}</span>
+                                        <span class="bg-surface-100 dark:bg-surface-700 px-2 py-0.5 rounded text-[10px] font-bold text-surface-600 dark:text-surface-300">{{ i.data.unitName }}</span>
                                     </template>
                                 </Column>
                                 <Column field="qty" header="Qty" class="text-center" style="width: 100px">
                                     <template #body="i">
-                                        <span class="font-bold px-2 py-0.5 rounded"
-                                            :class="slotProps.data.isReturn ? 'text-red-600 bg-red-50 dark:bg-red-900/20' : 'text-green-600 bg-green-50 dark:bg-green-900/20'"
+                                        <span class="font-bold px-2 py-0.5 rounded font-mono"
+                                            :class="slotProps.data.isReturn ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20' : 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20'"
                                         >
                                             {{ slotProps.data.isReturn ? '-' : '+' }}{{ i.data.qty }}
                                         </span>
@@ -353,10 +383,6 @@ defineExpose({ refreshData });
                                 </Column>
                             </DataTable>
                         </div>
-                        
-                        <div class="flex justify-end mt-3 gap-2">
-                             <Button label="Cetak Bukti" icon="pi pi-print" size="small" severity="secondary" outlined class="!text-xs !py-1" />
-                        </div>
                     </div>
                 </template>
 
@@ -366,74 +392,44 @@ defineExpose({ refreshData });
 </template>
 
 <style scoped>
-/* Mengatasi latar belakang tabel utama */
-:deep(.p-datatable) {
-    /* Menjadikan latar belakang transparent dan menghapus latar belakang PrimeVue */
-    background: transparent !important;
-    border-color: transparent !important;
+/* Styling khusus untuk DataTable agar menyatu dengan background */
+:deep(.custom-table .p-datatable-thead > tr > th) {
+    background-color: transparent;
+    color: var(--p-surface-500);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
 }
 
-/* Mengatasi latar belakang header */
-:deep(.p-datatable-thead > tr > th) {
-    background-color: var(--p-surface-50) !important; /* Light Mode default */
-    color: var(--p-text-color) !important;
-    border-color: var(--p-surface-200) !important;
+:deep(.custom-table .p-datatable-tbody > tr) {
+    background-color: transparent;
+    transition: background-color 0.2s;
 }
 
-/* Memaksa warna header di Dark Mode */
-.dark :deep(.p-datatable-thead > tr > th) {
-    background-color: var(--p-surface-900) !important;
-    color: var(--p-surface-100) !important;
-    border-color: var(--p-surface-800) !important;
+:deep(.custom-table .p-datatable-tbody > tr:hover) {
+    background-color: var(--p-surface-50);
 }
 
-/* Mengatasi latar belakang baris */
-:deep(.p-datatable-tbody > tr) {
-    background-color: var(--p-surface-0) !important; /* Light Mode default (putih) */
-    color: var(--p-text-color) !important;
-    border-color: var(--p-surface-200) !important;
+.dark :deep(.custom-table .p-datatable-tbody > tr:hover) {
+    background-color: var(--p-surface-700);
 }
 
-/* Mengatasi warna baris ganjil/genap (striped rows) */
-:deep(.p-datatable-tbody .p-row-even) {
-    background-color: var(--p-surface-50) !important; /* Light Mode striped */
+:deep(.p-datatable-tbody > tr > td) {
+    border-bottom: 1px solid var(--p-surface-100);
 }
 
-/* Memaksa warna baris di Dark Mode */
-.dark :deep(.p-datatable-tbody > tr) {
-    background-color: var(--p-surface-900) !important; /* Default Dark Row */
-}
-.dark :deep(.p-datatable-tbody .p-row-even) {
-    background-color: var(--p-surface-950) !important; /* Striped Dark Row (Genap) */
-}
-/* Memastikan warna baris ganjil di Dark Mode juga benar */
-.dark :deep(.p-datatable-tbody .p-row-odd) {
-     background-color: var(--p-surface-900) !important; /* Striped Dark Row (Ganjil) */
+.dark :deep(.p-datatable-tbody > tr > td) {
+    border-bottom: 1px solid var(--p-surface-700);
 }
 
-/* HOVER ROW FIX */
-.dark :deep(.p-datatable-tbody > tr:hover) {
-    background-color: var(--p-surface-800) !important; 
+/* Pagination Styling */
+:deep(.p-paginator) {
+    border-top: 1px solid var(--p-surface-200);
+    background: transparent;
 }
-:deep(.p-datatable-tbody > tr:hover) {
-    background-color: var(--p-surface-100) !important; 
-}
-
-/* Penyesuaian agar isi tabel rata atas */
-:deep(.p-datatable .p-datatable-tbody > tr > td) {
-    vertical-align: top;
-    border-color: var(--p-surface-200); /* Border Light */
-}
-.dark :deep(.p-datatable .p-datatable-tbody > tr > td) {
-    border-color: var(--p-surface-800); /* Border Dark */
-}
-
-
-.animate-fade-in {
-    animation: fadeIn 0.3s ease-in-out;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+.dark :deep(.p-paginator) {
+    border-top: 1px solid var(--p-surface-700);
 }
 </style>

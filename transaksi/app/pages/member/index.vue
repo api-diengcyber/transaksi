@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-6">
     <div class="flex justify-between items-center">
       <div>
-        <h1 class="text-2xl font-bold">Manajemen Member / Pelanggan</h1>
+        <h1 class="text-2xl font-bold">Member / Pelanggan</h1>
         <p class="text-gray-500">Daftar pelanggan setia (User Role: MEMBER)</p>
       </div>
       <button 

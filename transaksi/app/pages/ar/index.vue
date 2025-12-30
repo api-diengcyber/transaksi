@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
 // Import komponen Modal Tambah (Sesuaikan path jika berbeda)
-import ArapCreateModal from '~/components/arap/ArapCreateModal.vue';
+import ArCreateModal from '~/components/ar/ArCreateModal.vue';
 
 const journalService = useJournalService();
 const toast = useToast();
@@ -298,7 +298,7 @@ onMounted(() => { loadData(); });
             </template>
         </Dialog>
 
-        <ArapCreateModal 
+        <ArCreateModal 
             v-model:visible="showCreateModal" 
             defaultType="piutang"
             @saved="onTransactionSaved"

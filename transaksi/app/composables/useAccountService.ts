@@ -6,6 +6,12 @@ export const useAccountService = () => {
         });
     }
 
+    const getCategories = async () => {
+        return await useApi('/account/categories', {
+            method: 'GET'
+        });
+    }
+
     const create = async (payload: any) => {
         return await useApi('/account', {
             method: 'POST',
@@ -28,6 +34,7 @@ export const useAccountService = () => {
 
     return {
         getAll,
+        getCategories,
         create,
         update,
         remove

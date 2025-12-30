@@ -77,7 +77,7 @@ onMounted(() => {
 
         <div class="flex items-center justify-between mb-4">
             <div>
-                <h1 class="text-3xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Manajemen Produksi</h1>
+                <h1 class="text-2xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Produksi</h1>
                 <p class="text-surface-500 text-sm">Input data hasil produksi pegawai per langkah.</p>
             </div>
             <div class="flex gap-2">

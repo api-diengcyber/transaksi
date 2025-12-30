@@ -46,7 +46,7 @@ export class AccountEntity {
     store: StoreEntity;
 
     @Column({ name: 'parent_uuid', nullable: true, length: 60 })
-    parentUuid: string;
+    parentUuid: string | null;
 
     @ManyToOne(() => AccountEntity, (account) => account.children, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'parent_uuid' })
