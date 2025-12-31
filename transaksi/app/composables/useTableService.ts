@@ -31,11 +31,33 @@ export const useTableService = () => {
         });
     };
 
+    const bookTable = async (uuid: string, payload: { bookingName: string; bookingTime: string }) => {
+        return await useApi(`/table/book/${uuid}`, {
+            method: 'POST',
+            body: payload
+        });
+    };
+
+    const occupyTable = async (uuid: string) => {
+        return await useApi(`/table/occupy/${uuid}`, {
+            method: 'POST'
+        });
+    };
+
+    const clearTable = async (uuid: string) => {
+        return await useApi(`/table/clear/${uuid}`, {
+            method: 'POST'
+        });
+    };
+
     return {
         getAllTables,
         getTable,
         createTable,
         updateTable,
         deleteTable,
+        bookTable,
+        occupyTable,
+        clearTable
     };
 };

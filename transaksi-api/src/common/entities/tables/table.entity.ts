@@ -7,6 +7,12 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 
+export enum TableStatus {
+  AVAILABLE = 'AVAILABLE',
+  BOOKED = 'BOOKED',
+  OCCUPIED = 'OCCUPIED',
+}
+
 @Entity('table')
 export class TableEntity {
   @PrimaryColumn('varchar', { length: 60 })
@@ -17,6 +23,16 @@ export class TableEntity {
 
   @Column({ type: 'int', default: 2 })
   capacity: number;
+
+  @Column({
+    type: 'enum',
+    enum: TableStatus,
+    default: TableStatus.AVAILABLE,
+  })
+  status: TableStatus;
+
+  // Kolom Booking dihapus sesuai permintaan
+  // Data booking akan masuk history di Journal
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

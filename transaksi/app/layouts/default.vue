@@ -104,7 +104,7 @@ const items = ref([
         ]
     },
     { 
-        label: 'Menu', 
+        label: 'Transaksi', 
         icon: 'pi pi-shopping-cart', // Icon transaksi umum
         key: 'transaksi',
         items: [
