@@ -32,12 +32,12 @@ const onRootChange = (event: any, groupName: string) => {
         </div>
         <span :class="`font-bold text-${color}-900 text-sm tracking-wide`">{{ title }}</span>
       </div>
-      <span class="text-[10px] font-mono font-medium bg-white px-2.5 py-1 rounded-md text-gray-500 border border-gray-200/60 shadow-sm">
+      <span class="text-[10px] font-mono font-medium bg-surface-0 px-2.5 py-1 rounded-md text-gray-500 border border-gray-200/60 shadow-sm">
         {{ list.length }} Item
       </span>
     </div>
     
-    <div class="p-3 bg-white min-h-[150px] h-full relative">
+    <div class="p-3 bg-surface-0 min-h-[150px] h-full relative">
       <draggable 
         :list="list" 
         group="accounts" 

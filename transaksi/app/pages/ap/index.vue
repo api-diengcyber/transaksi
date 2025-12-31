@@ -153,14 +153,14 @@ onMounted(() => { loadData(); });
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-400 p-4">
+    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-100 p-4">
         
         <div class="mb-4 pb-2 border-b border-surface-200 dark:border-surface-700 flex items-center gap-2 text-xl font-semibold text-red-600">
             <i class="pi pi-arrow-down-left"></i>
             <span>Daftar Hutang (AP)</span>
         </div>
 
-        <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1 bg-surface-50/50 dark:bg-surface-400">
+        <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1 bg-surface-50/50 dark:bg-surface-100">
             
             <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center">
                 <IconField iconPosition="left">

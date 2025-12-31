@@ -304,10 +304,10 @@ const saveProduct = async () => {
         :style="{ width: '900px' }" 
         maximizable 
         class="p-fluid" 
-        :pt="{ content: { class: '!py-2 dark:bg-surface-900' } }"
+        :pt="{ content: { class: '!py-2 dark:bg-surface-100' } }"
     >
         
-        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6 bg-surface-0 dark:bg-surface-800">
+        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6 bg-surface-0 dark:bg-surface-100">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field mb-0">
                     <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Nama Produk <span class="text-red-500">*</span></label>
@@ -331,7 +331,7 @@ const saveProduct = async () => {
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
             <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
                 <span class="text-sm font-bold flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>
@@ -371,7 +371,7 @@ const saveProduct = async () => {
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
             <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
                 <span class="text-sm font-bold flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-[10px]">2</span>
@@ -409,7 +409,7 @@ const saveProduct = async () => {
             </div>
         </div>
         
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
              <div class="p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
                 <span class="text-sm font-bold flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">3</span>
@@ -427,7 +427,7 @@ const saveProduct = async () => {
             </div>
         </div>
 
-        <div class="section-box bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+        <div class="section-box bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
              <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
                 <span class="text-sm font-bold flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px]">4</span>

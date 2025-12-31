@@ -320,11 +320,11 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
+    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-100 font-sans">
         
-        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
             
-            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
+            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-100">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
                         <i class="pi pi-download text-xl"></i>
@@ -346,7 +346,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-100">
                 <div class="w-full md:w-48">
                     <MultiSelect 
                         v-model="selectedCategoryUuids" 
@@ -356,7 +356,7 @@ defineExpose({ refreshData });
                         placeholder="Filter Kategori" 
                         display="chip" 
                         :maxSelectedLabels="1" 
-                        class="w-full !h-10 !text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700" 
+                        class="w-full !h-10 !text-sm dark:bg-surface-100 border border-surface-200 dark:border-surface-700" 
                         :pt="{ label: { class: '!py-2 !px-3' } }"
                     >
                         <template #option="slotProps">
@@ -375,19 +375,19 @@ defineExpose({ refreshData });
                         v-model="searchQuery" 
                         type="text" 
                         placeholder="Cari Produk / Scan Barcode... (F2)" 
-                        class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all shadow-sm h-10" 
+                        class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all shadow-sm h-10" 
                         @keydown="onSearchKeydown" 
                         @input="handleLocalFiltering" 
                         autocomplete="off" 
                     />
                 </div>
 
-                <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
+                <div class="flex gap-1 bg-surface-100 dark:bg-surface-100 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
                     <button 
                         v-tooltip.bottom="'Tampilan List'"
                         @click="viewMode = 'list'"
                         class="w-8 h-full rounded flex items-center justify-center transition"
-                        :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                        :class="viewMode === 'list' ? 'bg-surface-0 dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
                     >
                         <i class="pi pi-list text-sm"></i>
                     </button>
@@ -395,7 +395,7 @@ defineExpose({ refreshData });
                         v-tooltip.bottom="'Tampilan Grid'"
                         @click="viewMode = 'grid'"
                         class="w-8 h-full rounded flex items-center justify-center transition"
-                        :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                        :class="viewMode === 'grid' ? 'bg-surface-0 dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
                     >
                         <i class="pi pi-th-large text-sm"></i>
                     </button>
@@ -403,7 +403,7 @@ defineExpose({ refreshData });
                     <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l border-surface-300 dark:border-surface-600 pl-1">
                         <button v-for="col in [3, 4, 5]" :key="col" @click="gridColumns = col" 
                              class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center"
-                             :class="gridColumns === col ? 'bg-white dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                             :class="gridColumns === col ? 'bg-surface-0 dark:bg-surface-600 shadow text-orange-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
                         >
                             {{ col }}
                         </button>
@@ -413,7 +413,7 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="warning" outlined v-tooltip.bottom="'Produk Baru'" @click="showCreateModal = true" />
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin flex flex-col">
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-100 scrollbar-thin flex flex-col">
                 <div v-if="loading" class="flex-1 flex justify-center items-center"><ProgressSpinner style="width: 40px; height: 40px" /></div>
                 
                 <div v-else-if="filteredProducts.length > 0" class="flex-1">
@@ -423,7 +423,7 @@ defineExpose({ refreshData });
                             v-for="prod in filteredProducts" 
                             :key="prod.uuid" 
                             @click="addToCart(prod)" 
-                            class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-orange-400 hover:shadow-md transition-all active:scale-95 select-none"
+                            class="group relative bg-surface-0 dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-orange-400 hover:shadow-md transition-all active:scale-95 select-none"
                             :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'"
                         >
                             <template v-if="viewMode === 'grid'">
@@ -465,7 +465,7 @@ defineExpose({ refreshData });
                     <span class="text-xs">Produk tidak ditemukan</span>
                 </div>
 
-                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-400 z-10">
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-100 z-10">
                     <Button icon="pi pi-chevron-left" label="Sebelumnya" size="small" text :disabled="currentPage === 1" @click="changePage(currentPage - 1)" class="!text-xs" />
                     <span class="text-xs font-medium text-surface-600 dark:text-surface-400">Halaman <span class="font-bold text-orange-600">{{ currentPage }}</span> dari {{ totalPages }} <span class="text-[10px] ml-1">({{ totalProducts }} total)</span></span>
                     <Button label="Selanjutnya" icon="pi pi-chevron-right" iconPos="right" size="small" text :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)" class="!text-xs" />
@@ -473,8 +473,8 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-full lg:w-[420px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-400/50 flex justify-between items-center">
+        <div class="w-full lg:w-[420px] flex flex-col bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-100/50 flex justify-between items-center">
                 <div class="flex items-center gap-2">
                     <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div>
                     <span class="font-bold text-sm text-surface-700 dark:text-surface-200">Item Masuk</span>
@@ -482,14 +482,14 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
             </div>
 
-            <div id="cart-items-container-buy" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-400/30">
+            <div id="cart-items-container-buy" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-100/30">
                  <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
-                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center"><i class="pi pi-inbox text-2xl opacity-40"></i></div>
+                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-100 rounded-full flex items-center justify-center"><i class="pi pi-inbox text-2xl opacity-40"></i></div>
                     <p class="text-xs">Belum ada item dipilih</p>
                 </div>
                 
-                <div v-for="(item, index) in cart" :key="index" class="group dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-2.5 hover:border-orange-300 dark:hover:border-orange-600 transition-all shadow-sm relative">
-                    <button class="absolute -top-2 -right-2 dark:bg-surface-900 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
+                <div v-for="(item, index) in cart" :key="index" class="group dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-xl p-2.5 hover:border-orange-300 dark:hover:border-orange-600 transition-all shadow-sm relative">
+                    <button class="absolute -top-2 -right-2 dark:bg-surface-100 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
                         <i class="pi pi-times text-[10px] font-bold"></i>
                     </button>
                     
@@ -506,18 +506,18 @@ defineExpose({ refreshData });
                             </div>
                         </div>
                         <div class="flex flex-col items-end gap-1.5">
-                            <div class="flex items-center bg-surface-100 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
+                            <div class="flex items-center bg-surface-100 dark:bg-surface-100 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
                                 <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"><i class="pi pi-minus text-[9px] font-bold"></i></button>
                                 <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" />
                                 <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-r-lg transition text-orange-600" @click="item.qty++"><i class="pi pi-plus text-[9px] font-bold"></i></button>
                             </div>
-                            <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-400 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">{{ formatCurrency(item.buyPrice * item.qty) }}</div>
+                            <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-100 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">{{ formatCurrency(item.buyPrice * item.qty) }}</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
+            <div class="p-4 dark:bg-surface-100 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
                 <div class="flex justify-between items-end">
                     <span class="text-sm text-surface-500 dark:text-surface-400 uppercase font-bold tracking-wider mb-1">Total Estimasi</span>
                     <span class="text-2xl font-black text-surface-900 dark:text-white">{{ formatCurrency(grandTotal) }}</span>
@@ -530,9 +530,9 @@ defineExpose({ refreshData });
     </div>
 
     <div v-if="showPurchaseModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
-        <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             
-            <div class="flex justify-between items-center p-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
+            <div class="flex justify-between items-center p-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-100">
                 <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100">Rincian Pembelian</h3>
                 <button @click="showPurchaseModal = false" class="text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 transition">
                     <i class="pi pi-times text-lg"></i>
@@ -581,7 +581,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 flex gap-3">
+            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-100 flex gap-3">
                 <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPurchaseModal = false" />
                 <Button 
                     :label="isCreditBuy ? 'Simpan Hutang' : 'Simpan Stok'" 

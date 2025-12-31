@@ -272,10 +272,10 @@ const isRouteActive = (item) => {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col bg-surface-50 dark:bg-surface-500 transition-colors duration-300">
+    <div class="min-h-screen flex flex-col bg-surface-50 dark:bg-surface-100 transition-colors duration-300">
         
         <aside v-if="layoutMode === 'sidebar' || layoutMode === 'multiwindow'" 
-               class="hidden lg:flex fixed top-0 left-0 h-screen bg-surface-0 dark:bg-surface-500 flex-col z-50 transition-all duration-300 shadow-xl border-r border-surface-200 dark:border-surface-700"
+               class="hidden lg:flex fixed top-0 left-0 h-screen bg-surface-0 dark:bg-surface-100 flex-col z-50 transition-all duration-300 shadow-xl border-r border-surface-200 dark:border-surface-700"
                :class="isSidebarCollapsed ? 'w-20' : 'w-64'">
             
             <div class="h-16 flex items-center justify-between px-3 border-b border-white/10 shadow-sm shrink-0" 
@@ -336,7 +336,7 @@ const isRouteActive = (item) => {
                     </div>
                 </template>
             </div>
-            <div class="p-4 border-t border-surface-200 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-500">
+            <div class="p-4 border-t border-surface-200 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-100">
                 <div class="flex items-center gap-3 group cursor-pointer" :class="isSidebarCollapsed ? 'justify-center' : ''" @click="toggleProfile" aria-haspopup="true" aria-controls="profile_menu">
                     <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-surface-0 !text-primary-700 font-bold border border-surface-200 dark:border-surface-700 shadow-sm shrink-0" shape="circle" />
                     <div v-show="!isSidebarCollapsed" class="flex-1 overflow-hidden transition-all duration-300">
@@ -392,7 +392,7 @@ const isRouteActive = (item) => {
                     <div class="flex items-center gap-3 pr-2 shrink-0">
                         <div class="hidden sm:block" v-if="authStore.flatStores && authStore.flatStores.length > 1">
                             <button @click="toggleStoreMenu" 
-                                class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-700 dark:text-surface-200 text-sm transition-colors border border-surface-200 dark:border-surface-700">
+                                class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-100 dark:bg-surface-100 hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-700 dark:text-surface-200 text-sm transition-colors border border-surface-200 dark:border-surface-700">
                                 <i class="pi pi-building text-primary-600"></i>
                                 <span class="font-medium max-w-[150px] truncate">{{ authStore.activeStore?.name }}</span>
                                 <i class="pi pi-chevron-down text-xs opacity-70"></i>
@@ -435,7 +435,7 @@ const isRouteActive = (item) => {
                     <div class="hidden sm:block" v-if="authStore.flatStores && authStore.flatStores.length > 1">
                         <button @click="toggleStoreMenu" 
                             class="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-surface-200 dark:hover:bg-surface-700 text-sm transition-colors border border-surface-200 dark:border-surface-700"
-                            :class="layoutMode === 'multiwindow' ? 'bg-surface-0 dark:bg-surface-800 text-surface-700 dark:text-surface-200' : 'bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-200'">
+                            :class="layoutMode === 'multiwindow' ? 'bg-surface-0 dark:bg-surface-100 text-surface-700 dark:text-surface-200' : 'bg-surface-100 dark:bg-surface-100 text-surface-700 dark:text-surface-200'">
                             <i class="pi pi-building text-primary-600"></i>
                             <span class="font-medium max-w-[150px] truncate">{{ authStore.activeStore?.name }}</span>
                             <i class="pi pi-chevron-down text-xs opacity-70"></i>
@@ -462,14 +462,14 @@ const isRouteActive = (item) => {
             </header>
 
             <div v-if="layoutMode === 'multiwindow'" 
-                 class="hidden lg:flex w-full h-9 bg-surface-100 dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 overflow-x-auto items-end px-2 gap-1 scrollbar-hide">
+                 class="hidden lg:flex w-full h-9 bg-surface-100 dark:bg-surface-100 border-b border-surface-200 dark:border-surface-800 overflow-x-auto items-end px-2 gap-1 scrollbar-hide">
                 
                 <div v-for="(tab, index) in openTabs" :key="tab.route" 
                      @click="router.push(tab.route)"
                      class="group flex items-center gap-2 px-3 h-8 min-w-[120px] max-w-[200px] text-xs cursor-pointer select-none transition-all rounded-t-md border-t border-x"
                      :class="route.path === tab.route 
-                        ? 'bg-surface-0 dark:bg-surface-500 border-surface-200 dark:border-surface-700 border-t-primary-500 text-primary-600 dark:text-primary-300 font-bold shadow-sm relative z-10' 
-                        : 'bg-surface-200/50 dark:bg-surface-800 border-transparent text-surface-500 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'">
+                        ? 'bg-surface-0 dark:bg-surface-100 border-surface-200 dark:border-surface-700 border-t-primary-500 text-primary-600 dark:text-primary-300 font-bold shadow-sm relative z-10' 
+                        : 'bg-surface-200/50 dark:bg-surface-100 border-transparent text-surface-500 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'">
                     
                     <i :class="[tab.icon, 'text-[10px]']"></i>
                     <span class="truncate flex-1">{{ tab.label }}</span>
@@ -484,7 +484,7 @@ const isRouteActive = (item) => {
             <main class="flex-1 container mx-auto p-4 lg:p-6 max-w-screen-2xl w-full animate-fade-in md:pb-6"
                   :class="[
                     layoutMode === 'tabs' ? 'pb-24' : 'pb-24',
-                    layoutMode === 'multiwindow' ? '!p-0 lg:!p-4 bg-surface-0/50 dark:bg-surface-900/50' : ''
+                    layoutMode === 'multiwindow' ? '!p-0 lg:!p-4 bg-surface-0/50 dark:bg-surface-100/50' : ''
                   ]"> 
                 <NuxtPage />
             </main>
@@ -496,7 +496,7 @@ const isRouteActive = (item) => {
             </footer>
         </div>
 
-        <nav class="fixed bottom-0 left-0 right-0 border-t border-surface-200 dark:border-surface-800 z-50 bg-surface-0 dark:bg-surface-500 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
+        <nav class="fixed bottom-0 left-0 right-0 border-t border-surface-200 dark:border-surface-800 z-50 bg-surface-0 dark:bg-surface-100 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
              :class="layoutMode === 'tabs' ? 'flex' : 'lg:hidden flex'">
              
             <div class="flex justify-around items-center h-16 w-full" :class="layoutMode === 'tabs' ? 'max-w-screen-xl mx-auto' : ''">
@@ -516,12 +516,12 @@ const isRouteActive = (item) => {
             </div>
         </nav>
 
-        <Menu ref="storeMenu" :model="storeItems" :popup="true" class="w-64" />
-        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-48" />
-        <Menu ref="desktopMenuRef" :model="desktopSubItems" :popup="true" class="mt-2 w-48" />
-        <Menu ref="mobileMenuRef" :model="mobileSubItems" :popup="true" class="!w-48 !mb-2" />
+        <Menu ref="storeMenu" :model="storeItems" :popup="true" class="w-64 bg-surface-0 dark:bg-surface-100" />
+        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-48 bg-surface-0 dark:bg-surface-100" />
+        <Menu ref="desktopMenuRef" :model="desktopSubItems" :popup="true" class="mt-2 w-48 bg-surface-0 dark:bg-surface-100" />
+        <Menu ref="mobileMenuRef" :model="mobileSubItems" :popup="true" class="!w-48 !mb-2 bg-surface-0 dark:bg-surface-100" />
 
-        <div v-if="isSwitchingStore" class="fixed inset-0 z-[9999] bg-surface-50/90 dark:bg-surface-500/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
+        <div v-if="isSwitchingStore" class="fixed inset-0 z-[9999] bg-surface-50/90 dark:bg-surface-100 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
             <div class="relative mb-6">
                 <i class="pi pi-spin pi-spinner text-6xl text-primary-600"></i>
                 <div class="absolute inset-0 flex items-center justify-center">

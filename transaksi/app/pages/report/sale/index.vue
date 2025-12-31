@@ -147,7 +147,7 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-surface-50 dark:bg-surface-900 transition-colors duration-300">
+    <div class="flex flex-col h-full bg-surface-50 dark:bg-surface-100 transition-colors duration-300">
         
         <div class="mb-8">
             <h1 class="text-2xl md:text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Laporan Penjualan</h1>
@@ -155,7 +155,7 @@ defineExpose({ refreshData });
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-            <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-emerald-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
@@ -174,7 +174,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-blue-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
@@ -190,7 +190,7 @@ defineExpose({ refreshData });
                 <p class="text-xs text-surface-500 dark:text-surface-400">Akumulasi Penjualan & Retur</p>
             </div>
 
-            <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-rose-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
@@ -209,7 +209,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-             <div class="p-5 rounded-2xl bg-white dark:bg-surface-800 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+             <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-orange-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
@@ -226,9 +226,9 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="bg-white dark:bg-surface-800 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700 flex-1 flex flex-col overflow-hidden">
+        <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700 flex-1 flex flex-col overflow-hidden">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0 dark:bg-surface-800">
+            <div class="p-4 border-b border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0 dark:bg-surface-100">
                 <div class="w-full sm:w-auto relative">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
                     <InputText v-model="filters['global'].value" placeholder="Cari No. Nota, Pelanggan..." class="w-full sm:w-80 !pl-10 !rounded-xl" size="small" />
@@ -321,13 +321,13 @@ defineExpose({ refreshData });
                 </Column>
 
                 <template #expansion="slotProps">
-                    <div class="p-4 bg-surface-50 dark:bg-surface-800/50 border-y border-surface-200 dark:border-surface-700">
+                    <div class="p-4 bg-surface-50 dark:bg-surface-100/50 border-y border-surface-200 dark:border-surface-700">
                         <div class="flex items-center gap-2 mb-3">
                             <i class="pi pi-list text-primary-500"></i>
                             <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Detail Produk</h5>
                         </div>
                         
-                        <div class="rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden bg-white dark:bg-surface-800 shadow-sm max-w-3xl">
+                        <div class="rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden bg-surface-0 dark:bg-surface-100 shadow-sm max-w-3xl">
                             <DataTable :value="slotProps.data.items" size="small" class="text-xs">
                                 <Column field="productName" header="Nama Produk">
                                     <template #body="i">

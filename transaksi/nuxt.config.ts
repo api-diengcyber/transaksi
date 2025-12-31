@@ -29,7 +29,13 @@ export default defineNuxtConfig({
     '@nuxtjs/tailwindcss',
     '@pinia/nuxt',
     '@pinia-plugin-persistedstate/nuxt',
+    '@nuxtjs/color-mode'
   ],
+  colorMode: {
+    classSuffix: '',
+    preference: 'system', 
+    fallback: 'light'
+  },
   primevue: {
     options: {
       theme: {

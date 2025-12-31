@@ -162,7 +162,7 @@ onMounted(() => {
 
 <template>
     <div class="h-full flex flex-col">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 p-4 bg-surface-50 dark:bg-surface-400 rounded-lg border border-surface-100 dark:border-surface-800">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 p-4 bg-surface-50 dark:bg-surface-100 rounded-lg border border-surface-100 dark:border-surface-800">
             <div class="flex flex-col">
                 <span class="text-xs font-bold text-surface-400 uppercase tracking-wide">Info Produksi</span>
                 <div class="text-sm mt-1">

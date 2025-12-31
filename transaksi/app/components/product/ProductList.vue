@@ -160,7 +160,7 @@ defineExpose({ refresh });
             </div>
         </div>
 
-        <div class="flex-1 overflow-hidden border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-0 dark:bg-surface-900 shadow-sm flex flex-col">
+        <div class="flex-1 overflow-hidden border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-0 dark:bg-surface-100 shadow-sm flex flex-col">
             <DataTable 
                 :value="products" 
                 :loading="loading" 

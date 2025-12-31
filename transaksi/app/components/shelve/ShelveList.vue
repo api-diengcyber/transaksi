@@ -94,7 +94,7 @@ defineExpose({ refresh: fetchShelves });
 
         <div v-else class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
             <div @click="emit('create')" class="rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6 flex flex-col items-center justify-center text-center h-56 border-dashed border-2 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors group">
-                <div class="w-12 h-12 rounded-full bg-surface-100 dark:bg-surface-400 group-hover:bg-primary-50 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
+                <div class="w-12 h-12 rounded-full bg-surface-100 dark:bg-surface-100 group-hover:bg-primary-50 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
                     <i class="pi pi-plus text-xl"></i>
                 </div>
                 <span class="font-bold text-surface-600 dark:text-surface-400 group-hover:text-primary-600">Buat Rak Baru</span>
@@ -120,7 +120,7 @@ defineExpose({ refresh: fetchShelves });
                     </p>
 
                     <div class="mt-auto space-y-2">
-                        <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-400 p-2 rounded border border-surface-100 dark:border-surface-700">
+                        <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-100 p-2 rounded border border-surface-100 dark:border-surface-700">
                              <div class="flex items-center gap-2">
                                 <i class="pi pi-box text-blue-500"></i>
                                 <span class="text-xs font-medium">Kapasitas</span>
@@ -128,7 +128,7 @@ defineExpose({ refresh: fetchShelves });
                             <span class="font-bold">{{ shelf.capacity || '∞' }}</span>
                         </div>
 
-                        <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-400 p-2 rounded border border-surface-100 dark:border-surface-700">
+                        <div class="flex items-center justify-between text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-100 p-2 rounded border border-surface-100 dark:border-surface-700">
                             <div class="flex items-center gap-2">
                                 <i class="pi pi-tags text-emerald-500"></i>
                                 <span class="text-xs font-medium">Total Item</span>
@@ -151,7 +151,7 @@ defineExpose({ refresh: fetchShelves });
             </div>
 
             <div v-else-if="selectedShelf" class="space-y-4">
-                <div class="grid grid-cols-2 gap-4 bg-surface-50 dark:bg-surface-400 p-4 rounded-lg border border-surface-100 dark:border-surface-700">
+                <div class="grid grid-cols-2 gap-4 bg-surface-50 dark:bg-surface-100 p-4 rounded-lg border border-surface-100 dark:border-surface-700">
                     <div>
                         <label class="text-xs text-surface-500 block mb-1">Kapasitas Max</label>
                         <span class="font-bold text-lg">{{ selectedShelf.capacity || 'Tidak Terbatas' }}</span>
@@ -171,7 +171,7 @@ defineExpose({ refresh: fetchShelves });
                     <div class="border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
                         <div class="max-h-64 overflow-y-auto scrollbar-thin">
                             <table class="w-full text-sm text-left">
-                                <thead class="bg-surface-50 dark:bg-surface-400 text-xs uppercase text-surface-500 sticky top-0 z-10">
+                                <thead class="bg-surface-50 dark:bg-surface-100 text-xs uppercase text-surface-500 sticky top-0 z-10">
                                     <tr>
                                         <th class="px-4 py-2">Produk</th>
                                         <th class="px-4 py-2">Satuan</th>

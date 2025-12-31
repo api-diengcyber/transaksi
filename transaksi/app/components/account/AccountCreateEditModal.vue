@@ -127,7 +127,7 @@ const onSubmit = async () => {
             leave-to="opacity-0 scale-95 translate-y-4"
           >
             <DialogPanel
-              class="w-full max-w-md transform overflow-hidden rounded-2xl bg-white text-left align-middle shadow-2xl transition-all"
+              class="w-full max-w-md transform overflow-hidden rounded-2xl bg-surface-0 text-left align-middle shadow-2xl transition-all"
             >
               <div class="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
                 <DialogTitle as="h3" class="text-lg font-bold leading-6 text-gray-900">
@@ -146,7 +146,7 @@ const onSubmit = async () => {
                     <div class="relative">
                       <select
                         v-model="form.category"
-                        class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
+                        class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-surface-0 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
                       >
                         <option 
                           v-for="cat in categories" 
@@ -169,7 +169,7 @@ const onSubmit = async () => {
                     <div class="relative">
                       <select
                         v-model="form.parentUuid"
-                        class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
+                        class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-surface-0 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
                       >
                         <option value="">- Akun Utama (Root) -</option>
                         <option v-for="parent in parentOptions" :key="parent.uuid" :value="parent.uuid">
@@ -228,7 +228,7 @@ const onSubmit = async () => {
                   <div class="mt-8 flex justify-end gap-3 pt-4 border-t border-gray-100">
                     <button
                       type="button"
-                      class="inline-flex justify-center rounded-xl border border-transparent bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none border-gray-200 transition-all"
+                      class="inline-flex justify-center rounded-xl border border-transparent bg-surface-0 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none border-gray-200 transition-all"
                       @click="closeModal"
                     >
                       Batal

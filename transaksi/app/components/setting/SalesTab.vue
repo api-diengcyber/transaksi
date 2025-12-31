@@ -15,7 +15,7 @@ defineProps({
                 <InputSwitch v-model="settings.sale_tax_enabled" />
             </div>
 
-            <div v-if="settings.sale_tax_enabled" class="bg-surface-50 dark:bg-surface-400 p-4 rounded-xl border border-surface-200 dark:border-surface-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            <div v-if="settings.sale_tax_enabled" class="bg-surface-50 dark:bg-surface-100 p-4 rounded-xl border border-surface-200 dark:border-surface-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <div class="field">
                     <label>Persentase Pajak (%)</label>
                     <InputNumber v-model="settings.sale_tax_percentage" suffix="%" :min="0" :max="100" showButtons class="w-full" />
@@ -50,7 +50,7 @@ defineProps({
 </template>
 
 <style scoped>
-.card-section { @apply dark:bg-surface-400 bg-surface-0 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6; }
+.card-section { @apply dark:bg-surface-100 bg-surface-0 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6; }
 .section-title { @apply text-base font-bold text-surface-800 dark:text-surface-100 mb-4 pb-2 border-b border-surface-100 dark:border-surface-700; }
 .field label { @apply text-xs font-bold text-surface-500 uppercase tracking-wide mb-1.5 block; }
 .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }

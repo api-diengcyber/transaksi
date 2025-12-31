@@ -13,7 +13,7 @@
       </button>
     </div>
 
-    <div class="bg-surface-0 dark:bg-surface-500 rounded-xl shadow border border-gray-100 overflow-hidden">
+    <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow border border-gray-100 overflow-hidden">
       <table class="w-full text-left border-collapse">
         <thead class="bg-surface-200 dark:bg-surface-700 border-b">
           <tr>

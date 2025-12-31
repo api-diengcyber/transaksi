@@ -128,14 +128,14 @@ watch(() => props.visible, async (val) => {
         :modal="true" 
         :style="{ width: '800px' }" 
         maximizable
-        class="p-fluid" :pt="{ content: { class: '!py-2 dark:bg-surface-400' } }">
+        class="p-fluid" :pt="{ content: { class: '!py-2 dark:bg-surface-100' } }">
         
         <div v-if="loading" class="text-center py-10">
             <ProgressSpinner />
         </div>
         
         <div v-else class="space-y-4">
-            <div class="p-3 bg-surface-50 dark:bg-surface-400 rounded-lg border border-surface-200 dark:border-surface-700">
+            <div class="p-3 bg-surface-50 dark:bg-surface-100 rounded-lg border border-surface-200 dark:border-surface-700">
                 <p class="text-sm font-semibold text-surface-700 dark:text-surface-200">
                     Definisi: 1 Unit Produk Jadi ({{ productData?.units.find(u => u.uuid === productData.defaultUnitUuid)?.unitName || 'PCS' }}) terdiri dari...
                 </p>
@@ -151,7 +151,7 @@ watch(() => props.visible, async (val) => {
                     Belum ada bahan baku terdaftar.
                 </div>
 
-                <div v-for="(ingredient, index) in recipe.ingredients" :key="index" class="p-3 border border-surface-200 dark:border-surface-700 rounded-lg bg-surface-0 dark:bg-surface-400 flex flex-col md:flex-row gap-3 items-center">
+                <div v-for="(ingredient, index) in recipe.ingredients" :key="index" class="p-3 border border-surface-200 dark:border-surface-700 rounded-lg bg-surface-0 dark:bg-surface-100 flex flex-col md:flex-row gap-3 items-center">
                     
                     <div class="flex-1">
                         <label class="text-[10px] font-bold text-surface-500 block mb-1">Bahan Baku</label>

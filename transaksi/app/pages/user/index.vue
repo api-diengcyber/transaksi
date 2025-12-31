@@ -173,9 +173,9 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-surface-0 dark:bg-surface-900 p-4 rounded-2xl border border-gray-200 dark:border-surface-700 shadow-sm">
+        <div class="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-surface-0 dark:bg-surface-100 p-4 rounded-2xl border border-gray-200 dark:border-surface-700 shadow-sm">
             
-            <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-surface-800 rounded-xl overflow-x-auto max-w-full lg:max-w-3xl no-scrollbar">
+            <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-surface-100 rounded-xl overflow-x-auto max-w-full lg:max-w-3xl no-scrollbar">
                 <button 
                     v-for="tab in roleTabs" 
                     :key="tab.role"
@@ -207,7 +207,7 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-900 border border-gray-200 dark:border-surface-700 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
+        <div class="bg-surface-0 dark:bg-surface-100 border border-gray-200 dark:border-surface-700 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
             <DataTable 
                 :value="filteredUsers" 
                 :loading="loading" 
@@ -217,13 +217,13 @@ onMounted(() => {
                 tableStyle="min-width: 50rem"
                 class="flex-1"
                 :pt="{
-                    headerRow: { class: 'bg-gray-50 dark:bg-surface-800 text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wider font-semibold border-b border-gray-200 dark:border-surface-700' },
+                    headerRow: { class: 'bg-gray-50 dark:bg-surface-100 text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wider font-semibold border-b border-gray-200 dark:border-surface-700' },
                     bodyRow: { class: 'hover:bg-gray-50 dark:hover:bg-surface-800/50 transition-colors border-b border-gray-100 dark:border-surface-800 last:border-0' }
                 }"
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-16 text-center">
-                        <div class="bg-gray-50 dark:bg-surface-800 p-4 rounded-full mb-4">
+                        <div class="bg-gray-50 dark:bg-surface-100 p-4 rounded-full mb-4">
                             <i class="pi pi-users text-4xl text-gray-400 dark:text-gray-500"></i>
                         </div>
                         <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Data Tidak Ditemukan</h3>

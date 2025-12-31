@@ -110,7 +110,7 @@ const navigateTo = (path) => router.push(path);
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div v-for="item in quickMenu" :key="item.title" 
                              @click="navigateTo(item.route)"
-                             class="group relative overflow-hidden bg-surface-0 dark:bg-surface-800 p-5 rounded-2xl border border-surface-100 dark:border-surface-700 shadow-sm hover:shadow-lg transition-all cursor-pointer">
+                             class="group relative overflow-hidden bg-surface-0 dark:bg-surface-100 p-5 rounded-2xl border border-surface-100 dark:border-surface-700 shadow-sm hover:shadow-lg transition-all cursor-pointer">
                             
                             <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-10 rounded-bl-full transition-transform group-hover:scale-110" :class="item.color"></div>
                             
@@ -137,7 +137,7 @@ const navigateTo = (path) => router.push(path);
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
                         <div v-for="item in secondaryMenu" :key="item.label"
                              @click="navigateTo(item.route)"
-                             class="flex flex-col items-center justify-center gap-2 p-4 bg-surface-0 dark:bg-surface-800 border border-surface-100 dark:border-surface-700 rounded-2xl hover:border-primary-200 dark:hover:border-primary-800 hover:shadow-md cursor-pointer transition-all group">
+                             class="flex flex-col items-center justify-center gap-2 p-4 bg-surface-0 dark:bg-surface-100 border border-surface-100 dark:border-surface-700 rounded-2xl hover:border-primary-200 dark:hover:border-primary-800 hover:shadow-md cursor-pointer transition-all group">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110" :class="item.color">
                                 <i :class="[item.icon, 'text-lg']"></i>
                             </div>
@@ -150,7 +150,7 @@ const navigateTo = (path) => router.push(path);
 
             <div class="space-y-6">
                 
-                <div class="bg-surface-0 dark:bg-surface-800 rounded-2xl shadow-sm border border-surface-100 dark:border-surface-700 p-5">
+                <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-100 dark:border-surface-700 p-5">
                     <h3 class="font-bold text-surface-700 dark:text-surface-100 mb-4 text-sm uppercase tracking-wider">Ringkasan Hari Ini</h3>
                     <div class="space-y-4">
                         <div class="flex justify-between items-center p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl">
@@ -183,7 +183,7 @@ const navigateTo = (path) => router.push(path);
                     </div>
                 </div>
 
-                <div class="bg-surface-0 dark:bg-surface-800 rounded-2xl shadow-sm border border-surface-100 dark:border-surface-700 p-5">
+                <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-100 dark:border-surface-700 p-5">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-bold text-surface-700 dark:text-surface-100 text-sm uppercase tracking-wider">Aktivitas Terakhir</h3>
                         <button class="text-xs text-primary-600 hover:underline">Lihat Semua</button>

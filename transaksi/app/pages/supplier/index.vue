@@ -13,9 +13,9 @@
       </button>
     </div>
 
-    <div class="bg-surface-0 dark:bg-surface-500 rounded-xl shadow border border-gray-100 overflow-hidden">
+    <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow border border-gray-100 overflow-hidden">
       <table class="w-full text-left border-collapse">
-        <thead class="bg-surface-200 dark:bg-surface-900 border-b">
+        <thead class="bg-surface-200 dark:bg-surface-100 border-b">
           <tr>
             <th class="px-6 py-4 text-sm font-semibold text-gray-600">Nama Supplier</th>
             <th class="px-6 py-4 text-sm font-semibold text-gray-600">Kontak / Email</th>

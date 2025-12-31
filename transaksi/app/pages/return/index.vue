@@ -283,11 +283,11 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
+    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-100 font-sans">
         
-        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
             
-            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
+            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-100">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
                         <i class="pi pi-undo text-xl"></i>
@@ -303,7 +303,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-100">
                 <div class="w-full flex gap-2">
                     <div class="relative flex-1">
                         <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 text-sm"></i>
@@ -312,19 +312,19 @@ defineExpose({ refreshData });
                             v-model="searchQuery" 
                             type="text"
                             placeholder="Cari Produk / Scan Barcode yang diretur... (Enter, F2)" 
-                            class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-400 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-all shadow-sm h-10"
+                            class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-all shadow-sm h-10"
                             @keydown="onSearchKeydown"
                             @input="handleLocalFiltering"
                             autocomplete="off"
                         />
                     </div>
 
-                    <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
+                    <div class="flex gap-1 bg-surface-100 dark:bg-surface-100 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
                         <button 
                             v-tooltip.bottom="'Tampilan List'"
                             @click="viewMode = 'list'"
                             class="w-8 h-full rounded flex items-center justify-center transition"
-                            :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-red-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                            :class="viewMode === 'list' ? 'bg-surface-0 dark:bg-surface-600 shadow text-red-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
                         >
                             <i class="pi pi-list text-sm"></i>
                         </button>
@@ -332,7 +332,7 @@ defineExpose({ refreshData });
                             v-tooltip.bottom="'Tampilan Grid'"
                             @click="viewMode = 'grid'"
                             class="w-8 h-full rounded flex items-center justify-center transition"
-                            :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-red-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                            :class="viewMode === 'grid' ? 'bg-surface-0 dark:bg-surface-600 shadow text-red-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
                         >
                             <i class="pi pi-th-large text-sm"></i>
                         </button>
@@ -340,7 +340,7 @@ defineExpose({ refreshData });
                         <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l border-surface-300 dark:border-surface-600 pl-1">
                             <button v-for="col in [3, 4, 5]" :key="col" @click="gridColumns = col" 
                                  class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center"
-                                 :class="gridColumns === col ? 'bg-white dark:bg-surface-600 shadow text-red-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
+                                 :class="gridColumns === col ? 'bg-surface-0 dark:bg-surface-600 shadow text-red-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
                             >
                                 {{ col }}
                             </button>
@@ -349,7 +349,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin flex flex-col">
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-100 scrollbar-thin flex flex-col">
                  <div v-if="loading" class="flex justify-center py-20">
                     <ProgressSpinner style="width: 40px; height: 40px" />
                 </div>
@@ -358,7 +358,7 @@ defineExpose({ refreshData });
                     <div :class="gridContainerClass">
                         <div v-for="prod in filteredProducts" :key="prod.uuid"
                             @click="addToCart(prod)"
-                            class="group relative bg-white dark:bg-surface-400 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-red-400 hover:shadow-md transition-all active:scale-95 select-none"
+                            class="group relative bg-surface-0 dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-red-400 hover:shadow-md transition-all active:scale-95 select-none"
                             :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'"
                         >
                             <template v-if="viewMode === 'grid'">
@@ -368,7 +368,7 @@ defineExpose({ refreshData });
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-end mt-1">
-                                    <span class="text-[10px] font-medium text-surface-500 bg-surface-100 dark:bg-surface-500 px-1.5 py-0.5 rounded">
+                                    <span class="text-[10px] font-medium text-surface-500 bg-surface-100 dark:bg-surface-100 px-1.5 py-0.5 rounded">
                                         {{ getDefaultUnitName(prod) }}
                                     </span>
                                     <i class="pi pi-plus-circle text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
@@ -398,7 +398,7 @@ defineExpose({ refreshData });
                     <span class="text-xs">Produk tidak ditemukan</span>
                 </div>
                 
-                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-400 z-10">
+                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-100 z-10">
                     <Button icon="pi pi-chevron-left" label="Sebelumnya" size="small" text :disabled="currentPage === 1" @click="changePage(currentPage - 1)" class="!text-xs" />
                     <span class="text-xs font-medium text-surface-600 dark:text-surface-400">
                         Halaman <span class="font-bold text-red-600">{{ currentPage }}</span> dari {{ totalPages }}
@@ -408,8 +408,8 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-[420px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-400 flex justify-between items-center">
+        <div class="w-[420px] flex flex-col bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-100 flex justify-between items-center">
                 <div class="flex items-center gap-2">
                     <div class="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
                         <span class="font-bold text-xs">{{ cart.length }}</span>
@@ -419,18 +419,18 @@ defineExpose({ refreshData });
                 <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
             </div>
 
-            <div id="cart-items-container-return" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-400">
+            <div id="cart-items-container-return" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-100">
                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
-                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-400 rounded-full flex items-center justify-center">
+                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-100 rounded-full flex items-center justify-center">
                         <i class="pi pi-inbox text-2xl opacity-40"></i>
                     </div>
                     <p class="text-xs">Belum ada item dipilih</p>
                 </div>
 
                 <div v-for="(item, index) in cart" :key="index" 
-                     class="group bg-white dark:bg-surface-400 border border-surface-200 dark:border-surface-700 rounded-xl p-3 hover:border-red-400 dark:hover:border-red-600 transition-all shadow-sm relative">
+                     class="group bg-surface-0 dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-xl p-3 hover:border-red-400 dark:hover:border-red-600 transition-all shadow-sm relative">
                     
-                    <button class="absolute -top-2 -right-2 bg-white dark:bg-surface-400 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
+                    <button class="absolute -top-2 -right-2 bg-surface-0 dark:bg-surface-100 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
                         <i class="pi pi-times text-[10px] font-bold"></i>
                     </button>
 
@@ -440,7 +440,7 @@ defineExpose({ refreshData });
 
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex flex-col gap-1 flex-1">
-                             <div class="inline-flex items-center h-6 bg-surface-50 dark:bg-surface-400 rounded-lg px-2 border border-surface-200 dark:border-surface-600 w-fit">
+                             <div class="inline-flex items-center h-6 bg-surface-50 dark:bg-surface-100 rounded-lg px-2 border border-surface-200 dark:border-surface-600 w-fit">
                                 <span class="text-[9px] text-surface-400 font-bold uppercase mr-1 tracking-wide">Unit</span>
                                 <Dropdown 
                                     v-model="item.unitUuid" 
@@ -470,16 +470,16 @@ defineExpose({ refreshData });
                         </div>
 
                         <div class="flex flex-col items-end gap-1.5">
-                            <div class="flex items-center bg-surface-100 dark:bg-surface-400 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
-                                <button class="w-7 h-full flex items-center justify-center hover:bg-surface-200 dark:hover:bg-surface-500 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
+                            <div class="flex items-center bg-surface-100 dark:bg-surface-100 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
+                                <button class="w-7 h-full flex items-center justify-center hover:bg-surface-200 dark:hover:bg-surface-800 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
                                     <i class="pi pi-minus text-[9px] font-bold"></i>
                                 </button>
                                 <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" />
-                                <button class="w-7 h-full flex items-center justify-center hover:bg-surface-200 dark:hover:bg-surface-500 rounded-r-lg transition text-primary-600" @click="item.qty++">
+                                <button class="w-7 h-full flex items-center justify-center hover:bg-surface-200 dark:hover:bg-surface-800 rounded-r-lg transition text-primary-600" @click="item.qty++">
                                     <i class="pi pi-plus text-[9px] font-bold"></i>
                                 </button>
                             </div>
-                            <div class="text-xs font-black text-red-600 dark:text-red-400 bg-surface-50 dark:bg-surface-400 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">
+                            <div class="text-xs font-black text-red-600 dark:text-red-400 bg-surface-50 dark:bg-surface-100 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">
                                 {{ formatCurrency(item.refundPrice * item.qty) }}
                             </div>
                         </div>
@@ -487,7 +487,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-4 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
+            <div class="p-4 dark:bg-surface-100 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
                 <div class="flex justify-between items-end">
                     <span class="text-sm text-surface-500 dark:text-surface-400 uppercase font-bold tracking-wider mb-1">Total Refund</span>
                     <span class="text-2xl font-black text-red-600 dark:text-red-400">{{ formatCurrency(grandTotal) }}</span>
@@ -498,9 +498,9 @@ defineExpose({ refreshData });
     </div>
 
     <div v-if="showReturnModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
-        <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             
-            <div class="flex justify-between items-center p-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
+            <div class="flex justify-between items-center p-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-100">
                 <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100 flex items-center gap-2">
                     <i class="pi pi-refresh text-red-600"></i>
                     Rincian Pengembalian
@@ -565,7 +565,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 flex gap-3">
+            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-100 flex gap-3">
                 <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showReturnModal = false" />
                 <Button 
                     label="Konfirmasi Retur" 

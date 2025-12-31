@@ -13,7 +13,7 @@
       </button>
     </div>
 
-    <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
+    <div class="bg-surface-0 rounded-xl shadow border border-gray-100 overflow-hidden">
       <table class="w-full text-left border-collapse">
         <thead class="bg-gray-50 border-b">
           <tr>
@@ -47,7 +47,7 @@
     </div>
 
     <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+      <div class="bg-surface-0 rounded-xl shadow-xl w-full max-w-md p-6">
         <h2 class="text-xl font-bold mb-4">Tambah Rekening Bank</h2>
         
         <div class="flex flex-col gap-4">

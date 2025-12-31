@@ -86,5 +86,5 @@ body {
 }
 
 .global-tab-active {
-    @apply px-4 py-2 text-sm font-extrabold text-primary-600 dark:text-primary-400 bg-surface-0 dark:bg-surface-400 border border-surface-300 dark:border-surface-700 border-b-0 rounded-t-lg shadow-md;
+    @apply px-4 py-2 text-sm font-extrabold text-primary-600 dark:text-primary-400 bg-surface-0 dark:bg-surface-100 border border-surface-300 dark:border-surface-700 border-b-0 rounded-t-lg shadow-md;
 }

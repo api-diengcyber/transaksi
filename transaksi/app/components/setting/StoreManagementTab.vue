@@ -144,7 +144,7 @@ const getStoreTypeConfig = (store) => {
         type: 'PUSAT',
         label: 'PUSAT',
         icon: 'pi pi-building',
-        colorClass: 'text-primary-600 bg-surface-0 dark:bg-surface-400 border-l-4 border-l-primary-600',
+        colorClass: 'text-primary-600 bg-surface-0 dark:bg-surface-100 border-l-4 border-l-primary-600',
         badgeSeverity: 'info',
         desc: store.description || 'Pusat Operasional'
     };
@@ -153,7 +153,7 @@ const getStoreTypeConfig = (store) => {
 
 <template>
     <div class="animate-fade-in space-y-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-0 dark:bg-surface-400 p-5 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-0 dark:bg-surface-100 p-5 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm gap-4">
             <div>
                 <h3 class="text-lg font-bold text-surface-900 dark:text-surface-100 flex items-center gap-2">
                     <i class="pi pi-briefcase text-primary-600"></i>
@@ -177,7 +177,7 @@ const getStoreTypeConfig = (store) => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div v-for="store in sortedStores" :key="store.uuid" 
                     @click="authStore.switchStore(store.uuid)"
-                    class="group relative rounded-xl border transition-all cursor-pointer shadow-sm hover:shadow-md overflow-hidden bg-surface-0 dark:bg-surface-400"
+                    class="group relative rounded-xl border transition-all cursor-pointer shadow-sm hover:shadow-md overflow-hidden bg-surface-0 dark:bg-surface-100"
                     :class="[
                         getStoreTypeConfig(store).colorClass,
                         store.uuid === authStore.activeStore?.uuid 
@@ -249,7 +249,7 @@ const getStoreTypeConfig = (store) => {
                         </div>
                     </div>
 
-                    <div class="bg-surface-50 dark:bg-surface-400 px-5 py-3 flex justify-between items-center text-xs font-medium text-surface-500 transition-colors group-hover:bg-primary-50 dark:group-hover:bg-primary-900/10">
+                    <div class="bg-surface-50 dark:bg-surface-100 px-5 py-3 flex justify-between items-center text-xs font-medium text-surface-500 transition-colors group-hover:bg-primary-50 dark:group-hover:bg-primary-900/10">
                         <span>ID: {{ store.uuid.substring(0, 8) }}...</span>
                         <span class="text-primary-600 group-hover:underline flex items-center gap-1">
                             Kelola Toko Ini <i class="pi pi-arrow-right"></i>
@@ -264,8 +264,8 @@ const getStoreTypeConfig = (store) => {
                 <i class="pi pi-sitemap"></i> Struktur Hierarki Cabang: <span class="text-primary-600">{{ authStore.activeStore?.name }}</span>
             </h4>
 
-            <div v-if="branchTreeNodes.length === 0" class="flex flex-col items-center justify-center py-12 bg-surface-0 dark:bg-surface-400 rounded-xl border border-dashed border-surface-300 dark:border-surface-700">
-                <div class="w-16 h-16 bg-surface-100 dark:bg-surface-400 rounded-full flex items-center justify-center mb-3">
+            <div v-if="branchTreeNodes.length === 0" class="flex flex-col items-center justify-center py-12 bg-surface-0 dark:bg-surface-100 rounded-xl border border-dashed border-surface-300 dark:border-surface-700">
+                <div class="w-16 h-16 bg-surface-100 dark:bg-surface-100 rounded-full flex items-center justify-center mb-3">
                     <i class="pi pi-sitemap text-2xl text-surface-400"></i>
                 </div>
                 <p class="text-surface-600 dark:text-surface-300 font-medium mb-1">Belum ada struktur cabang</p>
@@ -273,7 +273,7 @@ const getStoreTypeConfig = (store) => {
                 <Button label="Buat Cabang Pertama" icon="pi pi-plus" size="small" @click="openBranchModal(null)" />
             </div>
 
-            <div v-else class="card border border-surface-200 dark:border-surface-700 rounded-xl overflow-hidden bg-surface-0 dark:bg-surface-400 shadow-sm">
+            <div v-else class="card border border-surface-200 dark:border-surface-700 rounded-xl overflow-hidden bg-surface-0 dark:bg-surface-100 shadow-sm">
                 <TreeTable :value="branchTreeNodes" :autoLayout="true" class="text-sm">
                     <Column field="name" header="Nama Cabang" :expander="true">
                         <template #body="slotProps">

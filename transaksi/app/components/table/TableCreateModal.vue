@@ -80,7 +80,7 @@ const closeDialog = () => {
         :header="isEditMode ? 'Edit Meja' : 'Buat Meja Baru'" 
         :modal="true" 
         :style="{ width: '400px' }" 
-        class="p-fluid"
+        class="p-fluid bg-surface-0 dark:bg-surface-100"
     >
         <div class="flex flex-col gap-5 pt-2">
             <div class="field">

@@ -368,10 +368,10 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
+    <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-100 font-sans">
         
-        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
-             <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
+        <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
+             <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-100">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400"><i class="pi pi-shop text-xl"></i></div>
                     <div><h1 class="text-lg font-bold text-surface-800 dark:text-surface-100 leading-tight">{{ authStore.activeStore?.name || 'POS' }}</h1></div>
@@ -382,26 +382,26 @@ defineExpose({ refreshData });
                 </div>
             </div>
             
-            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
+            <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-100">
                 <MultiSelect v-model="selectedCategoryUuids" :options="categories" optionLabel="name" optionValue="uuid" placeholder="Filter Kategori" display="chip" :maxSelectedLabels="1" class="w-full md:w-48 !h-10 !text-sm" />
                 <div class="relative flex-1">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm"></i>
-                    <input id="search-input-sale" v-model="searchQuery" type="text" placeholder="Cari Produk (F2)" class="w-full pl-9 pr-3 py-2 text-sm border rounded-lg h-10 dark:bg-surface-800 dark:border-surface-700" @keydown="onSearchKeydown" />
+                    <input id="search-input-sale" v-model="searchQuery" type="text" placeholder="Cari Produk (F2)" class="w-full pl-9 pr-3 py-2 text-sm border rounded-lg h-10 dark:bg-surface-100 dark:border-surface-700" @keydown="onSearchKeydown" />
                 </div>
-                 <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
-                    <button @click="viewMode = 'list'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-list text-sm"></i></button>
-                    <button @click="viewMode = 'grid'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-th-large text-sm"></i></button>
+                 <div class="flex gap-1 bg-surface-100 dark:bg-surface-100 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
+                    <button @click="viewMode = 'list'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'list' ? 'bg-surface-0 dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-list text-sm"></i></button>
+                    <button @click="viewMode = 'grid'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'grid' ? 'bg-surface-0 dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-th-large text-sm"></i></button>
                     <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l pl-1 border-surface-300">
-                        <button v-for="n in [2, 3, 4, 5]" :key="n" @click="gridColumns = n" class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center" :class="gridColumns === n ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'">{{ n }}</button>
+                        <button v-for="n in [2, 3, 4, 5]" :key="n" @click="gridColumns = n" class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center" :class="gridColumns === n ? 'bg-surface-0 dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'">{{ n }}</button>
                     </div>
                 </div>
                 <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Tambah Produk Baru'" @click="showCreateProductModal = true" />
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin">
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-100 scrollbar-thin">
                 <div v-if="loading" class="flex justify-center p-10"><ProgressSpinner style="width: 40px; height: 40px" /></div>
                 <div v-else-if="products.length > 0" :class="gridContainerClass">
-                    <div v-for="prod in products" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'">
+                    <div v-for="prod in products" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 dark:bg-surface-100 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'">
                         <div v-if="viewMode === 'grid'">
                             <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1">{{ prod.name }}</div>
                             <div class="flex gap-1 mt-1"><span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span></div>
@@ -418,7 +418,7 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-full lg:w-[400px] xl:w-[450px] flex flex-col h-[calc(100vh-2rem)] bg-white dark:bg-surface-900 rounded-2xl shadow-xl border border-surface-200 dark:border-surface-800 overflow-hidden flex-shrink-0">
+        <div class="w-full lg:w-[400px] xl:w-[450px] flex flex-col h-[calc(100vh-2rem)] bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-xl border border-surface-200 dark:border-surface-800 overflow-hidden flex-shrink-0">
             
             <div class="p-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50 backdrop-blur-md z-10">
                 <div class="flex items-center gap-3">
@@ -431,14 +431,14 @@ defineExpose({ refreshData });
                 <Button v-if="cart.length > 0" label="Reset" icon="pi pi-trash" text severity="danger" size="small" class="!text-xs !px-2" @click="cart = []" />
             </div>
 
-            <div id="cart-items-container" class="flex-1 overflow-y-auto p-3 space-y-3 bg-surface-50 dark:bg-surface-900 scroll-smooth">
+            <div id="cart-items-container" class="flex-1 overflow-y-auto p-3 space-y-3 bg-surface-50 dark:bg-surface-100 scroll-smooth">
                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-400 gap-4 opacity-60 min-h-[300px]">
                     <div class="w-24 h-24 rounded-full bg-surface-100 flex items-center justify-center"><i class="pi pi-shopping-bag text-4xl"></i></div>
                     <p class="text-sm font-medium">Keranjang belum terisi</p>
                 </div>
 
-                <div v-for="(item, index) in cart" :key="index" class="group relative bg-white dark:bg-surface-800 rounded-xl p-3 shadow-sm border border-transparent hover:border-primary-200 dark:hover:border-primary-800 transition-all duration-200 hover:shadow-md">
-                    <button @click="removeFromCart(index)" class="absolute -top-2 -right-2 bg-white dark:bg-surface-700 text-surface-400 hover:text-red-500 w-6 h-6 rounded-full shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 scale-0 group-hover:scale-100 border border-surface-100"><i class="pi pi-times text-[10px] font-bold"></i></button>
+                <div v-for="(item, index) in cart" :key="index" class="group relative bg-surface-0 dark:bg-surface-100 rounded-xl p-3 shadow-sm border border-transparent hover:border-primary-200 dark:hover:border-primary-800 transition-all duration-200 hover:shadow-md">
+                    <button @click="removeFromCart(index)" class="absolute -top-2 -right-2 bg-surface-0 dark:bg-surface-700 text-surface-400 hover:text-red-500 w-6 h-6 rounded-full shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 scale-0 group-hover:scale-100 border border-surface-100"><i class="pi pi-times text-[10px] font-bold"></i></button>
 
                     <div class="flex justify-between items-start gap-2 mb-2">
                         <div class="flex-1">
@@ -451,7 +451,7 @@ defineExpose({ refreshData });
                         <div class="text-right"><div class="text-sm font-black text-primary-600 dark:text-primary-400">{{ formatCurrency(item.price * item.qty) }}</div></div>
                     </div>
 
-                    <div class="flex items-center justify-between gap-3 bg-surface-50 dark:bg-surface-900/50 p-1.5 rounded-lg">
+                    <div class="flex items-center justify-between gap-3 bg-surface-50 dark:bg-surface-100/50 p-1.5 rounded-lg">
                         <div class="flex-1 min-w-0">
                             <div class="relative">
                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-surface-400">Rp</span>
@@ -459,7 +459,7 @@ defineExpose({ refreshData });
                             </div>
                         </div>
                         
-                        <div class="flex items-center bg-white dark:bg-surface-800 rounded-md shadow-sm border border-surface-200 dark:border-surface-700 h-7 shrink-0 overflow-hidden">
+                        <div class="flex items-center bg-surface-0 dark:bg-surface-100 rounded-md shadow-sm border border-surface-200 dark:border-surface-700 h-7 shrink-0 overflow-hidden">
                             <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-red-500 hover:bg-red-50 transition border-r border-surface-100" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
                                 <i class="pi text-[10px] font-bold" :class="item.qty > 1 ? 'pi-minus' : 'pi-trash'"></i>
                             </button>
@@ -472,7 +472,7 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-4 bg-white dark:bg-surface-900 border-t border-surface-200 dark:border-surface-800 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-20">
+            <div class="p-4 bg-surface-0 dark:bg-surface-100 border-t border-surface-200 dark:border-surface-800 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-20">
                 <div class="space-y-2 mb-4">
                     <div class="flex justify-between items-center text-sm text-surface-500"><span>Subtotal</span><span class="font-mono">{{ formatCurrency(cartSubtotal) }}</span></div>
                     <div v-if="taxEnabled" class="flex justify-between items-center text-sm text-surface-500"><span>Pajak ({{ taxRate }}%)</span><span class="font-mono text-red-500">+ {{ formatCurrency(taxAmount) }}</span></div>
@@ -503,9 +503,9 @@ defineExpose({ refreshData });
     <ProductCreateModal v-model:visible="showCreateProductModal" @saved="loadProducts" />
 
     <div v-if="showPaymentModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
-        <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh] border border-surface-100 dark:border-surface-700" :class="{'ring-2 ring-purple-500': isPreOrder, 'ring-2 ring-blue-500': transactionType === 'MUTATION'}">
+        <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh] border border-surface-100 dark:border-surface-700" :class="{'ring-2 ring-purple-500': isPreOrder, 'ring-2 ring-blue-500': transactionType === 'MUTATION'}">
             
-            <div class="flex justify-between items-center px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
+            <div class="flex justify-between items-center px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-100">
                 <div class="flex items-center gap-2">
                     <h3 class="font-bold text-xl text-surface-800 dark:text-surface-100">Pembayaran</h3>
                     <span v-if="isPreOrder" class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[10px] font-bold border border-purple-200">PO (Pre-Order)</span>
@@ -523,9 +523,9 @@ defineExpose({ refreshData });
                 </div>
 
                 <div class="grid grid-cols-1 gap-4">
-                     <div class="flex p-1 bg-surface-100 dark:bg-surface-900 rounded-lg">
-                         <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'SALE' ? 'bg-white dark:bg-surface-800 text-primary-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'SALE'"><i class="pi pi-user"></i> Penjualan</button>
-                        <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'MUTATION' ? 'bg-white dark:bg-surface-800 text-blue-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'MUTATION'"><i class="pi pi-arrow-right-arrow-left"></i> Mutasi Cabang</button>
+                     <div class="flex p-1 bg-surface-100 dark:bg-surface-100 rounded-lg">
+                         <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'SALE' ? 'bg-surface-0 dark:bg-surface-100 text-primary-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'SALE'"><i class="pi pi-user"></i> Penjualan</button>
+                        <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'MUTATION' ? 'bg-surface-0 dark:bg-surface-100 text-blue-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'MUTATION'"><i class="pi pi-arrow-right-arrow-left"></i> Mutasi Cabang</button>
                     </div>
 
                     <div v-if="transactionType === 'SALE'" class="space-y-3">
@@ -540,7 +540,7 @@ defineExpose({ refreshData });
                             </div>
                         </div>
                         
-                        <div class="flex items-center justify-between bg-surface-50 dark:bg-surface-900/50 px-3 py-2 rounded-lg border border-surface-200">
+                        <div class="flex items-center justify-between bg-surface-50 dark:bg-surface-100/50 px-3 py-2 rounded-lg border border-surface-200">
                             <div class="flex flex-col"><span class="text-xs font-bold text-surface-700">Pre-Order (PO)</span><span class="text-[9px] text-surface-500">Aktifkan jika barang belum ready</span></div>
                             <InputSwitch v-model="isPreOrder" class="scale-75" />
                         </div>
@@ -552,12 +552,12 @@ defineExpose({ refreshData });
                     </div>
                 </div>
 
-                <div class="bg-surface-0 dark:bg-surface-800 border border-surface-200 rounded-xl overflow-hidden">
-                    <div class="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-900/30 cursor-pointer" @click="shippingState.enable = !shippingState.enable">
+                <div class="bg-surface-0 dark:bg-surface-100 border border-surface-200 rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-100/30 cursor-pointer" @click="shippingState.enable = !shippingState.enable">
                         <div class="flex items-center gap-2"><i class="pi pi-truck text-surface-500"></i><span class="text-sm font-bold text-surface-700">Pengiriman Ekspedisi</span></div>
                         <InputSwitch v-model="shippingState.enable" class="scale-75" @click.stop />
                     </div>
-                    <div v-if="shippingState.enable" class="p-3 border-t border-surface-100 space-y-3 bg-white animate-fade-in-down">
+                    <div v-if="shippingState.enable" class="p-3 border-t border-surface-100 space-y-3 bg-surface-0 animate-fade-in-down">
                         <div class="grid grid-cols-2 gap-3">
                             <div><label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Kurir</label><Dropdown v-model="shippingState.courierUuid" :options="couriers" optionLabel="name" optionValue="uuid" placeholder="Pilih..." class="w-full !text-xs" /></div>
                             <div><label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Layanan</label><Dropdown v-model="shippingState.routeUuid" :options="availableRoutes" optionLabel="destination" optionValue="uuid" placeholder="Pilih..." class="w-full !text-xs" :disabled="!shippingState.courierUuid">
@@ -574,7 +574,7 @@ defineExpose({ refreshData });
                     </div>
 
                     <div class="space-y-3">
-                        <div v-for="(line, idx) in paymentLines" :key="idx" class="relative p-3 rounded-xl border-l-4 shadow-sm bg-white border border-surface-200 transition-all hover:shadow-md" :class="{'border-l-emerald-500': line.type === 'TUNAI', 'border-l-orange-500': line.type === 'KREDIT', 'border-l-purple-500': line.type === 'CICILAN'}">
+                        <div v-for="(line, idx) in paymentLines" :key="idx" class="relative p-3 rounded-xl border-l-4 shadow-sm bg-surface-0 border border-surface-200 transition-all hover:shadow-md" :class="{'border-l-emerald-500': line.type === 'TUNAI', 'border-l-orange-500': line.type === 'KREDIT', 'border-l-purple-500': line.type === 'CICILAN'}">
                             <div class="flex gap-3 items-start">
                                 <div class="w-32 shrink-0">
                                     <Dropdown v-model="line.type" :options="['TUNAI', 'KREDIT', 'CICILAN']" class="w-full !text-xs font-bold" :pt="{ input: { class: '!py-2' } }">
@@ -610,7 +610,7 @@ defineExpose({ refreshData });
 
             </div>
 
-            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 space-y-3">
+            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-100 space-y-3">
                 <div class="flex justify-between items-center">
                     <span class="text-sm font-medium text-surface-600">{{ remainingBalance > 0 ? (hasDebtOrInstallment ? 'Sisa (Akan jadi Hutang)' : 'Kurang Bayar') : 'Kembalian' }}</span>
                     <span class="text-xl font-black font-mono" :class="remainingBalance > 100 ? 'text-red-500' : 'text-emerald-500'">{{ formatCurrency(Math.abs(remainingBalance)) }}</span>

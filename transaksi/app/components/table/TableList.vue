@@ -139,7 +139,7 @@ const getCardClass = (status) => {
         case 'BOOKED':
             return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800';
         default: // AVAILABLE
-            return 'bg-surface-0 dark:bg-surface-800 border-surface-200 dark:border-surface-700';
+            return 'bg-surface-0 dark:bg-surface-100 border-surface-200 dark:border-surface-700';
     }
 };
 
@@ -200,7 +200,7 @@ defineExpose({ refresh: fetchTables });
 
             <div v-for="table in tables" :key="table.uuid" 
                 :class="['rounded-xl shadow-sm border p-4 flex flex-col justify-between transition-all relative group hover:shadow-md', getCardClass(table.status)]"
-                class="min-h-[180px]"
+                class="min-h-[180px] bg-surface-0 dark:bg-surface-100"
             >
                 <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                     <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" @click.stop="emit('edit', table)" v-tooltip.top="'Edit Data Meja'" />
@@ -219,11 +219,10 @@ defineExpose({ refresh: fetchTables });
                            'text-red-500 dark:text-red-400': table.status === 'OCCUPIED'
                        }"
                     ></i>
-                    
                     <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100 line-clamp-1">{{ table.name }}</h3>
                     <p class="text-sm text-surface-500 mb-1">Kapasitas: {{ table.capacity }} Org</p>
 
-                    <div v-if="table.status === 'BOOKED'" class="mt-2 p-2 bg-white/50 dark:bg-black/20 rounded text-xs w-full">
+                    <div v-if="table.status === 'BOOKED'" class="mt-2 p-2 bg-surface-0/50 dark:bg-black/20 rounded text-xs w-full">
                         <div class="font-semibold text-surface-700 dark:text-surface-200 truncate">{{ table.bookingName }}</div>
                         <div class="text-surface-500 flex items-center justify-center gap-1">
                             <i class="pi pi-clock text-[10px]"></i> {{ formatTime(table.bookingTime) }}
@@ -273,7 +272,7 @@ defineExpose({ refresh: fetchTables });
             </div>
         </div>
 
-        <Dialog v-model:visible="showBookingModal" modal header="Booking Meja" :style="{ width: '400px' }">
+        <Dialog v-model:visible="showBookingModal" modal header="Booking Meja" :style="{ width: '400px' }" class="bg-surface-0 dark:bg-surface-100">
             <div class="flex flex-col gap-4">
                 <div class="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-center gap-3">
                     <i class="pi pi-info-circle text-primary-600 text-xl"></i>

@@ -184,7 +184,7 @@ definePageMeta({ layout: "default" });
 
       <div class="flex flex-col lg:flex-row gap-8">
         <aside class="w-full lg:w-64 shrink-0 space-y-2">
-          <div class="bg-surface-0 dark:bg-surface-400 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
+          <div class="bg-surface-0 dark:bg-surface-100 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
             <div class="p-2">
               <button v-for="item in menuItems" :key="item.id" @click="changeTab(item.id)"
                 class="w-full text-left p-3 rounded-lg flex items-start gap-3 transition-all duration-200 group relative overflow-hidden"
