@@ -1,18 +1,28 @@
 <script setup>
-import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, reactive, watch, nextTick, defineAsyncComponent } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useAuthStore } from '~/stores/auth.store';
+import { useBankService } from '~/composables/useBankService';
+import { useProductService } from '~/composables/useProductService';
+import { useJournalService } from '~/composables/useJournalService';
+import { useCategoryService } from '~/composables/useCategoryService';
+import { useUserService } from '~/composables/useUserService';
 import { useStoreService } from '~/composables/useStoreService';
 import { useCourierService } from '~/composables/useCourierService';
-import { useBankService } from '~/composables/useBankService';
+import { useTableService } from '~/composables/useTableService';
+
+// --- COMPONENT IMPORTS ---
+const ProductCreateModal = defineAsyncComponent(() => import('~/components/product/ProductCreateModal.vue'));
 
 // --- SERVICES ---
 const productService = useProductService();
 const journalService = useJournalService();
 const categoryService = useCategoryService();
+const bankService = useBankService();
+const userService = useUserService(); 
 const storeService = useStoreService();
 const courierService = useCourierService();
-const bankService = useBankService();
+const tableService = useTableService();
 const authStore = useAuthStore();
 const toast = useToast();
 
@@ -25,49 +35,46 @@ const cart = ref([]);
 const searchQuery = ref('');
 const loading = ref(true);
 const processing = ref(false);
+
+// --- MODAL STATES ---
 const showPaymentModal = ref(false);
+const showCreateProductModal = ref(false);
+const showTableModal = ref(false);
 
-// --- VIEW STATE (BARU) ---
-const viewMode = ref('grid'); // 'grid' | 'list'
-const gridColumns = ref(4); // 3 | 4 | 5
-
+// --- VIEW STATE ---
+const viewMode = ref('grid'); 
+const gridColumns = ref(4); 
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]);
 
 // --- DATA MASTER ---
-const couriers = ref([]);
 const banks = ref([]);
-const allRoutes = ref([]); 
-const availableRoutes = ref([]); 
+const members = ref([]);
 const myStores = ref([]);
+const couriers = ref([]); 
+const availableRoutes = ref([]); 
+const tables = ref([]); 
 
-// --- STATE TRANSAKSI KHUSUS ---
-const isInterStore = ref(false);
-const selectedTargetStore = ref(null);
+// --- STATE TRANSAKSI ---
+const transactionType = ref('SALE'); // 'SALE' | 'MUTATION'
+const isPreOrder = ref(false); 
 
-// State Ekspedisi
-const shipping = reactive({
+const transactionMeta = reactive({
+    memberUuid: null,
+    customerName: '', 
+    targetStoreUuid: null,
+});
+
+// --- STATE PENGIRIMAN ---
+const shippingState = reactive({
     enable: false,
     courierUuid: null,
     routeUuid: null,
     cost: 0
 });
 
-// State Pembayaran
-const payment = reactive({
-    mainMethod: 'TUNAI', // TUNAI, KREDIT, CICILAN
-    subMethod: 'CASH',   // CASH, BANK
-    
-    amount: null,        // Total Bayar / DP
-    bankUuid: null,      
-    
-    customerName: '',    // Global Customer Name
-    dueDate: null,       
-    
-    // Khusus Cicilan
-    installmentCount: 1, 
-    installmentFee: 0,   
-});
+// --- STATE PEMBAYARAN MULTI ---
+const paymentLines = ref([]); 
 
 // --- PAGINATION ---
 const currentPage = ref(1);
@@ -92,143 +99,180 @@ const taxAmount = computed(() => {
 
 const grandTotal = computed(() => {
     let total = taxMethod.value === 'exclusive' ? cartSubtotal.value + taxAmount.value : cartSubtotal.value;
-    if (shipping.enable && shipping.cost > 0) total += Number(shipping.cost);
+    if (shippingState.enable && shippingState.cost > 0) total += Number(shippingState.cost);
     return total;
 });
 
-const isCreditOrCicilan = computed(() => payment.mainMethod === 'KREDIT' || payment.mainMethod === 'CICILAN');
-const isBankPayment = computed(() => payment.subMethod === 'BANK');
-
-const amountPaid = computed(() => payment.amount || 0); 
-const remainingDebt = computed(() => {
-    if (!isCreditOrCicilan.value) return 0;
-    return Math.max(0, grandTotal.value - amountPaid.value);
-});
-const changeAmount = computed(() => {
-    if (isCreditOrCicilan.value) return 0;
-    return amountPaid.value - grandTotal.value;
-});
-
-const monthlyInstallment = computed(() => {
-    if (payment.mainMethod !== 'CICILAN' || payment.installmentCount <= 0) return 0;
-    const totalFee = payment.installmentFee * payment.installmentCount;
-    return (remainingDebt.value + totalFee) / payment.installmentCount;
-});
-
-// --- DATE HELPER FOR TITLE ---
 const currentDate = computed(() => {
-    return new Date().toLocaleDateString('id-ID', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
+    return new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 });
 
-// --- GRID CLASS HELPER (BARU) ---
 const gridContainerClass = computed(() => {
-    if (viewMode.value === 'list') {
-        return 'flex flex-col gap-2';
+    if (viewMode.value === 'list') return 'flex flex-col gap-2';
+    switch (gridColumns.value) {
+        case 2: return 'grid grid-cols-2 gap-3';
+        case 3: return 'grid grid-cols-2 md:grid-cols-3 gap-3';
+        case 5: return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3';
+        default: return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3'; 
     }
-    // Logic untuk grid columns
-    // Mobile selalu 2 kolom, tablet 3 kolom, desktop sesuai setting
-    if (gridColumns.value === 3) return 'grid grid-cols-2 md:grid-cols-3 gap-3';
-    if (gridColumns.value === 5) return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3';
-    // Default 4
-    return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3';
 });
+
+// --- LOGIKA PEMBAYARAN & CICILAN ---
+const totalInputAmount = computed(() => paymentLines.value.reduce((sum, line) => sum + (line.amount || 0), 0));
+const remainingBalance = computed(() => grandTotal.value - totalInputAmount.value);
+const hasDebtOrInstallment = computed(() => paymentLines.value.some(l => l.type === 'KREDIT' || l.type === 'CICILAN'));
+
+const getInstallmentSchedule = (line) => {
+    if (line.type !== 'CICILAN' || line.amount <= 0 || line.tenor <= 0) return [];
+    const principalPerMonth = line.amount / line.tenor;
+    const totalPerMonth = principalPerMonth + (line.fee || 0);
+    const schedule = [];
+    let baseDate = line.dueDate ? new Date(line.dueDate) : new Date();
+    for (let i = 1; i <= line.tenor; i++) {
+        let nextDate = new Date(baseDate);
+        nextDate.setMonth(baseDate.getMonth() + (i - 1));
+        schedule.push({ no: i, date: nextDate, total: totalPerMonth });
+    }
+    return schedule;
+};
 
 // --- VALIDASI ---
 const canCheckout = computed(() => {
     if (cart.value.length === 0) return false;
     if (processing.value) return false;
-    
-    // 1. Inter Store (Kirim ke Toko Lain)
-    if (isInterStore.value) {
-        return grandTotal.value > 0 && !!selectedTargetStore.value;
+
+    if (transactionType.value === 'MUTATION' && !transactionMeta.targetStoreUuid) return false;
+    const needsCustomer = (transactionType.value === 'SALE') && (hasDebtOrInstallment.value || isPreOrder.value);
+    if (needsCustomer) {
+        if (!transactionMeta.memberUuid && (!transactionMeta.customerName || transactionMeta.customerName.trim() === '')) return false;
     }
 
-    // 2. Ekspedisi
-    if (shipping.enable && (!shipping.courierUuid || !shipping.routeUuid)) return false;
+    if (shippingState.enable && (!shippingState.courierUuid || !shippingState.routeUuid)) return false;
 
-    // 3. Bank Check (Jika metode sub adalah Transfer)
-    if (isBankPayment.value && !payment.bankUuid) return false;
+    if (!hasDebtOrInstallment.value && remainingBalance.value > 100) return false; 
+    if (hasDebtOrInstallment.value && Math.abs(remainingBalance.value) > 100) return false;
 
-    // 4. Metode Bayar Utama
-    if (payment.mainMethod === 'TUNAI') {
-        // Harus bayar lunas atau lebih
-        return amountPaid.value >= (grandTotal.value - 100); // Toleransi 100 perak
-    } 
-    else if (payment.mainMethod === 'KREDIT') {
-        return grandTotal.value > 0 && !!payment.dueDate;
+    for (const line of paymentLines.value) {
+        if (line.amount <= 0) return false;
+        if (line.type === 'TUNAI' && line.subType === 'BANK' && !line.bankUuid) return false;
+        if ((line.type === 'KREDIT' || line.type === 'CICILAN') && !line.dueDate) return false;
     }
-    else if (payment.mainMethod === 'CICILAN') {
-        return grandTotal.value > 0 && !!payment.dueDate && payment.installmentCount > 0;
-    }
-    
-    return false;
+
+    return true;
 });
 
 // --- WATCHERS ---
-
-watch(isInterStore, (val) => {
-    if(val) {
-        shipping.enable = false;
-        payment.mainMethod = 'KREDIT'; 
-        payment.amount = 0; 
-        payment.dueDate = new Date();
-    } else {
-        payment.mainMethod = 'TUNAI';
-        payment.amount = grandTotal.value;
-        payment.dueDate = null;
-    }
+watch(() => shippingState.courierUuid, async (newVal) => {
+    shippingState.routeUuid = null; shippingState.cost = 0;
+    if (newVal) {
+        try { availableRoutes.value = await courierService.getRoutes(newVal) || []; } catch (e) { availableRoutes.value = []; }
+    } else availableRoutes.value = [];
 });
-
-// Reset saat ganti Metode Utama
-watch(() => payment.mainMethod, (val) => {
-    payment.subMethod = 'CASH'; 
-    payment.bankUuid = null;
-    
-    if (val === 'TUNAI') {
-        payment.amount = grandTotal.value;
-    } else {
-        payment.amount = 0; 
-        payment.dueDate = new Date(); // Default jatuh tempo hari ini (bisa diubah user)
-    }
-});
-
-// Reset Ekspedisi
-watch(() => shipping.courierUuid, (newVal) => {
-    shipping.routeUuid = null; shipping.cost = 0;
-    if (newVal) availableRoutes.value = allRoutes.value.filter(r => r.courier?.uuid === newVal || r.courier_uuid === newVal);
-    else availableRoutes.value = [];
-});
-watch(() => shipping.routeUuid, (newVal) => {
+watch(() => shippingState.routeUuid, (newVal) => {
     const route = availableRoutes.value.find(r => r.uuid === newVal);
-    shipping.cost = route ? Number(route.price) : 0;
+    shippingState.cost = route ? Number(route.price) : 0;
 });
-
-// Auto update nominal bayar jika metode TUNAI dan total berubah
-watch(grandTotal, (newVal) => {
-    if (payment.mainMethod === 'TUNAI' && !isInterStore.value) {
-        payment.amount = newVal;
+watch(transactionType, (val) => {
+    if(val === 'MUTATION') {
+        isPreOrder.value = false;
+        transactionMeta.memberUuid = null;
+        transactionMeta.customerName = '';
+        paymentLines.value = [{ type: 'KREDIT', amount: grandTotal.value, subType: 'CASH', bankUuid: null, dueDate: new Date(), tenor: 1, fee: 0, showSchedule: false }];
+    } else {
+        transactionMeta.targetStoreUuid = null;
+        resetPaymentLines();
+    }
+});
+watch(() => shippingState.cost, () => {
+    if (paymentLines.value.length === 1 && paymentLines.value[0].type === 'TUNAI') {
+        paymentLines.value[0].amount = grandTotal.value;
     }
 });
 
 // --- ACTIONS ---
+const resetPaymentLines = () => {
+    paymentLines.value = [{ type: 'TUNAI', amount: grandTotal.value, subType: 'CASH', bankUuid: null, dueDate: new Date(), tenor: 1, fee: 0, showSchedule: false }];
+};
+
+const resetState = () => {
+    resetPaymentLines();
+    transactionType.value = 'SALE';
+    isPreOrder.value = false;
+    transactionMeta.memberUuid = null;
+    transactionMeta.customerName = '';
+    transactionMeta.targetStoreUuid = null;
+    shippingState.enable = false;
+    shippingState.courierUuid = null; shippingState.routeUuid = null; shippingState.cost = 0;
+};
+
+// Hanya view
+const onTableClick = (table) => {
+    const status = table.is_occupied ? 'TERISI' : 'KOSONG';
+    const severity = table.is_occupied ? 'error' : 'success';
+    toast.add({ severity: severity, summary: `Info Meja: ${table.name}`, detail: `Status: ${status}`, life: 2000 });
+};
+
+const addPaymentLine = () => {
+    const sisa = remainingBalance.value > 0 ? remainingBalance.value : 0;
+    paymentLines.value.push({ type: 'TUNAI', amount: sisa, subType: 'CASH', bankUuid: null, dueDate: new Date(), tenor: 1, fee: 0, showSchedule: false });
+};
+const removePaymentLine = (index) => {
+    paymentLines.value.splice(index, 1);
+    if (paymentLines.value.length === 0) addPaymentLine();
+};
+const setMaxAmount = (index) => {
+    let currentTotalOther = 0;
+    paymentLines.value.forEach((l, i) => { if (i !== index) currentTotalOther += (l.amount || 0); });
+    const sisa = grandTotal.value - currentTotalOther;
+    paymentLines.value[index].amount = sisa > 0 ? sisa : 0;
+};
+
+const openPaymentModal = () => {
+    if (cart.value.length === 0) {
+        toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk dulu', life: 2000 });
+        return;
+    }
+    if (paymentLines.value.length === 1 && paymentLines.value[0].type === 'TUNAI') {
+        paymentLines.value[0].amount = grandTotal.value;
+    }
+    showPaymentModal.value = true;
+};
 
 const processCheckout = async () => {
     if (!canCheckout.value) return;
     processing.value = true;
 
     try {
-        let finalPaymentMethod = 'CASH';
-        if (payment.mainMethod === 'TUNAI') {
-            finalPaymentMethod = payment.subMethod === 'BANK' ? 'TRANSFER' : 'CASH';
-        } else {
-            // Untuk Kredit/Cicilan, jurnalnya tetap tercatat, metodenya CREDIT
-            finalPaymentMethod = 'CREDIT';
+        const totalCashReceived = paymentLines.value.filter(l => l.type === 'TUNAI').reduce((sum, l) => sum + l.amount, 0);
+
+        let mainMethod = 'CASH';
+        if (transactionType.value === 'MUTATION') mainMethod = 'CREDIT'; 
+        else if (hasDebtOrInstallment.value) mainMethod = 'CREDIT';
+        else {
+            const types = paymentLines.value.map(l => l.subType);
+            if (types.includes('CASH') && types.includes('BANK')) mainMethod = 'MIXED';
+            else if (types.includes('BANK')) mainMethod = 'TRANSFER';
         }
+
+        let finalCustName = 'Umum';
+        if (transactionType.value === 'MUTATION') {
+            finalCustName = `Mutasi: ${myStores.value.find(s => s.uuid === transactionMeta.targetStoreUuid)?.name}`;
+        } else {
+            if (transactionMeta.memberUuid) finalCustName = members.value.find(m => m.uuid === transactionMeta.memberUuid)?.name || 'Member';
+            else if (transactionMeta.customerName) finalCustName = transactionMeta.customerName;
+        }
+
+        const notesArr = [];
+        if(isPreOrder.value) notesArr.push('[PRE-ORDER]');
+        if (shippingState.enable) notesArr.push(`Ekspedisi: ${formatCurrency(shippingState.cost)}`);
+        
+        paymentLines.value.forEach(l => {
+            if (l.type === 'TUNAI') {
+                const via = l.subType === 'BANK' ? `Transfer ${banks.value.find(b=>b.uuid===l.bankUuid)?.bank_name||''}` : 'Cash';
+                notesArr.push(`Bayar: ${formatCurrency(l.amount)} (${via})`);
+            } else if (l.type === 'KREDIT') notesArr.push(`Kredit: ${formatCurrency(l.amount)} (JT: ${new Date(l.dueDate).toLocaleDateString('id-ID')})`);
+            else if (l.type === 'CICILAN') notesArr.push(`Cicilan: ${formatCurrency(l.amount)} | ${l.tenor}x @${formatCurrency((l.amount/l.tenor)+l.fee)}`);
+        });
 
         const payload = {
             total_items_count: cart.value.length,
@@ -238,31 +282,28 @@ const processCheckout = async () => {
             tax_method: taxEnabled.value ? taxMethod.value : null,
             grand_total: grandTotal.value,
 
-            payment_method: finalPaymentMethod,
-            payment_received: (isCreditOrCicilan.value || isInterStore.value) ? (payment.amount || 0) : payment.amount,
-            change: (isCreditOrCicilan.value || isInterStore.value) ? 0 : changeAmount.value,
+            payment_method: mainMethod,
+            payment_received: (transactionType.value === 'MUTATION') ? 0 : totalCashReceived,
+            change: (!hasDebtOrInstallment.value && remainingBalance.value < 0) ? Math.abs(remainingBalance.value) : 0,
+            is_credit: (hasDebtOrInstallment.value || transactionType.value === 'MUTATION') ? 'true' : 'false',
             
-            is_credit: (isCreditOrCicilan.value || isInterStore.value) ? 'true' : 'false',
-            due_date: (isCreditOrCicilan.value || isInterStore.value) ? (payment.dueDate || new Date()) : null,
+            is_pre_order: isPreOrder.value, 
+            status: isPreOrder.value ? 'PENDING' : 'COMPLETED',
+
+            due_date: (hasDebtOrInstallment.value) ? paymentLines.value.find(l => l.type !== 'TUNAI')?.dueDate : null,
+            customer_name: finalCustName,
+            member_uuid: transactionMeta.memberUuid || null,
+            bank_uuid: paymentLines.value.find(l => l.subType === 'BANK')?.bankUuid || null,
             
-            // Gunakan global customerName, default ke 'Umum' jika kosong
-            customer_name: isInterStore.value 
-                ? `Toko: ${myStores.value.find(s => s.uuid === selectedTargetStore.value)?.name}` 
-                : (payment.customerName || 'Umum'),
-            target_store_uuid: isInterStore.value ? selectedTargetStore.value : null,
+            target_store_uuid: transactionType.value === 'MUTATION' ? transactionMeta.targetStoreUuid : null,
+            
+            courier_uuid: shippingState.enable ? shippingState.courierUuid : null,
+            courier_route_uuid: shippingState.enable ? shippingState.routeUuid : null,
+            shipping_cost: shippingState.enable ? shippingState.cost : 0,
 
-            courier_uuid: (shipping.enable && !isInterStore.value) ? shipping.courierUuid : null,
-            courier_route_uuid: (shipping.enable && !isInterStore.value) ? shipping.routeUuid : null,
-            shipping_cost: (shipping.enable && !isInterStore.value) ? shipping.cost : 0,
-
-            bank_uuid: (payment.subMethod === 'BANK') ? payment.bankUuid : null,
-
-            notes: payment.mainMethod === 'CICILAN' 
-                ? `Cicilan: ${payment.installmentCount}x. Biaya/bln: ${formatCurrency(payment.installmentFee)}. Est: ${formatCurrency(monthlyInstallment.value)}/bln`
-                : ''
+            notes: notesArr.join(' | ')
         };
 
-        // Flatten items untuk backend
         cart.value.forEach((item, index) => {
             payload[`product_uuid#${index}`] = item.productUuid;
             payload[`unit_uuid#${index}`] = item.unitUuid;
@@ -270,237 +311,58 @@ const processCheckout = async () => {
             payload[`price#${index}`] = item.price;
             payload[`subtotal#${index}`] = item.qty * item.price;
         });
-        
+
         await journalService.createSaleTransaction(payload);
-        
-        let msg = 'Transaksi Berhasil';
-        if(isInterStore.value) msg = 'Stok dikirim ke toko lain';
-        else if(payment.mainMethod === 'KREDIT') msg = 'Transaksi Kredit (DP) Berhasil';
-        else if(payment.mainMethod === 'CICILAN') msg = 'Transaksi Cicilan Berhasil';
-        
-        toast.add({ severity: 'success', summary: 'Sukses', detail: msg, life: 3000 });
-        
-        resetState();
-        await loadProducts(); // Refresh stok
-
+        toast.add({ severity: 'success', summary: 'Sukses', detail: 'Transaksi Berhasil', life: 3000 });
+        showPaymentModal.value = false; cart.value = []; resetState(); await loadProducts(); 
     } catch (e) {
-        console.error("Checkout Error:", e);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Terjadi kesalahan saat memproses transaksi.', life: 3000 });
-    } finally {
-        processing.value = false;
-    }
+        console.error(e); toast.add({ severity: 'error', summary: 'Gagal', detail: 'Error', life: 3000 });
+    } finally { processing.value = false; }
 };
 
-const resetState = () => {
-    cart.value = [];
-    payment.mainMethod = 'TUNAI';
-    payment.subMethod = 'CASH';
-    payment.amount = null;
-    payment.bankUuid = null;
-    payment.customerName = '';
-    payment.dueDate = null;
-    payment.installmentCount = 1;
-    payment.installmentFee = 0;
-    
-    isInterStore.value = false;
-    selectedTargetStore.value = null;
-    shipping.enable = false;
-    shipping.courierUuid = null;
-    shipping.routeUuid = null;
-    shipping.cost = 0;
-    
-    showPaymentModal.value = false; 
-    // Tidak reset halaman agar kasir tetap di posisi produk terakhir
+// --- STANDARD FUNCTIONS ---
+const addToCart = (product) => {
+    let unit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0]; if(!unit) return;
+    const unitPrices = product.prices.filter(p => p.unitUuid === unit.uuid);
+    const priceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
+    const item = cart.value.find(i => i.productUuid === product.uuid && i.unitUuid === unit.uuid);
+    if(item) item.qty++;
+    else cart.value.push({ productUuid: product.uuid, name: product.name, unitUuid: unit.uuid, unitName: unit.unitName, price: priceObj?.price||0, qty: 1, selectedPriceObj: priceObj, availableUnits: product.units, allPrices: product.prices });
+    nextTick(() => { const el = document.getElementById('cart-items-container'); if(el) el.scrollTop = el.scrollHeight; });
 };
-
-// --- CART FUNCTIONS ---
-const openPaymentModal = () => {
-    if (cart.value.length === 0) {
-        toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk terlebih dahulu', life: 2000 });
-        return;
-    }
-    // Set default amount jika Tunai
-    if (payment.mainMethod === 'TUNAI') {
-        payment.amount = grandTotal.value;
-    }
-    showPaymentModal.value = true;
-};
-
-const addToCart = (product, specificUnit = null) => {
-    let selectedUnit = specificUnit;
-    
-    // Fallback unit
-    if (!selectedUnit) {
-        selectedUnit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0];
-    }
-    
-    if (!selectedUnit) { 
-        toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk error (tanpa satuan)', life: 3000 }); 
-        return; 
-    }
-
-    // Cari harga untuk unit ini
-    const unitPrices = product.prices.filter(p => p.unitUuid === selectedUnit.uuid);
-    const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
-    const finalPrice = defaultPriceObj ? defaultPriceObj.price : 0;
-
-    const existingItem = cart.value.find(item => item.productUuid === product.uuid && item.unitUuid === selectedUnit.uuid);
-    
-    if (existingItem) {
-        existingItem.qty++;
-    } else {
-        cart.value.push({ 
-            productUuid: product.uuid, 
-            name: product.name, 
-            unitUuid: selectedUnit.uuid, 
-            unitName: selectedUnit.unitName, 
-            price: finalPrice, 
-            qty: 1, 
-            selectedPriceObj: defaultPriceObj, 
-            availableUnits: product.units, 
-            allPrices: product.prices 
-        });
-    }
-
-    // Auto scroll ke bawah keranjang
-    nextTick(() => { 
-        const cartEl = document.getElementById('cart-items-container'); 
-        if(cartEl) cartEl.scrollTop = cartEl.scrollHeight; 
-    });
-};
-
 const changeCartItemUnit = (item, newUnitUuid) => {
-    const newUnit = item.availableUnits.find(u => u.uuid === newUnitUuid);
-    if (!newUnit) return;
-    
-    item.unitUuid = newUnit.uuid;
-    item.unitName = newUnit.unitName;
-    
-    // Update harga sesuai unit baru
-    const unitPrices = item.allPrices.filter(p => p.unitUuid === newUnit.uuid);
-    const defaultPriceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
-    
-    item.selectedPriceObj = defaultPriceObj;
-    item.price = defaultPriceObj ? defaultPriceObj.price : 0;
+    const unit = item.availableUnits.find(u => u.uuid === newUnitUuid); if(!unit) return;
+    item.unitUuid = unit.uuid; item.unitName = unit.unitName;
+    const unitPrices = item.allPrices.filter(p => p.unitUuid === unit.uuid);
+    const priceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
+    item.selectedPriceObj = priceObj; item.price = priceObj?.price||0;
 };
-
-const changeCartItemPriceTier = (item, newPriceObj) => { 
-    if(newPriceObj) {
-        item.selectedPriceObj = newPriceObj; 
-        item.price = newPriceObj.price; 
-    }
-};
-
+const changeCartItemPriceTier = (item, newPriceObj) => { if(newPriceObj) { item.selectedPriceObj = newPriceObj; item.price = newPriceObj.price; } };
 const removeFromCart = (index) => { cart.value.splice(index, 1); };
-
-// --- FILTERING & LOADING ---
-const onSearchKeydown = (event) => { 
-    if (event.key === 'Enter') { 
-        currentPage.value = 1; 
-        loadProducts(); 
-    } 
-};
-
-const fetchCategories = async () => { 
-    try { 
-        const data = await categoryService.getAllCategorys(); 
-        categories.value = data || []; 
-    } catch (e) { console.error(e); } 
-};
-
+const onSearchKeydown = (event) => { if (event.key === 'Enter') { currentPage.value = 1; loadProducts(); } };
+const fetchCategories = async () => { try { categories.value = await categoryService.getAllCategorys() || []; } catch (e) {} };
 const loadProducts = async () => {
-    loading.value = true; 
-    products.value = []; 
+    loading.value = true; products.value = []; 
     try {
         const response = await productService.getAllProducts(currentPage.value, limit, searchQuery.value.toLowerCase().trim(), selectedCategoryUuids.value.join(','));
-        const productsArray = response?.data || [];
-        
-        products.value = productsArray.map(p => ({ 
-            ...p, 
-            prices: p.prices || p.price || [], 
-            units: p.units || [], 
-            categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) 
-        }));
-        
-        totalPages.value = response?.meta?.totalPage || response?.meta?.total_page || 1;
-        totalProducts.value = response?.meta?.total || 0;
-        
-        handleLocalFiltering(true); 
+        products.value = (response?.data || []).map(p => ({ ...p, prices: p.prices || [], units: p.units || [], categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) }));
+        totalPages.value = response?.meta?.totalPage || 1; totalProducts.value = response?.meta?.total || 0;
     } catch (error) { console.error(error); } finally { loading.value = false; }
 };
-
-const changePage = (newPage) => { 
-    if (newPage >= 1 && newPage <= totalPages.value) { 
-        currentPage.value = newPage; 
-        loadProducts(); 
-    } 
-};
-
-const handleLocalFiltering = (isApiLoad = false) => {
-    let result = products.value;
-    const query = searchQuery.value.toLowerCase().trim();
-    
-    if (query) {
-        // Coba cari barcode exact match
-        const exactProduct = products.value.find(p => p.units.some(u => u.barcode === query));
-        if (exactProduct) {
-            const matchedUnit = exactProduct.units.find(u => u.barcode === query);
-            addToCart(exactProduct, matchedUnit);
-            searchQuery.value = ''; 
-            toast.add({ severity: 'success', summary: 'Scan', detail: `${exactProduct.name}`, life: 1500 });
-            // Setelah add, jangan ubah filtered list agar user tetap melihat list sebelumnya
-            return; 
-        }
-        
-        if (!isApiLoad) {
-            result = result.filter(p => p.name.toLowerCase().includes(query) || p.units.some(u => u.barcode?.includes(query)));
-        }
-    }
-    filteredProducts.value = result;
-};
-
-watch(selectedCategoryUuids, () => { currentPage.value = 1; loadProducts(); });
-watch(searchQuery, () => { handleLocalFiltering(); });
-
-// --- UTILS ---
 const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 const getDefaultUnitStock = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.currentStock || 0; 
-const getDefaultUnitName = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.unitName;
-const getStockColor = (qty) => {
-    if (qty <= 0) return 'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-    if (qty < 10) return 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
-    return 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800';
-};
+const getStockColor = (qty) => { if (qty <= 0) return 'bg-red-100 text-red-600'; if (qty < 10) return 'bg-amber-100 text-amber-600'; return 'bg-blue-50 text-blue-600'; };
 
 onMounted(async () => {
-    await fetchCategories(); 
-    await loadProducts();
-    
-    try { 
-        const stores = await storeService.getMyStore(); 
-        const currentStoreUuid = authStore.user?.activeStoreUuid || authStore.activeStore.uuid; 
-        if (stores && Array.isArray(stores)) {
-            myStores.value = stores.filter(s => s.uuid !== currentStoreUuid); 
-        }
-    } catch (e) { console.error(e); }
-    
-    try { 
-        const cData = await courierService.getCouriers(); couriers.value = cData || []; 
-        const rData = await courierService.getRoutes(); allRoutes.value = rData || []; 
-    } catch (e) { console.error(e); }
-    
-    try { 
-        const bData = await bankService.getAllBanks(); banks.value = bData || []; 
-    } catch (e) { console.error(e); }
-    
-    window.addEventListener('keydown', (e) => { 
-        if (e.key === 'F2') {
-            e.preventDefault();
-            document.getElementById('search-input-sale')?.focus(); 
-        }
-    });
+    await fetchCategories(); await loadProducts(); 
+    try { const data = await userService.getAllUsers({ role: 'member' }); members.value = data || []; } catch (e) {}
+    try { const bData = await bankService.getAllBanks(); banks.value = bData || []; } catch (e) {}
+    try { const sData = await storeService.getMyStore(); if (sData) myStores.value = sData.filter(s => s.uuid !== authStore.activeStore?.uuid); } catch (e) {}
+    try { const cData = await courierService.getCouriers(); couriers.value = cData || []; } catch (e) {}
+    try { const tData = await tableService.getAllTables(); tables.value = tData || []; } catch (e) {}
+    window.addEventListener('keydown', (e) => { if (e.key === 'F2') { e.preventDefault(); document.getElementById('search-input-sale')?.focus(); } });
+    resetState();
 });
-
 const refreshData = async () => { currentPage.value = 1; await loadProducts(); }
 defineExpose({ refreshData });
 </script>
@@ -509,435 +371,264 @@ defineExpose({ refreshData });
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 dark:bg-surface-400 font-sans">
         
         <div class="flex-1 flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden">
-            
-            <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
+             <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-0 dark:bg-surface-400">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
-                        <i class="pi pi-shop text-xl"></i>
-                    </div>
-                    <div>
-                        <h1 class="text-lg font-bold text-surface-800 dark:text-surface-100 leading-tight">
-                            {{ authStore.activeStore?.name || 'Point of Sales' }}
-                        </h1>
-                        <p class="text-xs text-surface-500 dark:text-surface-300">
-                            Kasir: <span class="font-medium text-surface-700 dark:text-surface-200">{{ authStore.user?.name || 'Staff' }}</span>
-                        </p>
-                    </div>
+                    <div class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400"><i class="pi pi-shop text-xl"></i></div>
+                    <div><h1 class="text-lg font-bold text-surface-800 dark:text-surface-100 leading-tight">{{ authStore.activeStore?.name || 'POS' }}</h1></div>
                 </div>
-                <div class="hidden md:block text-right">
-                    <div class="text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-0.5">Hari ini</div>
-                    <div class="text-sm font-bold text-surface-700 dark:text-surface-200">
-                        {{ currentDate }}
-                    </div>
+                <div class="flex items-center gap-2">
+                    <Button label="Lihat Denah Meja" icon="pi pi-table" size="small" outlined severity="secondary" @click="showTableModal = true" />
+                    <div class="hidden md:block text-right text-sm font-bold text-surface-700 dark:text-surface-200 ml-3">{{ currentDate }}</div>
                 </div>
             </div>
-
+            
             <div class="p-3 border-b border-surface-100 dark:border-surface-800 flex flex-col md:flex-row gap-2 bg-surface-0 dark:bg-surface-400">
-                <div class="w-full md:w-48">
-                    <MultiSelect 
-                        v-model="selectedCategoryUuids" 
-                        :options="categories" 
-                        optionLabel="name" 
-                        optionValue="uuid" 
-                        placeholder="Filter Kategori" 
-                        display="chip" 
-                        :maxSelectedLabels="1" 
-                        class="w-full !h-10 !text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700" 
-                        :pt="{ label: { class: '!py-2 !px-3' } }"
-                    >
-                        <template #option="slotProps">
-                            <div class="flex align-items-center text-surface-700 dark:text-surface-200">
-                                <i class="pi pi-tag mr-2 text-orange-500 text-xs"></i>
-                                <span class="text-sm">{{ slotProps.option.name }}</span>
-                            </div>
-                        </template>
-                    </MultiSelect>
-                </div>
-                
+                <MultiSelect v-model="selectedCategoryUuids" :options="categories" optionLabel="name" optionValue="uuid" placeholder="Filter Kategori" display="chip" :maxSelectedLabels="1" class="w-full md:w-48 !h-10 !text-sm" />
                 <div class="relative flex-1">
-                    <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 text-sm"></i>
-                    <input 
-                        id="search-input-sale" 
-                        v-model="searchQuery" 
-                        type="text" 
-                        placeholder="Cari Produk / Scan Barcode... (F2)" 
-                        class="w-full pl-9 pr-3 py-2 text-sm dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all shadow-sm h-10" 
-                        @keydown="onSearchKeydown" 
-                        @input="handleLocalFiltering" 
-                        autocomplete="off" 
-                    />
+                    <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm"></i>
+                    <input id="search-input-sale" v-model="searchQuery" type="text" placeholder="Cari Produk (F2)" class="w-full pl-9 pr-3 py-2 text-sm border rounded-lg h-10 dark:bg-surface-800 dark:border-surface-700" @keydown="onSearchKeydown" />
                 </div>
-
-                <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
-                    <button 
-                        v-tooltip.bottom="'Tampilan List'"
-                        @click="viewMode = 'list'"
-                        class="w-8 h-full rounded flex items-center justify-center transition"
-                        :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
-                    >
-                        <i class="pi pi-list text-sm"></i>
-                    </button>
-                    <button 
-                        v-tooltip.bottom="'Tampilan Grid'"
-                        @click="viewMode = 'grid'"
-                        class="w-8 h-full rounded flex items-center justify-center transition"
-                        :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
-                    >
-                        <i class="pi pi-th-large text-sm"></i>
-                    </button>
-                    
-                    <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l border-surface-300 dark:border-surface-600 pl-1">
-                        <button v-for="col in [3, 4, 5]" :key="col" @click="gridColumns = col" 
-                             class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center"
-                             :class="gridColumns === col ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-200'"
-                        >
-                            {{ col }}
-                        </button>
+                 <div class="flex gap-1 bg-surface-100 dark:bg-surface-800 rounded-lg p-1 h-10 border border-surface-200 dark:border-surface-700">
+                    <button @click="viewMode = 'list'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'list' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-list text-sm"></i></button>
+                    <button @click="viewMode = 'grid'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'grid' ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-th-large text-sm"></i></button>
+                    <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l pl-1 border-surface-300">
+                        <button v-for="n in [2, 3, 4, 5]" :key="n" @click="gridColumns = n" class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center" :class="gridColumns === n ? 'bg-white dark:bg-surface-600 shadow text-primary-600' : 'text-surface-400'">{{ n }}</button>
                     </div>
                 </div>
-
-                <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Produk Baru'" @click="emit('open-create-modal')" />
+                <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Tambah Produk Baru'" @click="showCreateProductModal = true" />
             </div>
 
-            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin flex flex-col">
-                <div v-if="loading" class="flex-1 flex justify-center items-center"><ProgressSpinner style="width: 40px; height: 40px" /></div>
-                
-                <div v-else-if="filteredProducts.length > 0" class="flex-1">
-                    
-                    <div :class="gridContainerClass">
-                        
-                        <div 
-                            v-for="prod in filteredProducts" 
-                            :key="prod.uuid" 
-                            @click="addToCart(prod)" 
-                            class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none"
-                            :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'"
-                        >
-                            
-                            <template v-if="viewMode === 'grid'">
-                                <div>
-                                    <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1 leading-snug group-hover:text-primary-600 transition-colors">{{ prod.name }}</div>
-                                    <div class="flex gap-1 mt-1">
-                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span>
-                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 border border-surface-200 dark:border-surface-600">{{ getDefaultUnitName(prod) }}</span>
-                                    </div>
-                                </div>
-                                <div class="flex justify-between items-end mt-2">
-                                    <span class="text-[9px] text-surface-400 truncate max-w-[50%]">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
-                                    <span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span>
-                                </div>
-                            </template>
-
-                            <template v-else>
-                                <div class="flex items-center gap-3 flex-1 overflow-hidden">
-                                    <div class="w-10 h-10 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-400 shrink-0">
-                                        <i class="pi pi-box"></i>
-                                    </div>
-                                    <div class="flex flex-col overflow-hidden">
-                                        <div class="text-sm font-bold text-surface-700 dark:text-surface-200 truncate group-hover:text-primary-600 transition-colors">{{ prod.name }}</div>
-                                        <div class="flex gap-1.5 items-center mt-0.5">
-                                            <span class="text-[9px] font-medium px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">{{ getDefaultUnitStock(prod) }} {{ getDefaultUnitName(prod) }}</span>
-                                            <span class="text-[10px] text-surface-400 truncate hidden sm:inline">{{ categories.find(c => c.uuid === prod.categoryUuids[0])?.name || 'Umum' }}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="flex flex-col items-end shrink-0">
-                                    <span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.unitUuid === (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.uuid && (p.isDefault || p.name === 'Umum')) || prod.prices?.[0])?.price || 0) }}</span>
-                                    <i class="pi pi-plus-circle text-primary-500 text-lg opacity-0 group-hover:opacity-100 transition-opacity mt-1"></i>
-                                </div>
-                            </template>
-
+            <div class="flex-1 overflow-y-auto p-3 bg-surface-50 dark:bg-surface-400 scrollbar-thin">
+                <div v-if="loading" class="flex justify-center p-10"><ProgressSpinner style="width: 40px; height: 40px" /></div>
+                <div v-else-if="products.length > 0" :class="gridContainerClass">
+                    <div v-for="prod in products" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'">
+                        <div v-if="viewMode === 'grid'">
+                            <div class="text-xs font-bold text-surface-700 dark:text-surface-200 line-clamp-2 mb-1">{{ prod.name }}</div>
+                            <div class="flex gap-1 mt-1"><span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span></div>
+                            <div class="flex justify-between items-end mt-2"><span class="text-sm font-black text-surface-800 dark:text-white">{{ formatCurrency((prod.prices?.find(p => p.isDefault)?.price || prod.prices?.[0]?.price || 0)) }}</span></div>
+                        </div>
+                         <div v-else class="flex items-center gap-3 w-full">
+                            <div class="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 shrink-0"><i class="pi pi-box"></i></div>
+                            <div class="flex-1 min-w-0"><div class="text-sm font-bold truncate">{{ prod.name }}</div><div class="text-[10px] text-surface-500">Stok: {{ getDefaultUnitStock(prod) }}</div></div>
+                            <div class="text-sm font-black">{{ formatCurrency((prod.prices?.find(p => p.isDefault)?.price || prod.prices?.[0]?.price || 0)) }}</div>
                         </div>
                     </div>
-
                 </div>
-                
-                <div v-else class="flex-1 flex flex-col items-center justify-center text-surface-400 dark:text-surface-600 gap-2 opacity-60">
-                    <i class="pi pi-box text-4xl"></i>
-                    <span class="text-xs">Produk tidak ditemukan</span>
-                </div>
-
-                <div v-if="totalPages > 1 && !loading" class="mt-4 flex justify-between items-center border-t border-surface-200 dark:border-surface-700 pt-3 sticky bottom-0 bg-surface-50 dark:bg-surface-400 z-10">
-                    <Button icon="pi pi-chevron-left" label="Sebelumnya" size="small" text :disabled="currentPage === 1" @click="changePage(currentPage - 1)" class="!text-xs" />
-                    <span class="text-xs font-medium text-surface-600 dark:text-surface-400">Halaman <span class="font-bold text-primary-600">{{ currentPage }}</span> dari {{ totalPages }} <span class="text-[10px] ml-1">({{ totalProducts }} total)</span></span>
-                    <Button label="Selanjutnya" icon="pi pi-chevron-right" iconPos="right" size="small" text :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)" class="!text-xs" />
-                </div>
+                 <div v-if="totalPages > 1" class="flex justify-between mt-4 border-t pt-2"><Button label="Prev" text size="small" :disabled="currentPage===1" @click="changePage(currentPage-1)" /><Button label="Next" text size="small" :disabled="currentPage===totalPages" @click="changePage(currentPage+1)" /></div>
             </div>
         </div>
 
-        <div class="w-full lg:w-[420px] flex flex-col bg-surface-0 dark:bg-surface-400 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden shrink-0 h-[600px] lg:h-auto">
-            <div class="p-3 border-b border-surface-100 dark:border-surface-700 bg-surface-50/50 dark:bg-surface-400/50 flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div>
-                    <span class="font-bold text-sm text-surface-700 dark:text-surface-200">Keranjang</span>
+        <div class="w-full lg:w-[400px] xl:w-[450px] flex flex-col h-[calc(100vh-2rem)] bg-white dark:bg-surface-900 rounded-2xl shadow-xl border border-surface-200 dark:border-surface-800 overflow-hidden flex-shrink-0">
+            
+            <div class="p-4 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50/50 backdrop-blur-md z-10">
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <i class="pi pi-shopping-cart text-xl text-surface-700 dark:text-surface-200"></i>
+                        <span v-if="totalItems > 0" class="absolute -top-2 -right-2 bg-primary-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{{ totalItems }}</span>
+                    </div>
+                    <span class="font-bold text-lg text-surface-800 dark:text-surface-100">Pesanan</span>
                 </div>
-                <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
+                <Button v-if="cart.length > 0" label="Reset" icon="pi pi-trash" text severity="danger" size="small" class="!text-xs !px-2" @click="cart = []" />
             </div>
 
-            <div id="cart-items-container" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30 dark:bg-surface-400/30">
-                 <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-300 dark:text-surface-700 gap-3">
-                    <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center"><i class="pi pi-shopping-cart text-2xl opacity-40"></i></div>
-                    <p class="text-xs">Belum ada item</p>
+            <div id="cart-items-container" class="flex-1 overflow-y-auto p-3 space-y-3 bg-surface-50 dark:bg-surface-900 scroll-smooth">
+                <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-surface-400 gap-4 opacity-60 min-h-[300px]">
+                    <div class="w-24 h-24 rounded-full bg-surface-100 flex items-center justify-center"><i class="pi pi-shopping-bag text-4xl"></i></div>
+                    <p class="text-sm font-medium">Keranjang belum terisi</p>
                 </div>
-                
-                <div v-for="(item, index) in cart" :key="index" class="group dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl p-2.5 hover:border-primary-300 dark:hover:border-primary-600 transition-all shadow-sm relative">
-                    <button class="absolute -top-2 -right-2 dark:bg-surface-900 shadow border border-surface-200 dark:border-surface-700 text-surface-400 dark:text-surface-500 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
-                        <i class="pi pi-times text-[10px] font-bold"></i>
-                    </button>
-                    
-                    <div class="mb-2 pr-4"><div class="text-sm font-bold text-surface-800 dark:text-surface-100 line-clamp-1" :title="item.name">{{ item.name }}</div></div>
-                    
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="flex flex-col gap-2 flex-1">
-                             <div class="flex gap-2">
-                                <Dropdown v-model="item.unitUuid" :options="item.availableUnits" optionLabel="unitName" optionValue="uuid" class="custom-tiny-dropdown !h-7 !w-20 !bg-surface-50 dark:!bg-surface-700 !border-surface-200 dark:!border-surface-600 !shadow-none !rounded-lg !flex !items-center" :pt="{ input: { class: '!py-0 !px-2 !text-[10px] !font-bold !text-surface-700 dark:!text-surface-200' }, trigger: { class: '!w-5 !text-surface-400' }, panel: { class: '!text-xs' }, item: { class: '!py-1.5 !px-3 !text-xs' } }" @change="(e) => changeCartItemUnit(item, e.value)" />
-                                <Dropdown v-model="item.selectedPriceObj" :options="item.allPrices.filter(p => p.unitUuid === item.unitUuid)" optionLabel="name" class="custom-tiny-dropdown !h-7 flex-1 !bg-surface-50 dark:!bg-surface-700 !border-surface-200 dark:!border-surface-600 !shadow-none !rounded-lg !flex !items-center" placeholder="Custom" :pt="{ input: { class: '!py-0 !px-2 !text-[10px] !font-medium !text-surface-700 dark:!text-surface-200' }, trigger: { class: '!w-5 !text-surface-400' }, panel: { class: '!text-xs' }, item: { class: '!py-1.5 !px-3 !text-xs' } }" @change="(e) => changeCartItemPriceTier(item, e.value)" />
+
+                <div v-for="(item, index) in cart" :key="index" class="group relative bg-white dark:bg-surface-800 rounded-xl p-3 shadow-sm border border-transparent hover:border-primary-200 dark:hover:border-primary-800 transition-all duration-200 hover:shadow-md">
+                    <button @click="removeFromCart(index)" class="absolute -top-2 -right-2 bg-white dark:bg-surface-700 text-surface-400 hover:text-red-500 w-6 h-6 rounded-full shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 scale-0 group-hover:scale-100 border border-surface-100"><i class="pi pi-times text-[10px] font-bold"></i></button>
+
+                    <div class="flex justify-between items-start gap-2 mb-2">
+                        <div class="flex-1">
+                            <div class="text-sm font-bold text-surface-800 dark:text-surface-100 leading-tight line-clamp-2 mb-1" :title="item.name">{{ item.name }}</div>
+                            <div class="flex items-center gap-1">
+                                <Dropdown v-model="item.unitUuid" :options="item.availableUnits" optionLabel="unitName" optionValue="uuid" class="!h-6 !text-[10px] w-24" :pt="{ root: { class: '!bg-surface-50 !border-0' }, input: { class: '!py-0 !px-2 !text-[10px]' }, trigger: { class: '!w-6' } }" @change="(e) => changeCartItemUnit(item, e.value)" />
+                                <Dropdown v-model="item.selectedPriceObj" :options="item.allPrices.filter(p => p.unitUuid === item.unitUuid)" optionLabel="name" class="!h-6 !text-[10px] w-20" :pt="{ root: { class: '!bg-surface-50 !border-0' }, input: { class: '!py-0 !px-2 !text-[10px]' }, trigger: { class: '!w-6' } }" placeholder="Tier" @change="(e) => changeCartItemPriceTier(item, e.value)" />
                             </div>
-                            <InputNumber v-model="item.price" mode="currency" currency="IDR" locale="id-ID" class="!h-7 w-full" inputClass="!text-xs !h-7 !py-0 !px-2 !font-mono !text-right !rounded-lg !bg-surface-50 dark:!bg-surface-700 !border-surface-200 dark:!border-surface-600 focus:!border-primary-500 focus:!ring-1" :min="0" @input="item.selectedPriceObj = null" />
                         </div>
-                        <div class="flex flex-col items-end gap-1.5">
-                            <div class="flex items-center bg-surface-100 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-600 h-7">
-                                <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-l-lg transition text-surface-600 dark:text-surface-400 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"><i class="pi pi-minus text-[9px] font-bold"></i></button>
-                                <input v-model="item.qty" type="number" class="w-8 h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 text-surface-800 dark:text-surface-100" min="1" />
-                                <button class="w-7 h-full flex items-center justify-center hover:dark:hover:bg-surface-800 rounded-r-lg transition text-primary-600" @click="item.qty++"><i class="pi pi-plus text-[9px] font-bold"></i></button>
+                        <div class="text-right"><div class="text-sm font-black text-primary-600 dark:text-primary-400">{{ formatCurrency(item.price * item.qty) }}</div></div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-3 bg-surface-50 dark:bg-surface-900/50 p-1.5 rounded-lg">
+                        <div class="flex-1 min-w-0">
+                            <div class="relative">
+                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-surface-400">Rp</span>
+                                <InputNumber v-model="item.price" mode="decimal" locale="id-ID" class="w-full !h-7" inputClass="!pl-6 !pr-2 !py-0 !text-xs !h-7 !bg-transparent !border-0 focus:!ring-0 font-mono font-medium text-surface-700" :min="0" @input="item.selectedPriceObj = null" />
                             </div>
-                            <div class="text-xs font-black text-surface-800 dark:text-surface-100 bg-surface-50 dark:bg-surface-400 px-2 py-1 rounded border border-surface-200 dark:border-surface-600">{{ formatCurrency(item.price * item.qty) }}</div>
+                        </div>
+                        
+                        <div class="flex items-center bg-white dark:bg-surface-800 rounded-md shadow-sm border border-surface-200 dark:border-surface-700 h-7 shrink-0 overflow-hidden">
+                            <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-red-500 hover:bg-red-50 transition border-r border-surface-100" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
+                                <i class="pi text-[10px] font-bold" :class="item.qty > 1 ? 'pi-minus' : 'pi-trash'"></i>
+                            </button>
+                            <InputNumber v-model="item.qty" class="!w-10" inputClass="!w-full !text-center !text-xs !border-0 !p-0 !h-full font-bold focus:!ring-0 bg-transparent" :min="1" />
+                            <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-primary-600 hover:bg-primary-50 transition border-l border-surface-100" @click="item.qty++">
+                                <i class="pi pi-plus text-[10px] font-bold"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
-                <div v-if="taxEnabled" class="space-y-1 border-b border-dashed border-surface-300 dark:border-surface-600 pb-2 mb-2">
-                    <div class="flex justify-between items-center text-xs text-surface-500 dark:text-surface-400"><span>Subtotal</span><span>{{ formatCurrency(cartSubtotal) }}</span></div>
-                    <div class="flex justify-between items-center text-xs text-surface-500 dark:text-surface-400"><span>Pajak ({{ taxRate }}%) <span v-if="taxMethod === 'inclusive'" class="text-[9px] bg-surface-200 dark:bg-surface-400 px-1 rounded ml-1">Include</span></span><span>{{ formatCurrency(taxAmount) }}</span></div>
+            <div class="p-4 bg-white dark:bg-surface-900 border-t border-surface-200 dark:border-surface-800 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-20">
+                <div class="space-y-2 mb-4">
+                    <div class="flex justify-between items-center text-sm text-surface-500"><span>Subtotal</span><span class="font-mono">{{ formatCurrency(cartSubtotal) }}</span></div>
+                    <div v-if="taxEnabled" class="flex justify-between items-center text-sm text-surface-500"><span>Pajak ({{ taxRate }}%)</span><span class="font-mono text-red-500">+ {{ formatCurrency(taxAmount) }}</span></div>
+                    <div class="border-t border-dashed border-surface-200 my-2"></div>
+                    <div class="flex justify-between items-end"><span class="text-base font-bold text-surface-800 uppercase tracking-wide">Total Bayar</span><span class="text-2xl font-black text-primary-600 dark:text-primary-400">{{ formatCurrency(grandTotal) }}</span></div>
                 </div>
-                <div class="flex justify-between items-end"><span class="text-sm text-surface-500 dark:text-surface-400 uppercase font-bold tracking-wider mb-1">Total</span><span class="text-2xl font-black text-primary-600 dark:text-primary-400">{{ formatCurrency(grandTotal) }}</span></div>
-                <Button label="Lanjut Pembayaran" icon="pi pi-arrow-right" iconPos="right" class="w-full !h-12 !text-base !font-bold" severity="primary" @click="openPaymentModal" :disabled="cart.length === 0" />
+                <Button label="Proses Pembayaran" icon="pi pi-arrow-right" iconPos="right" class="w-full !h-12 !text-base !font-bold !rounded-xl shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 transition-all transform active:scale-95" severity="primary" @click="openPaymentModal" :disabled="cart.length === 0" />
             </div>
         </div>
     </div>
     
+    <Dialog v-model:visible="showTableModal" header="Denah Meja Restoran" modal class="w-full max-w-2xl">
+        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-2">
+            <div v-for="table in tables" :key="table.uuid" 
+                 class="aspect-square rounded-xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105"
+                 :class="table.is_occupied ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200 hover:border-green-400'"
+                 @click="onTableClick(table)">
+                <i class="pi pi-stop text-2xl mb-1" :class="table.is_occupied ? 'text-red-400' : 'text-green-500'"></i>
+                <span class="font-bold text-sm">{{ table.name }}</span>
+                <span class="text-[10px] uppercase font-bold" :class="table.is_occupied ? 'text-red-500' : 'text-green-600'">
+                    {{ table.is_occupied ? 'Terisi' : 'Kosong' }}
+                </span>
+            </div>
+        </div>
+        <div class="text-xs text-surface-500 mt-4 text-center italic">* Klik meja untuk melihat detail status. Ini hanya tampilan denah, tidak memilih meja untuk transaksi.</div>
+    </Dialog>
+
+    <ProductCreateModal v-model:visible="showCreateProductModal" @saved="loadProducts" />
+
     <div v-if="showPaymentModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
-        <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-surface-0 dark:bg-surface-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh] border border-surface-100 dark:border-surface-700" :class="{'ring-2 ring-purple-500': isPreOrder, 'ring-2 ring-blue-500': transactionType === 'MUTATION'}">
             
-            <div class="flex justify-between items-center p-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
-                <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100">Rincian Pembayaran</h3>
-                <button @click="showPaymentModal = false" class="text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 transition">
-                    <i class="pi pi-times text-lg"></i>
-                </button>
+            <div class="flex justify-between items-center px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
+                <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-xl text-surface-800 dark:text-surface-100">Pembayaran</h3>
+                    <span v-if="isPreOrder" class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[10px] font-bold border border-purple-200">PO (Pre-Order)</span>
+                    <span v-if="transactionType === 'MUTATION'" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-bold border border-blue-200">MUTASI STOK</span>
+                </div>
+                <button @click="showPaymentModal = false" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-200 hover:bg-surface-300 text-surface-600 transition"><i class="pi pi-times"></i></button>
             </div>
 
-            <div class="p-5 overflow-y-auto scrollbar-thin space-y-5">
+            <div class="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-6">
                 
-                <div class="text-center p-4 bg-primary-50 dark:bg-primary-900/20 rounded-xl border border-primary-100 dark:border-primary-800">
-                    <span class="text-xs uppercase text-surface-500 dark:text-surface-400 tracking-widest font-bold">Total Tagihan</span>
-                    <div class="text-3xl font-black text-primary-700 dark:text-primary-400 mt-1">
-                        {{ formatCurrency(grandTotal) }}
-                    </div>
-                     <span v-if="shipping.enable && shipping.cost > 0" class="text-[10px] text-surface-500 font-medium animate-pulse">
-                        (Termasuk Ongkir {{ formatCurrency(shipping.cost) }})
-                    </span>
+                <div class="flex flex-col items-center justify-center p-5 rounded-2xl border-2" :class="isPreOrder ? 'bg-purple-50 border-purple-100' : 'bg-primary-50 border-primary-100'">
+                    <span class="text-xs uppercase font-bold tracking-widest text-surface-500">Total Tagihan</span>
+                    <div class="text-4xl font-black mt-1" :class="isPreOrder ? 'text-purple-700' : 'text-primary-700'">{{ formatCurrency(grandTotal) }}</div>
+                    <span v-if="shippingState.enable && shippingState.cost > 0" class="text-xs font-semibold text-surface-600 mt-1 flex items-center gap-1"><i class="pi pi-truck"></i> Termasuk Ongkir {{ formatCurrency(shippingState.cost) }}</span>
                 </div>
 
-                <div v-if="!isInterStore" class="space-y-3 p-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
-                    <div class="flex items-center justify-between">
-                         <label class="text-xs font-bold text-surface-600 dark:text-surface-300 uppercase">Pengiriman</label>
-                         <div class="flex items-center gap-2">
-                             <label for="shippingToggle" class="text-[10px] font-bold text-surface-400 cursor-pointer select-none">Kirim via Ekspedisi?</label>
-                             <InputSwitch v-model="shipping.enable" inputId="shippingToggle" class="!scale-75" />
+                <div class="grid grid-cols-1 gap-4">
+                     <div class="flex p-1 bg-surface-100 dark:bg-surface-900 rounded-lg">
+                         <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'SALE' ? 'bg-white dark:bg-surface-800 text-primary-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'SALE'"><i class="pi pi-user"></i> Penjualan</button>
+                        <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'MUTATION' ? 'bg-white dark:bg-surface-800 text-blue-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'MUTATION'"><i class="pi pi-arrow-right-arrow-left"></i> Mutasi Cabang</button>
+                    </div>
+
+                    <div v-if="transactionType === 'SALE'" class="space-y-3">
+                        <div class="flex gap-3">
+                            <div class="flex-1">
+                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Pelanggan</label>
+                                <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Member..." class="w-full !text-sm" showClear />
+                            </div>
+                            <div class="flex-1" v-if="!transactionMeta.memberUuid">
+                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Nama Umum</label>
+                                <InputText v-model="transactionMeta.customerName" placeholder="Cth: Bapak Budi" class="w-full !text-sm" />
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between bg-surface-50 dark:bg-surface-900/50 px-3 py-2 rounded-lg border border-surface-200">
+                            <div class="flex flex-col"><span class="text-xs font-bold text-surface-700">Pre-Order (PO)</span><span class="text-[9px] text-surface-500">Aktifkan jika barang belum ready</span></div>
+                            <InputSwitch v-model="isPreOrder" class="scale-75" />
                         </div>
                     </div>
 
-                    <div v-if="shipping.enable" class="space-y-2 animate-fade-in-down">
-                        <Dropdown v-model="shipping.courierUuid" :options="couriers" optionLabel="name" optionValue="uuid" placeholder="Pilih Kurir..." class="w-full !text-xs" :pt="{ root: { class: '!h-9 !items-center' }, input: { class: '!text-xs' } }" />
-                        <Dropdown v-model="shipping.routeUuid" :options="availableRoutes" optionLabel="destination" optionValue="uuid" :placeholder="shipping.courierUuid ? 'Pilih Rute & Tarif...' : 'Pilih Kurir Dulu'" class="w-full !text-xs" :disabled="!shipping.courierUuid" :pt="{ root: { class: '!h-9 !items-center' }, input: { class: '!text-xs' } }">
-                            <template #option="slotProps">
-                                <div class="flex justify-between w-full text-xs"><span>{{ slotProps.option.origin }} -> {{ slotProps.option.destination }}</span><span class="font-bold">{{ formatCurrency(slotProps.option.price) }}</span></div>
-                            </template>
-                        </Dropdown>
-                    </div>
-                </div>
-
-                <div v-if="myStores.length > 0 && !shipping.enable" class="p-3 rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800">
-                    <div class="flex items-center gap-2 mb-2">
-                         <Checkbox v-model="isInterStore" :binary="true" inputId="interStore" />
-                         <label for="interStore" class="text-xs font-bold text-surface-600 dark:text-surface-300 cursor-pointer select-none">Kirim ke Toko Lain?</label>
-                    </div>
-
-                    <div v-if="isInterStore" class="mt-2 animate-fade-in-down">
-                        <Dropdown v-model="selectedTargetStore" :options="myStores" optionLabel="name" optionValue="uuid" placeholder="Pilih Toko Tujuan..." class="w-full !text-xs" :pt="{ root: { class: '!h-9 !items-center' }, input: { class: '!text-xs' } }" />
+                    <div v-if="transactionType === 'MUTATION'">
+                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Toko Tujuan</label>
+                        <Dropdown v-model="transactionMeta.targetStoreUuid" :options="myStores" optionLabel="name" optionValue="uuid" placeholder="Pilih Cabang..." class="w-full !text-sm" />
                     </div>
                 </div>
 
-                <div v-if="!isInterStore" class="mb-3">
-                    <label class="text-xs font-bold text-surface-500 uppercase mb-2 block">Pelanggan / Member (Opsional)</label>
-                    <div class="relative">
-                        <i class="pi pi-user absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 text-sm"></i>
-                        <InputText v-model="payment.customerName" placeholder="Nama Pelanggan / Member..." class="w-full !pl-9 !text-sm dark:bg-surface-900 border-surface-300 dark:border-surface-600" />
+                <div class="bg-surface-0 dark:bg-surface-800 border border-surface-200 rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-900/30 cursor-pointer" @click="shippingState.enable = !shippingState.enable">
+                        <div class="flex items-center gap-2"><i class="pi pi-truck text-surface-500"></i><span class="text-sm font-bold text-surface-700">Pengiriman Ekspedisi</span></div>
+                        <InputSwitch v-model="shippingState.enable" class="scale-75" @click.stop />
                     </div>
-                </div>
-
-                <div v-if="!isInterStore">
-                    <label class="text-xs font-bold text-surface-500 uppercase mb-2 block">Jenis Pembayaran</label>
-                    <SelectButton 
-                        v-model="payment.mainMethod" 
-                        :options="['TUNAI', 'KREDIT', 'CICILAN']"
-                        class="w-full"
-                        :pt="{ button: { class: '!text-xs !py-3 flex-1' } }"
-                    />
-                </div>
-                
-                <div v-if="!isInterStore" class="animate-fade-in-down">
-                    
-                    <div v-if="payment.mainMethod === 'TUNAI'" class="space-y-4">
-                        <div class="flex gap-2">
-                             <div 
-                                class="flex-1 border rounded-lg p-3 cursor-pointer transition-all text-center"
-                                :class="payment.subMethod === 'CASH' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600' : 'border-surface-200 dark:border-surface-700 text-surface-500'"
-                                @click="payment.subMethod = 'CASH'"
-                             >
-                                <i class="pi pi-wallet block text-lg mb-1"></i>
-                                <span class="text-xs font-bold">CASH (Tunai)</span>
-                             </div>
-                             <div 
-                                class="flex-1 border rounded-lg p-3 cursor-pointer transition-all text-center"
-                                :class="payment.subMethod === 'BANK' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600' : 'border-surface-200 dark:border-surface-700 text-surface-500'"
-                                @click="payment.subMethod = 'BANK'"
-                             >
-                                <i class="pi pi-building block text-lg mb-1"></i>
-                                <span class="text-xs font-bold">BANK (Transfer)</span>
-                             </div>
-                        </div>
-
-                        <div v-if="payment.subMethod === 'BANK'" class="animate-fade-in-down">
-                            <Dropdown v-model="payment.bankUuid" :options="banks" optionLabel="bank_name" optionValue="uuid" placeholder="Pilih Bank Tujuan..." class="w-full !text-xs">
-                                <template #option="slotProps"><div class="flex items-center gap-2"><span class="font-bold text-xs">{{ slotProps.option.bank_name }}</span><span class="text-[10px] text-surface-500">({{ slotProps.option.account_number }})</span></div></template>
-                            </Dropdown>
-                        </div>
-
-                        <div>
-                            <label class="text-xs font-bold text-surface-500 uppercase mb-2 block">Nominal Bayar</label>
-                            <InputNumber v-model="payment.amount" mode="currency" currency="IDR" locale="id-ID" class="w-full" placeholder="0" :min="0" inputClass="!text-lg !py-3 !font-mono !text-center" />
-                             <div class="grid grid-cols-4 gap-2 mt-2">
-                                 <button class="py-2 bg-surface-100 hover:bg-surface-200 dark:bg-surface-700 rounded text-xs font-semibold transition" @click="payment.amount = grandTotal">Pas</button>
-                                 <button class="py-2 bg-surface-100 hover:bg-surface-200 dark:bg-surface-700 rounded text-xs font-semibold transition" @click="payment.amount = 50000">50rb</button>
-                                 <button class="py-2 bg-surface-100 hover:bg-surface-200 dark:bg-surface-700 rounded text-xs font-semibold transition" @click="payment.amount = 100000">100rb</button>
-                                 <button class="py-2 bg-red-50 text-red-500 hover:bg-red-100 rounded text-xs font-semibold transition" @click="payment.amount = null">Clear</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-else-if="payment.mainMethod === 'KREDIT'" class="space-y-4 bg-orange-50 dark:bg-orange-900/10 p-3 rounded-lg border border-orange-100 dark:border-orange-800">
-                         <div class="grid grid-cols-1 gap-3">
-                            <div>
-                                <label class="text-[10px] font-bold text-orange-600 dark:text-orange-300 uppercase mb-1 block">Jatuh Tempo <span class="text-red-500">*</span></label>
-                                <Calendar v-model="payment.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="w-full" inputClass="!text-xs" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="text-xs font-bold text-orange-600 dark:text-orange-300 uppercase mb-2 block">Down Payment (DP)</label>
-                            <div class="flex gap-2 mb-2">
-                                <SelectButton 
-                                    v-model="payment.subMethod" 
-                                    :options="['CASH', 'BANK']"
-                                    class="w-full"
-                                    :pt="{ button: { class: '!text-[10px] !py-1 flex-1' } }"
-                                />
-                            </div>
-                            <div v-if="payment.subMethod === 'BANK'" class="mb-2">
-                                <Dropdown v-model="payment.bankUuid" :options="banks" optionLabel="bank_name" optionValue="uuid" placeholder="Pilih Bank..." class="w-full !text-xs" />
-                            </div>
-                            <InputNumber v-model="payment.amount" mode="currency" currency="IDR" locale="id-ID" class="w-full" placeholder="0" :min="0" inputClass="!text-sm !py-2 !font-mono" />
-                        </div>
-                    </div>
-
-                    <div v-else-if="payment.mainMethod === 'CICILAN'" class="space-y-4 bg-purple-50 dark:bg-purple-900/10 p-3 rounded-lg border border-purple-100 dark:border-purple-800">
-                         <div class="grid grid-cols-1 gap-3">
-                            <div>
-                                <label class="text-[10px] font-bold text-purple-600 dark:text-purple-300 uppercase mb-1 block">Jatuh Tempo Awal <span class="text-red-500">*</span></label>
-                                <Calendar v-model="payment.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="w-full" inputClass="!text-xs" />
-                            </div>
-                        </div>
-
+                    <div v-if="shippingState.enable" class="p-3 border-t border-surface-100 space-y-3 bg-white animate-fade-in-down">
                         <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="text-[10px] font-bold text-purple-600 dark:text-purple-300 uppercase mb-1 block">Tenor (Kali)</label>
-                                <InputNumber v-model="payment.installmentCount" :min="1" showButtons buttonLayout="horizontal" class="w-full" inputClass="!text-xs !text-center !w-12" />
-                            </div>
-                             <div>
-                                <label class="text-[10px] font-bold text-purple-600 dark:text-purple-300 uppercase mb-1 block">Biaya / Cicilan</label>
-                                <InputNumber v-model="payment.installmentFee" mode="currency" currency="IDR" locale="id-ID" class="w-full" :min="0" inputClass="!text-xs" />
-                            </div>
+                            <div><label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Kurir</label><Dropdown v-model="shippingState.courierUuid" :options="couriers" optionLabel="name" optionValue="uuid" placeholder="Pilih..." class="w-full !text-xs" /></div>
+                            <div><label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Layanan</label><Dropdown v-model="shippingState.routeUuid" :options="availableRoutes" optionLabel="destination" optionValue="uuid" placeholder="Pilih..." class="w-full !text-xs" :disabled="!shippingState.courierUuid">
+                                <template #option="slotProps"><div class="flex justify-between w-full"><span>{{ slotProps.option.destination }}</span><span class="font-bold">{{ formatCurrency(slotProps.option.price) }}</span></div></template>
+                            </Dropdown></div>
                         </div>
+                    </div>
+                </div>
 
-                        <div>
-                            <label class="text-xs font-bold text-purple-600 dark:text-purple-300 uppercase mb-2 block">Down Payment (DP)</label>
-                            <div class="flex gap-2 mb-2">
-                                <SelectButton v-model="payment.subMethod" :options="['CASH', 'BANK']" class="w-full" :pt="{ button: { class: '!text-[10px] !py-1 flex-1' } }" />
-                            </div>
-                            <div v-if="payment.subMethod === 'BANK'" class="mb-2">
-                                <Dropdown v-model="payment.bankUuid" :options="banks" optionLabel="bank_name" optionValue="uuid" placeholder="Pilih Bank..." class="w-full !text-xs" />
-                            </div>
-                            <InputNumber v-model="payment.amount" mode="currency" currency="IDR" locale="id-ID" class="w-full" placeholder="0" :min="0" inputClass="!text-sm !py-2 !font-mono" />
-                        </div>
+                <div>
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="text-sm font-bold text-surface-800">Metode Pembayaran</label>
+                        <button @click="addPaymentLine" class="text-xs text-primary-600 font-bold hover:bg-primary-50 px-3 py-1.5 rounded-lg transition border border-primary-100 flex items-center gap-1"><i class="pi pi-plus"></i> Tambah</button>
+                    </div>
 
-                        <div class="bg-surface-0 dark:bg-surface-800 p-2 rounded border border-purple-200 dark:border-purple-700">
-                            <div class="flex justify-between text-[10px] text-surface-500">
-                                <span>Sisa Pokok: {{ formatCurrency(remainingDebt) }}</span>
-                                <span>+ Total Biaya: {{ formatCurrency(payment.installmentFee * payment.installmentCount) }}</span>
+                    <div class="space-y-3">
+                        <div v-for="(line, idx) in paymentLines" :key="idx" class="relative p-3 rounded-xl border-l-4 shadow-sm bg-white border border-surface-200 transition-all hover:shadow-md" :class="{'border-l-emerald-500': line.type === 'TUNAI', 'border-l-orange-500': line.type === 'KREDIT', 'border-l-purple-500': line.type === 'CICILAN'}">
+                            <div class="flex gap-3 items-start">
+                                <div class="w-32 shrink-0">
+                                    <Dropdown v-model="line.type" :options="['TUNAI', 'KREDIT', 'CICILAN']" class="w-full !text-xs font-bold" :pt="{ input: { class: '!py-2' } }">
+                                        <template #value="slotProps"><div class="flex items-center gap-2"><i class="pi" :class="{'pi-wallet text-emerald-500': slotProps.value==='TUNAI', 'pi-book text-orange-500': slotProps.value==='KREDIT', 'pi-calendar text-purple-500': slotProps.value==='CICILAN'}"></i><span>{{ slotProps.value }}</span></div></template>
+                                        <template #option="slotProps"><div class="flex items-center gap-2"><i class="pi" :class="{'pi-wallet text-emerald-500': slotProps.option==='TUNAI', 'pi-book text-orange-500': slotProps.option==='KREDIT', 'pi-calendar text-purple-500': slotProps.option==='CICILAN'}"></i><span>{{ slotProps.option }}</span></div></template>
+                                    </Dropdown>
+                                </div>
+                                <div class="flex-1 relative">
+                                    <InputNumber v-model="line.amount" mode="currency" currency="IDR" locale="id-ID" placeholder="0" class="w-full" inputClass="!text-sm !py-2 !font-bold" />
+                                    <button v-if="remainingBalance > 0 && line.amount !== remainingBalance" @click="setMaxAmount(idx)" class="absolute right-1 top-1/2 -translate-y-1/2 bg-surface-100 hover:bg-surface-200 text-[9px] font-bold px-2 py-1 rounded text-surface-600 transition">MAX</button>
+                                </div>
+                                <button @click="removePaymentLine(idx)" class="w-9 h-[38px] flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><i class="pi pi-trash"></i></button>
                             </div>
-                            <div class="flex justify-between items-center mt-1 pt-1 border-t border-dashed border-surface-200">
-                                <span class="text-xs font-bold text-purple-700">Est. Cicilan/Bulan</span>
-                                <span class="text-sm font-black text-purple-700">{{ formatCurrency(monthlyInstallment) }}</span>
+
+                            <div class="mt-3 pt-2 border-t border-dashed border-surface-200 text-xs space-y-2">
+                                <div v-if="line.type === 'TUNAI'" class="flex gap-2 items-center"><span class="text-surface-500 w-16">Metode:</span><Dropdown v-model="line.subType" :options="['CASH', 'BANK']" class="w-24 !text-[10px]" :pt="{ input: { class: '!py-1' } }" /><Dropdown v-if="line.subType === 'BANK'" v-model="line.bankUuid" :options="banks" optionLabel="bank_name" optionValue="uuid" placeholder="Pilih Bank" class="flex-1 !text-[10px]" :pt="{ input: { class: '!py-1' } }" /></div>
+                                <div v-if="line.type === 'KREDIT'" class="flex gap-2 items-center"><span class="text-surface-500 w-16">Jatuh Tempo:</span><Calendar v-model="line.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="flex-1" inputClass="!text-[10px] !py-1" /></div>
+                                <div v-if="line.type === 'CICILAN'" class="space-y-2">
+                                    <div class="flex gap-3">
+                                        <div class="flex-1"><label class="text-[9px] font-bold text-surface-500 block mb-1">Tenor</label><InputNumber v-model="line.tenor" :min="1" showButtons buttonLayout="horizontal" class="w-full" inputClass="!text-[10px] !text-center !w-8 !py-1" /></div>
+                                        <div class="flex-1"><label class="text-[9px] font-bold text-surface-500 block mb-1">Bunga/Bln</label><InputNumber v-model="line.fee" mode="currency" currency="IDR" class="w-full" inputClass="!text-[10px] !py-1" /></div>
+                                        <div class="flex-[1.5]"><label class="text-[9px] font-bold text-surface-500 block mb-1">Mulai</label><Calendar v-model="line.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="w-full" inputClass="!text-[10px] !py-1" /></div>
+                                    </div>
+                                    <div class="bg-purple-50 rounded border border-purple-100 overflow-hidden">
+                                        <button @click="line.showSchedule = !line.showSchedule" class="w-full flex justify-between items-center px-3 py-1.5 text-[10px] font-bold text-purple-700 hover:bg-purple-100 transition"><span><i class="pi pi-calendar mr-1"></i> Simulasi: {{ formatCurrency((line.amount/line.tenor) + line.fee) }}/bln</span><i class="pi" :class="line.showSchedule ? 'pi-chevron-up' : 'pi-chevron-down'"></i></button>
+                                        <div v-if="line.showSchedule" class="p-2 border-t border-purple-100 max-h-32 overflow-y-auto custom-scrollbar"><table class="w-full text-[9px]"><thead class="text-purple-500 border-b border-purple-200"><tr><th class="text-left pb-1">Ke</th><th class="text-left pb-1">Tanggal</th><th class="text-right pb-1">Total</th></tr></thead><tbody><tr v-for="sch in getInstallmentSchedule(line)" :key="sch.no"><td class="py-1">{{ sch.no }}</td><td class="py-1">{{ new Date(sch.date).toLocaleDateString('id-ID') }}</td><td class="py-1 text-right font-bold">{{ formatCurrency(sch.total) }}</td></tr></tbody></table></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                </div>
-
-                <div class="flex justify-between items-center pt-4 border-t border-dashed border-surface-300 dark:border-surface-600">
-                    <span class="text-sm font-medium text-surface-500">
-                        {{ (isCreditOrCicilan || isInterStore) ? 'Sisa Hutang' : 'Kembalian' }}
-                    </span>
-                    <span class="text-xl font-mono font-bold" :class="changeAmount < 0 ? 'text-red-500' : 'text-emerald-500'">
-                        {{ (isCreditOrCicilan || isInterStore) ? formatCurrency(remainingDebt) : formatCurrency(changeAmount) }}
-                    </span>
                 </div>
 
             </div>
 
-            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 flex gap-3">
-                <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPaymentModal = false" />
-                <Button 
-                    :label="isInterStore ? 'Kirim Stok' : 'Proses Pembayaran'" 
-                    :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" 
-                    class="flex-[2]"
-                    :severity="(isCreditOrCicilan || isInterStore) ? 'warning' : 'success'"
-                    :loading="processing" 
-                    :disabled="!canCheckout"
-                    @click="processCheckout"
-                />
+            <div class="p-4 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-surface-600">{{ remainingBalance > 0 ? (hasDebtOrInstallment ? 'Sisa (Akan jadi Hutang)' : 'Kurang Bayar') : 'Kembalian' }}</span>
+                    <span class="text-xl font-black font-mono" :class="remainingBalance > 100 ? 'text-red-500' : 'text-emerald-500'">{{ formatCurrency(Math.abs(remainingBalance)) }}</span>
+                </div>
+                <div class="flex gap-3">
+                    <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPaymentModal = false" />
+                    <Button :label="hasDebtOrInstallment || transactionType === 'MUTATION' || isPreOrder ? 'Simpan Transaksi' : 'Bayar Lunas'" :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" class="flex-[2] font-bold" :severity="hasDebtOrInstallment || isPreOrder ? 'help' : 'success'" :loading="processing" :disabled="!canCheckout" @click="processCheckout" />
+                </div>
             </div>
         </div>
     </div>
 </template>
 
 <style scoped>
-/* Custom Scrollbar */
-.scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-.scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(156, 163, 175, 0.5);
-    border-radius: 20px;
-}
-.custom-tiny-dropdown :deep(.p-dropdown-label) {
-    padding: 0 0.5rem !important;
-}
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 20px; }
+.custom-tiny-dropdown :deep(.p-dropdown-label) { padding: 0 0.5rem !important; }
+.animate-fade-in-down { animation: fadeInDown 0.3s ease-out; }
+@keyframes fadeInDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 </style>

@@ -436,33 +436,32 @@ export class ProductService {
   }
 
   // ==========================================================
-  // FIND ONE (Inject Stock Calculation)
+  // FIND ONE (FIXED WITH QUERY BUILDER)
   // ==========================================================
   async findOne(uuid: string, storeUuid?: string) {
-    const whereCondition: { uuid: any } = { uuid };
+    // 1. Gunakan QueryBuilder agar bisa menggabungkan filter ID dan Store secara aman
+    const query = this.productRepo.createQueryBuilder('product')
+      .leftJoinAndSelect('product.units', 'units')
+      .leftJoinAndSelect('product.price', 'price')
+      .leftJoinAndSelect('product.shelve', 'shelve')
+      .leftJoinAndSelect('shelve.shelve', 'shelveEntity')
+      .leftJoinAndSelect('product.productCategory', 'productCategory')
+      .leftJoinAndSelect('productCategory.category', 'category')
+      .where('product.uuid = :uuid', { uuid }); // Cari ID spesifik
 
-    // Filtering menggunakan LIKE pada kolom uuid (Primary Key)
-    // Jika storeUuid ada, pastikan UUID yang dicari memiliki prefix storeUuid.
+    // 2. Tambahkan filter Store (Security Check)
+    // Logika: "Filter uuidnya juga where store"
     if (storeUuid) {
-      whereCondition.uuid = Like(`${storeUuid}%`);
+      query.andWhere('product.uuid LIKE :storePrefix', { storePrefix: `${storeUuid}%` });
     }
 
-    // Namun, kita tetap ingin mencari berdasarkan UUID yang lengkap jika diberikan.
-    // Jika UUID yang dicari sudah membawa prefix, filter LIKE tetap berfungsi.
-    // Kita hanya perlu memastikan TypeORM tidak membuat query yang kontradiktif (uuid=... AND uuid LIKE...).
-    // Dengan hanya menggunakan `whereCondition` (yang bisa berupa `{ uuid: Like(...) }` atau `{ uuid: 'UUID_LENGKAP' }`), ini lebih aman.
-
-    // NOTE: TypeORM akan secara otomatis mengganti `uuid` dengan `Like` jika properti `uuid` adalah objek `Like`.
-
-    const product = await this.productRepo.findOne({
-      where: whereCondition,
-      relations: ['units', 'price', 'shelve', 'shelve.shelve', 'productCategory', 'productCategory.category'],
-    });
+    const product = await query.getOne();
 
     if (!product) {
       return null;
     }
 
+    // 3. Inject Stock Calculation (Sama seperti sebelumnya)
     if (product.units && product.units.length > 0) {
       const manager = this.dataSource.manager;
       const stockMap = await this.calculateStockForUnits(product.units, manager);
@@ -470,7 +469,7 @@ export class ProductService {
       product.units = product.units.map(unit => ({
         ...unit,
         currentStock: stockMap.get(unit.uuid) || 0
-      } as ProductUnitEntity & { currentStock: number; })); // Tambahkan currentStock
+      } as ProductUnitEntity & { currentStock: number; })); 
     }
 
     return product;

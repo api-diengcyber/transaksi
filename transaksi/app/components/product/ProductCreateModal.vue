@@ -1,8 +1,7 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
-// Pastikan path import ini benar sesuai struktur project Anda
-import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue'; 
+import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue';
 
 const props = defineProps({
     visible: Boolean,
@@ -11,80 +10,110 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'product-created', 'product-updated']);
 
-// [BARU] Inject Service Category & Product
+// --- INJECT SERVICES ---
 const productService = useProductService();
 const shelveService = useShelveService();
 const categoryService = useCategoryService(); 
 const toast = useToast();
 
+// --- STATE ---
 const submitted = ref(false);
 const loading = ref(false);
 const isEditMode = computed(() => !!props.productUuid);
 
-// State Data Utama
+// Data Utama
 const product = reactive({ 
     name: '', 
     categoryUuids: [] 
 });
 
+// Konfigurasi Dinamis
 const configUnits = ref([]); 
 const configPrices = ref([]);
 
-// State Options
+// Options
 const showShelfModal = ref(false);
 const shelfOptions = ref([]); 
 const categoryOptions = ref([]); 
 const unitOptions = ['PCS', 'BOX', 'KG', 'LITER', 'PACK', 'CARTON', 'DUS', 'LUSIN'];
 
-// --- FETCH DATA UTILS ---
+// --- FETCH REFERENCE DATA ---
 
 const fetchShelves = async () => {
     try {
-        const data = await shelveService.getAllShelves(); 
-        shelfOptions.value = data || [];
+        const res = await shelveService.getAllShelves(); 
+        shelfOptions.value = Array.isArray(res) ? res : (res.data || []);
     } catch (e) { console.error(e); }
 };
 
-// [BARU] Fetch Data Kategori
 const fetchCategories = async () => {
     try {
-        const data = await categoryService.getAllCategorys(); 
-        // Map ke format label/value untuk PrimeVue
-        categoryOptions.value = (data || []).map(c => ({
+        const res = await categoryService.getAllCategorys(); 
+        const rawData = Array.isArray(res) ? res : (res.data || []);
+        categoryOptions.value = rawData.map(c => ({
             label: c.name,
             value: c.uuid
         }));
     } catch (e) { console.error(e); }
 };
 
-const onShelveCreated = () => {
-    fetchShelves(); 
+const onShelveCreated = () => fetchShelves(); 
+
+// --- FORM MANAGEMENT ---
+
+const initForm = () => {
+    // 1. Reset Data Reaktif
+    product.name = '';
+    product.categoryUuids = []; 
+    
+    // 2. Reset Tabel Satuan & Harga ke Default
+    const tempId = Date.now();
+    configUnits.value = [{ 
+        tempId, 
+        uuid: null,
+        unitName: 'PCS', 
+        multiplier: 1, 
+        barcode: '', 
+        isDefault: true, 
+        allocations: [],
+        oldQty: 0,
+        newQty: 0, 
+    }]; 
+    configPrices.value = [{ 
+        tempId: tempId + 1, 
+        uuid: null,
+        unitTempId: tempId, 
+        name: 'Umum', 
+        price: 0, 
+        minWholesaleQty: 0, 
+        isDefault: true 
+    }]; 
+    
+    submitted.value = false;
 };
 
-// --- LOAD DATA FOR EDIT ---
+// --- LOAD DATA (FIXED) ---
 const loadProductData = async (uuid) => {
     loading.value = true;
     try {
-        // Data yang dikembalikan oleh API (ProductService.findOne) sudah menyertakan units[].currentStock
-        const data = await productService.getProduct(uuid); 
+        const response = await productService.getProduct(uuid);
+        const data = response.data || response; 
+
+        if (!data) throw new Error("Data produk kosong dari server");
+
+        // 1. Isi Basic Info
+        product.name = data.name || '';
         
-        if (!data) throw new Error("Data produk tidak ditemukan");
+        // 2. Isi Kategori
+        const cats = data.productCategory || [];
+        product.categoryUuids = Array.isArray(cats) 
+            ? cats.map(pc => pc.category?.uuid).filter(Boolean) 
+            : [];
 
-        // 1. Isi Nama
-        product.name = data.name;
-
-        // [FIXED] 2. Isi Kategori (Menggunakan productCategory)
-        if (data.productCategory && Array.isArray(data.productCategory)) {
-            product.categoryUuids = data.productCategory.map(pc => pc.category?.uuid).filter(Boolean);
-        } else {
-            product.categoryUuids = [];
-        }
-
-        // 3. Mapping Units (ADD STOCK FIELDS)
-        configUnits.value = data.units.map(u => {
-             // [FIX KRITIS] Mengambil stok aktual dari properti currentStock yang diinjeksi oleh backend ProductService
+        // 3. Mapping Units 
+        const units = data.units || [];
+        configUnits.value = units.map(u => {
             const currentQty = Number(u.currentStock || 0); 
-
             return {
                 uuid: u.uuid, 
                 tempId: u.uuid, 
@@ -93,17 +122,16 @@ const loadProductData = async (uuid) => {
                 barcode: u.barcode,
                 isDefault: data.defaultUnitUuid === u.uuid,
                 allocations: [],
-                // [FIX] Menggunakan stok aktual untuk inisialisasi oldQty dan newQty
                 oldQty: currentQty,
-                newQty: currentQty, // Awalnya, newQty sama dengan oldQty
+                newQty: currentQty, 
             };
         });
 
         // 4. Mapping Prices
-        const pricesData = data.prices || data.price || [];
-        configPrices.value = pricesData.map(p => ({
+        const prices = data.prices || data.price || [];
+        configPrices.value = prices.map(p => ({
             uuid: p.uuid,
-            tempId: Date.now() + Math.random(),
+            tempId: Date.now() + Math.random(), 
             unitTempId: p.unitUuid,
             name: p.name,
             price: Number(p.price),
@@ -111,83 +139,75 @@ const loadProductData = async (uuid) => {
             isDefault: data.defaultPriceUuid === p.uuid
         }));
 
-        // 5. Mapping Shelves (Alokasi Rak)
+        // 5. Mapping Shelves
+        const allShelves = data.shelve || [];
         configUnits.value.forEach(unitItem => {
-            const backendShelves = (data.shelve || []).filter(s => s.unitUuid === unitItem.tempId);
-            if (backendShelves.length > 0) {
-                unitItem.allocations = backendShelves.map(bs => ({
-                    shelfUuid: bs.shelveUuid,
-                    qty: Number(bs.qty)
+            const related = allShelves.filter(s => s.unitUuid === unitItem.uuid);
+            if (related.length > 0) {
+                unitItem.allocations = related.map(rs => ({
+                    shelfUuid: rs.shelveUuid || rs.shelveId,
+                    qty: Number(rs.qty)
                 }));
             }
         });
 
     } catch (error) {
-        console.error(error);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data produk', life: 3000 });
-        closeDialog();
+        console.error("Load Error:", error);
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memuat data produk.' });
+        emit('update:visible', false); 
     } finally {
         loading.value = false;
     }
 };
 
-// --- HELPER INIT FORM (RESET) ---
-const initForm = () => {
-    product.name = '';
-    product.categoryUuids = []; 
-    const tempId = Date.now();
-    
-    // [MODIFIKASI] Tambahkan newQty & oldQty untuk Stok Awal (Create Mode)
-    configUnits.value = [{ 
-        tempId, unitName: 'PCS', multiplier: 1, barcode: '', isDefault: true, allocations: [],
-        oldQty: 0,
-        newQty: 0, 
-    }]; 
-    configPrices.value = [{ tempId: tempId + 1, unitTempId: tempId, name: 'Umum', price: 0, minWholesaleQty: 0, isDefault: true }]; 
-};
-
-
-// --- WATCHERS ---
+// --- WATCHERS (CRITICAL FIX) ---
 watch(() => props.visible, async (val) => {
     if (val) {
-        fetchShelves();
-        fetchCategories(); 
+        // [PENTING] Tunggu update prop selesai dari parent
+        await nextTick(); 
         
-        submitted.value = false;
-        if (isEditMode.value && props.productUuid) {
+        // Selalu bersihkan form dulu agar tidak muncul data produk sebelumnya
+        initForm();
+        
+        // Load referensi
+        await Promise.all([fetchShelves(), fetchCategories()]);
+        
+        // Cek props.productUuid langsung setelah nextTick
+        if (props.productUuid) {
             await loadProductData(props.productUuid);
-        } else {
-            initForm();
         }
     }
 });
 
-// --- ACTION HANDLERS ---
+// --- ACTIONS (ADD/REMOVE ROWS) ---
 const addUnitRow = () => {
     const newId = Date.now();
-    // [MODIFIKASI] Tambahkan fields stok ke unit baru
+    const isFirst = configUnits.value.length === 0;
     configUnits.value.push({ 
-        tempId: newId, unitName: 'PCS', multiplier: 1, barcode: '', isDefault: configUnits.value.length === 0, allocations: [],
-        oldQty: 0,
-        newQty: 0,
+        tempId: newId, uuid: null, unitName: 'PCS', multiplier: 1, barcode: '', 
+        isDefault: isFirst, allocations: [], oldQty: 0, newQty: 0,
     });
-    configPrices.value.push({ tempId: newId + 1, unitTempId: newId, name: 'Umum', price: 0, minWholesaleQty: 0, isDefault: true });
+    configPrices.value.push({ 
+        tempId: newId + 1, uuid: null, unitTempId: newId, name: 'Umum', 
+        price: 0, minWholesaleQty: 0, isDefault: isFirst 
+    });
 };
 
 const removeUnitRow = (index) => {
-    if (configUnits.value.length === 1) {
-           toast.add({ severity: 'warn', summary: 'Warning', detail: 'Minimal harus ada 1 satuan.', life: 2000 });
-           return;
-    }
+    if (configUnits.value.length <= 1) return;
     const removed = configUnits.value[index];
     configUnits.value.splice(index, 1);
     configPrices.value = configPrices.value.filter(p => p.unitTempId !== removed.tempId);
+    if (removed.isDefault && configUnits.value.length > 0) {
+        configUnits.value[0].isDefault = true;
+    }
 };
 const setUnitDefault = (index) => { configUnits.value.forEach((u, i) => u.isDefault = (i === index)); };
 
 const addPriceRow = () => {
-    const defaultUnitId = configUnits.value[0]?.tempId;
-    configPrices.value.push({ tempId: Date.now(), unitTempId: defaultUnitId, name: '', price: 0, minWholesaleQty: 0, isDefault: false });
+    const defaultUnit = configUnits.value[0];
+    if(!defaultUnit) return;
+    configPrices.value.push({ tempId: Date.now(), uuid: null, unitTempId: defaultUnit.tempId, name: '', price: 0, minWholesaleQty: 0, isDefault: false });
 };
 const removePriceRow = (index) => { configPrices.value.splice(index, 1); };
 const setPriceDefault = (index) => { configPrices.value.forEach((p, i) => p.isDefault = (i === index)); };
@@ -203,26 +223,27 @@ const removeStockAllocation = (unitIndex, allocIndex) => {
 // --- SAVE / UPDATE ---
 const saveProduct = async () => {
     submitted.value = true;
-    if (!product.name) return;
+    if (!product.name) {
+        toast.add({ severity: 'warn', detail: 'Nama produk wajib diisi' });
+        return;
+    }
 
     loading.value = true;
     try {
-        // 1. Kumpulkan data penyesuaian stok (newQty vs oldQty)
+        // Payload Stock Adjustment
         const stockAdjustments = [];
         configUnits.value.forEach(u => {
-            // Hanya rekam jika ada perubahan (saat edit) atau ada stok awal (saat create)
-            // Cek: jika newQty BEDA dengan oldQty
-            if (Number(u.newQty) !== Number(u.oldQty)) { 
+            const oldQ = Number(u.oldQty) || 0;
+            const newQ = Number(u.newQty) || 0;
+            if (newQ !== oldQ) { 
                 stockAdjustments.push({
                     unitUuid: u.uuid || u.tempId, 
-                    oldQty: Number(u.oldQty) || 0,
-                    newQty: Number(u.newQty) || 0
+                    oldQty: oldQ,
+                    newQty: newQ
                 });
             }
         });
 
-
-        // 2. Susun Payload
         const payload = {
             name: product.name,
             categoryUuids: product.categoryUuids, 
@@ -230,7 +251,7 @@ const saveProduct = async () => {
                 uuid: u.uuid, 
                 tempId: u.tempId, 
                 name: u.unitName,
-                multiplier: u.multiplier,
+                multiplier: Number(u.multiplier),
                 barcode: u.barcode,
                 isDefault: u.isDefault
             })),
@@ -238,64 +259,64 @@ const saveProduct = async () => {
                 uuid: p.uuid, 
                 unitTempId: p.unitTempId, 
                 name: p.name || 'Umum',
-                price: p.price,
-                minWholesaleQty: p.minWholesaleQty || 0,
+                price: Number(p.price),
+                minWholesaleQty: Number(p.minWholesaleQty),
                 isDefault: p.isDefault
             })),
-            
-            // [BARU] Kirim data penyesuaian stok untuk diproses di Journal
             stockAdjustments: stockAdjustments,
-
-            // Payload Stocks hanya untuk Shelves
             stocks: configUnits.value.map(u => ({
                 unitTempId: u.tempId,
-                qty: 0, // DUMMY: Diabaikan oleh backend ProductService
+                qty: 0, 
                 allocations: u.allocations
-                    .filter(a => a.qty > 0 && a.shelfUuid)
+                    .filter(a => a.shelfUuid && a.qty > 0)
                     .map(a => ({
                         shelfUuid: a.shelfUuid,
-                        qty: a.qty
+                        qty: Number(a.qty)
                     }))
             }))
         };
 
         if (isEditMode.value) {
             await productService.updateProduct(props.productUuid, payload);
-            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil diperbarui', life: 3000 });
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk diperbarui' });
             emit('product-updated');
         } else {
-            const newProd = await productService.createProduct(payload);
-            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil dibuat', life: 3000 });
-            emit('product-created', newProd);
+            await productService.createProduct(payload);
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk dibuat' });
+            emit('product-created');
         }
-        closeDialog();
+        emit('update:visible', false);
     } catch (e) {
         console.error(e);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi kesalahan server', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi kesalahan sistem' });
     } finally {
         loading.value = false;
     }
 };
-
-const closeDialog = () => emit('update:visible', false);
 </script>
 
 <template>
-    <Dialog :visible="visible" @update:visible="val => emit('update:visible', val)" 
-            :header="isEditMode ? 'Edit Produk' : 'Produk Baru'" 
-            :modal="true" :style="{ width: '900px' }" maximizable 
-            class="p-fluid" :pt="{ content: { class: '!py-2 dark:bg-surface-400' } }">
+    <Dialog 
+        :visible="visible" 
+        @update:visible="val => emit('update:visible', val)" 
+        :header="isEditMode ? 'Edit Produk' : 'Produk Baru'" 
+        :modal="true" 
+        :style="{ width: '900px' }" 
+        maximizable 
+        class="p-fluid" 
+        :pt="{ content: { class: '!py-2 dark:bg-surface-900' } }"
+    >
         
-        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6">
+        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6 bg-surface-0 dark:bg-surface-800">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field mb-0">
                     <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Nama Produk <span class="text-red-500">*</span></label>
-                    <InputText v-model="product.name" placeholder="Contoh: Kopi Kapal Api" class="w-full !h-9 text-sm dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" :class="{'p-invalid': submitted && !product.name}" />
+                    <InputText v-model="product.name" placeholder="Contoh: Kopi Kapal Api" class="w-full !h-9 text-sm" :class="{'p-invalid': submitted && !product.name}" />
                     <small class="text-red-500 text-[10px] mt-1" v-if="submitted && !product.name">Wajib diisi.</small>
                 </div>
 
                 <div class="field mb-0">
-                    <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Kategori (Multi)</label>
+                    <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Kategori</label>
                     <MultiSelect 
                         v-model="product.categoryUuids" 
                         :options="categoryOptions" 
@@ -304,49 +325,45 @@ const closeDialog = () => emit('update:visible', false);
                         placeholder="Pilih Kategori" 
                         display="chip" 
                         filter
-                        class="w-full !min-h-[2.25rem] text-xs compact-multiselect dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700"
-                        :pt="{ label: { class: '!py-1.5 !px-2' } }"
+                        class="w-full !min-h-[2.25rem] text-xs"
                     />
                 </div>
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-400">
-            <div class="flex justify-between items-center mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg">
-                <span class="section-title flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">1</div>
-                    Konfigurasi Satuan & Barcode
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>
+                    Satuan & Barcode
                 </span>
-                <Button label="Tambah Satuan" icon="pi pi-plus" size="small" text severity="primary" @click="addUnitRow" class="!py-1 !text-xs" />
+                <Button label="Tambah" icon="pi pi-plus" size="small" text severity="primary" @click="addUnitRow" class="!py-0.5 !text-xs" />
             </div>
-            <div class="table-container">
+            <div class="p-0 overflow-x-auto">
                 <table class="w-full text-xs">
-                    <thead class="bg-surface-100 dark:bg-surface-400 text-surface-600 dark:text-surface-200 text-[10px] uppercase font-bold">
+                    <thead class="bg-surface-100 dark:bg-surface-700 text-surface-500 uppercase font-bold">
                         <tr>
-                            <th class="p-2 w-10 text-center border-b dark:border-surface-700">Def</th>
-                            <th class="p-2 w-32 border-b dark:border-surface-700">Satuan</th>
-                            <th class="p-2 w-20 border-b dark:border-surface-700">Multiplier</th>
-                            <th class="p-2 border-b dark:border-surface-700">Barcode / SKU</th>
-                            <th class="p-2 w-8 text-center border-b dark:border-surface-700"></th>
+                            <th class="p-2 w-10 text-center">Def</th>
+                            <th class="p-2 w-32">Satuan</th>
+                            <th class="p-2 w-20">Multiplier</th>
+                            <th class="p-2">Barcode</th>
+                            <th class="p-2 w-8"></th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-surface-100 dark:divide-surface-800">
-                        <tr v-for="(u, idx) in configUnits" :key="u.tempId" class="hover:bg-surface-50 dark:hover:bg-surface-800/50">
-                            <td class="p-2 text-center align-middle"><RadioButton v-model="u.isDefault" :value="true" name="uDef" @change="setUnitDefault(idx)" class="scale-75" /></td>
+                    <tbody class="divide-y divide-surface-100 dark:divide-surface-700">
+                        <tr v-for="(u, idx) in configUnits" :key="u.tempId">
+                            <td class="p-2 text-center align-middle"><RadioButton v-model="u.isDefault" :value="true" name="uDef" @change="setUnitDefault(idx)" /></td>
                             <td class="p-2 align-middle">
-                                <Dropdown v-model="u.unitName" :options="unitOptions" class="w-full !h-8 text-xs compact-input dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" editable placeholder="Pilih" :pt="{ input: { class: '!py-1 !px-2' } }" />
+                                <Dropdown v-model="u.unitName" :options="unitOptions" editable placeholder="Pilih" class="w-full !h-8 text-xs" />
                             </td>
                             <td class="p-2 align-middle">
-                                <InputNumber v-model="u.multiplier" :min="1" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1" :disabled="u.isDefault" />
+                                <InputNumber v-model="u.multiplier" :min="1" class="w-full !h-8" inputClass="!text-xs !text-center !p-1" :disabled="u.isDefault" />
                             </td>
                             <td class="p-2 align-middle">
-                                <div class="p-inputgroup !h-8">
-                                    <span class="p-inputgroup-addon !px-2 !bg-surface-50 dark:!bg-surface-700 border-r-0 !min-w-[2rem] dark:border-surface-700"><i class="pi pi-barcode text-surface-400 dark:text-surface-500 text-xs"></i></span>
-                                    <InputText v-model="u.barcode" class="!text-xs !p-1 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" placeholder="Scan..." />
-                                </div>
+                                <InputText v-model="u.barcode" class="w-full !h-8 !text-xs !p-1" placeholder="Scan..." />
                             </td>
                             <td class="p-2 text-center align-middle">
-                                <Button icon="pi pi-trash" text rounded severity="danger" size="small" @click="removeUnitRow(idx)" class="!w-6 !h-6 !p-0" />
+                                <Button icon="pi pi-trash" text rounded severity="danger" size="small" @click="removeUnitRow(idx)" class="!w-6 !h-6" />
                             </td>
                         </tr>
                     </tbody>
@@ -354,41 +371,37 @@ const closeDialog = () => emit('update:visible', false);
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-400">
-            <div class="flex justify-between items-center mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg">
-                <span class="section-title flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">2</div>
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-[10px]">2</span>
                     Harga Jual
                 </span>
-                <Button label="Tambah Harga" icon="pi pi-plus" size="small" text severity="success" @click="addPriceRow" class="!py-1 !text-xs" />
+                <Button label="Tambah" icon="pi pi-plus" size="small" text severity="success" @click="addPriceRow" class="!py-0.5 !text-xs" />
             </div>
-            <div class="table-container">
+            <div class="p-0 overflow-x-auto">
                 <table class="w-full text-xs">
-                    <thead class="bg-surface-100 dark:bg-surface-400 text-surface-600 dark:text-surface-200 text-[10px] uppercase font-bold">
+                    <thead class="bg-surface-100 dark:bg-surface-700 text-surface-500 uppercase font-bold">
                         <tr>
-                            <th class="p-2 w-10 text-center border-b dark:border-surface-700">Def</th>
-                            <th class="p-2 w-40 border-b dark:border-surface-700">Nama Harga</th>
-                            <th class="p-2 w-32 border-b dark:border-surface-700">Satuan</th>
-                            <th class="p-2 w-28 text-center border-b dark:border-surface-700">Min Grosir</th>
-                            <th class="p-2 border-b dark:border-surface-700">Nominal (Rp)</th>
-                            <th class="p-2 w-8 text-center border-b dark:border-surface-700"></th>
+                            <th class="p-2 w-10 text-center">Def</th>
+                            <th class="p-2">Nama Harga</th>
+                            <th class="p-2 w-32">Satuan</th>
+                            <th class="p-2 w-20">Min Qty</th>
+                            <th class="p-2 w-32">Harga (Rp)</th>
+                            <th class="p-2 w-8"></th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-surface-100 dark:divide-surface-800">
-                        <tr v-for="(p, idx) in configPrices" :key="p.tempId" class="hover:bg-surface-50 dark:hover:bg-surface-800/50">
-                            <td class="p-2 text-center align-middle"><RadioButton v-model="p.isDefault" :value="true" name="pDef" @change="setPriceDefault(idx)" class="scale-75" /></td>
-                            <td class="p-2 align-middle"><InputText v-model="p.name" class="w-full !h-8 !text-xs !p-1 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" placeholder="Cth: Umum" /></td>
+                    <tbody class="divide-y divide-surface-100 dark:divide-surface-700">
+                        <tr v-for="(p, idx) in configPrices" :key="p.tempId">
+                            <td class="p-2 text-center align-middle"><RadioButton v-model="p.isDefault" :value="true" name="pDef" @change="setPriceDefault(idx)" /></td>
+                            <td class="p-2 align-middle"><InputText v-model="p.name" class="w-full !h-8 !text-xs !p-1" placeholder="Umum" /></td>
                             <td class="p-2 align-middle">
-                                <Dropdown v-model="p.unitTempId" :options="configUnits" optionLabel="unitName" optionValue="tempId" class="w-full !h-8 text-xs compact-input dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" :pt="{ input: { class: '!py-1 !px-2' } }" />
+                                <Dropdown v-model="p.unitTempId" :options="configUnits" optionLabel="unitName" optionValue="tempId" class="w-full !h-8 text-xs" />
                             </td>
-                            <td class="p-2 align-middle">
-                                <InputNumber v-model="p.minWholesaleQty" :min="0" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1" placeholder="0" />
-                            </td>
-                            <td class="p-2 align-middle">
-                                <InputNumber v-model="p.price" mode="currency" currency="IDR" locale="id-ID" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-right !p-1" />
-                            </td>
+                            <td class="p-2 align-middle"><InputNumber v-model="p.minWholesaleQty" :min="0" class="w-full !h-8" inputClass="!text-xs !text-center !p-1" /></td>
+                            <td class="p-2 align-middle"><InputNumber v-model="p.price" mode="currency" currency="IDR" locale="id-ID" class="w-full !h-8" inputClass="!text-xs !text-right !p-1" /></td>
                             <td class="p-2 text-center align-middle">
-                                <Button icon="pi pi-trash" text rounded severity="danger" size="small" @click="removePriceRow(idx)" class="!w-6 !h-6 !p-0" />
+                                <Button icon="pi pi-trash" text rounded severity="danger" size="small" @click="removePriceRow(idx)" class="!w-6 !h-6" />
                             </td>
                         </tr>
                     </tbody>
@@ -396,118 +409,57 @@ const closeDialog = () => emit('update:visible', false);
             </div>
         </div>
         
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-400">
-            <div class="mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg">
-                <span class="section-title flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">3</div>
-                    Stok Awal / Penyesuaian
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+             <div class="p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">3</span>
+                    {{ isEditMode ? 'Opname Stok' : 'Stok Awal' }}
                 </span>
-                <span v-if="isEditMode" class="text-[10px] text-orange-500 ml-auto italic bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded">Isi hanya jika ada penambahan atau pengurangan stok</span>
-                <span v-else class="text-[10px] text-blue-500 ml-auto italic bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">Stok awal saat produk dibuat</span>
             </div>
-            
-            <div v-if="isEditMode && configUnits.every(u => u.oldQty === 0)" class="p-3 text-center text-red-500 text-xs italic">
-                ⚠️ Stok Lama saat ini terdeteksi 0. Pastikan Anda sudah mengimplementasikan API kalkulasi stok dari Journal untuk mengisi nilai ini saat mode Edit!
-            </div>
-            
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-                <div v-for="u in configUnits" :key="u.tempId" class="bg-surface-50 dark:bg-surface-400 p-2 rounded border border-surface-200 dark:border-surface-700">
-                    <label class="text-[10px] font-bold text-surface-500 uppercase block mb-1">
-                         {{ isEditMode ? 'Stok Baru' : 'Stok Awal' }} ({{ u.unitName }})
-                    </label>
-                     <div v-if="isEditMode" class="text-[10px] text-surface-400 mb-1">Stok Lama: {{ u.oldQty }}</div>
-                    <InputNumber v-model="u.newQty" :min="0" class="w-full !h-9" inputClass="!text-sm !text-center !font-bold text-surface-700 dark:text-surface-100 dark:bg-surface-400" placeholder="0" />
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+                <div v-for="u in configUnits" :key="u.tempId" class="p-2 border border-surface-200 dark:border-surface-700 rounded bg-surface-50 dark:bg-surface-700/30">
+                    <div class="text-[10px] uppercase font-bold text-surface-500 mb-1">{{ u.unitName }}</div>
+                    <div v-if="isEditMode" class="text-[10px] mb-1 flex justify-between">
+                        <span>Lama:</span> <span class="font-bold">{{ u.oldQty }}</span>
+                    </div>
+                    <InputNumber v-model="u.newQty" :min="0" class="w-full !h-8" inputClass="!text-xs !text-center !font-bold" placeholder="0" />
                 </div>
             </div>
         </div>
 
-        <div class="section-box bg-surface-0 dark:bg-surface-400">
-            <div class="mb-2 border-b border-surface-200 dark:border-surface-700 pb-2 bg-surface-50/50 dark:bg-surface-400 p-2 rounded-t-lg flex justify-between items-center">
-                <span class="section-title flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">4</div>
-                    Penempatan Rak / Lokasi (Opsional)
+        <div class="section-box bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+             <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px]">4</span>
+                    Lokasi Rak
                 </span>
-                <Button label="Rak Baru" icon="pi pi-plus-circle" size="small" text severity="help" @click="showShelfModal = true" class="!py-1 !text-xs" />
+                <Button label="Rak Baru" icon="pi pi-plus-circle" size="small" text severity="help" @click="showShelfModal = true" class="!py-0.5 !text-xs" />
             </div>
-            
-            <div class="p-3 space-y-4">
-                <div v-for="(u, uIdx) in configUnits" :key="u.tempId" class="bg-surface-50 dark:bg-surface-400/40 rounded-lg border border-surface-200 dark:border-surface-700 p-3">
+            <div class="p-3 space-y-3">
+                <div v-for="(u, uIdx) in configUnits" :key="u.tempId" class="border border-surface-200 dark:border-surface-700 rounded p-2">
                     <div class="flex justify-between items-center mb-2">
-                        <span class="font-bold text-sm text-surface-700 dark:text-surface-200 flex items-center gap-2">
-                            <i class="pi pi-map-marker text-surface-400"></i>
-                            Lokasi untuk: <span class="text-primary-600">{{ u.unitName }}</span>
-                        </span>
-                        <Button label="Tambah Lokasi" icon="pi pi-plus" size="small" outlined severity="secondary" class="!p-1 !text-[10px] !h-6" @click="addStockAllocation(uIdx)" />
+                        <span class="text-xs font-bold text-surface-600 dark:text-surface-300">{{ u.unitName }}</span>
+                        <Button label="Tambah Lokasi" icon="pi pi-plus" size="small" outlined severity="secondary" class="!py-0 !px-2 !h-6 !text-[10px]" @click="addStockAllocation(uIdx)" />
                     </div>
-
-                    <div v-if="u.allocations.length === 0" class="text-center py-2 text-xs text-surface-400 italic border border-dashed border-surface-200 dark:border-surface-700 rounded bg-surface-0 dark:bg-surface-400">
-                        Belum ada penempatan rak.
-                    </div>
-
-                    <div v-else class="bg-surface-0 dark:bg-surface-400 rounded border border-surface-100 dark:border-surface-700 overflow-hidden">
-                        <table class="w-full text-xs">
-                            <thead class="bg-surface-100 dark:bg-surface-400 text-[10px] text-surface-500 uppercase">
-                                <tr>
-                                    <th class="p-2 text-left font-bold">Pilih Rak</th>
-                                    <th class="p-2 w-24 text-center font-bold">Jumlah</th>
-                                    <th class="p-2 w-8"></th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-surface-100 dark:divide-surface-800">
-                                <tr v-for="(alloc, aIdx) in u.allocations" :key="aIdx">
-                                    <td class="p-1.5">
-                                        <Dropdown v-model="alloc.shelfUuid" :options="shelfOptions" optionLabel="name" optionValue="uuid" 
-                                            placeholder="Pilih Rak..." class="w-full !h-8 text-xs compact-input dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" 
-                                            :pt="{ input: { class: '!py-1 !px-2' }, panel: { class: '!text-xs' } }" />
-                                    </td>
-                                    <td class="p-1.5">
-                                        <InputNumber v-model="alloc.qty" :min="0" class="w-full !h-8 dark:bg-surface-400 dark:text-surface-100 dark:border-surface-700" inputClass="!text-xs !text-center !p-1 font-bold" placeholder="0" />
-                                    </td>
-                                    <td class="p-1.5 text-center">
-                                        <Button icon="pi pi-times" text rounded severity="danger" class="!w-6 !h-6 !p-0" @click="removeStockAllocation(uIdx, aIdx)" />
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div v-if="!u.allocations.length" class="text-[10px] text-surface-400 italic text-center py-1">Belum ada lokasi</div>
+                    <div v-else class="space-y-1">
+                        <div v-for="(alloc, aIdx) in u.allocations" :key="aIdx" class="flex gap-2 items-center">
+                            <Dropdown v-model="alloc.shelfUuid" :options="shelfOptions" optionLabel="name" optionValue="uuid" placeholder="Rak..." class="w-full !h-7 text-[10px]" />
+                            <InputNumber v-model="alloc.qty" placeholder="Qty" class="w-16 !h-7" inputClass="!text-[10px] !text-center !p-1" />
+                            <Button icon="pi pi-times" text rounded severity="danger" size="small" class="!w-6 !h-6" @click="removeStockAllocation(uIdx, aIdx)" />
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
         <template #footer>
-            <div class="flex justify-end gap-2 pt-3 border-t border-surface-200 dark:border-surface-700 mt-2">
-                <Button label="Batal" icon="pi pi-times" text @click="closeDialog" severity="secondary" size="small" />
-                <Button :label="isEditMode ? 'Simpan Perubahan' : 'Buat Produk'" icon="pi pi-check" @click="saveProduct" :loading="loading" size="small" />
+            <div class="flex justify-end gap-2 pt-2 border-t border-surface-200 dark:border-surface-700">
+                <Button label="Batal" icon="pi pi-times" text @click="emit('update:visible', false)" severity="secondary" size="small" />
+                <Button :label="isEditMode ? 'Simpan' : 'Buat'" icon="pi pi-check" @click="saveProduct" :loading="loading" size="small" />
             </div>
         </template>
     </Dialog>
 
-    <ShelveCreateModal 
-        v-model:visible="showShelfModal" 
-        @saved="onShelveCreated" 
-    />
+    <ShelveCreateModal v-model:visible="showShelfModal" @saved="onShelveCreated" />
 </template>
-
-<style scoped>
-.section-title {
-    @apply text-sm font-bold text-surface-700 dark:text-surface-200 uppercase tracking-wide;
-}
-.section-box {
-    /* Kelas dark:bg-surface-400 dipindahkan ke template */
-    @apply rounded-lg shadow-sm overflow-hidden;
-}
-.table-container {
-    @apply border-t border-surface-100 dark:border-surface-700;
-}
-/* Compact styling */
-:deep(.compact-input .p-dropdown-label) {
-    padding: 4px 8px !important;
-    font-size: 0.75rem !important; 
-}
-:deep(.compact-multiselect .p-multiselect-label) {
-    padding: 4px 8px !important;
-}
-:deep(.p-inputnumber-input) {
-    padding: 4px 8px !important;
-}
-</style>
