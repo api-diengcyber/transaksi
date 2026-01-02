@@ -53,9 +53,8 @@ const filters = ref({
 const loadData = async () => {
     loading.value = true;
     try {
-        // [UPDATED] Tambahkan parameter prefix: 'ac_'
         const [discRes, accRes] = await Promise.all([ 
-            getDiscovery({ prefix: 'ac_' }), 
+            getDiscovery({ prefix: '' }), 
             fetchAccounts() 
         ]) as any[];
 
@@ -130,10 +129,10 @@ onMounted(loadData);
                         <span class="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
                             <i class="pi pi-sparkles text-lg"></i>
                         </span>
-                        Konfigurasi Jurnal Otomatis (AC)
+                        Konfigurasi Jurnal Otomatis
                     </h1>
                     <p class="text-slate-500 text-sm leading-relaxed max-w-2xl">
-                        Sistem mendeteksi kode transaksi <strong>(Prefix: ac_)</strong> dari database yang belum memiliki pasangan di Akuntansi. 
+                        Sistem mendeteksi kode transaksi dari database yang belum memiliki pasangan di Akuntansi. 
                         Hubungkan kode-kode ini ke <strong>Akun Perkiraan (COA)</strong> agar jurnal keuangan terbentuk otomatis.
                     </p>
                 </div>

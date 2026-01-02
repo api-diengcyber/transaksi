@@ -287,7 +287,6 @@ const processCheckout = async () => {
                 qty: item.qty,
                 price: item.price,
                 subtotal: item.qty * item.price,
-                
                 // Tambahan detail spesifik untuk disimpan di journal_detail
                 item_name: item.name,
                 unit_name: item.unitName,
@@ -303,28 +302,21 @@ const processCheckout = async () => {
             tax_percentage: taxEnabled.value ? taxRate.value : 0,
             tax_method: taxEnabled.value ? taxMethod.value : null,
             grand_total: grandTotal.value,
-
             payment_method: mainMethod,
             payment_received: (transactionType.value === 'MUTATION') ? 0 : totalCashReceived,
             change: (!hasDebtOrInstallment.value && remainingBalance.value < 0) ? Math.abs(remainingBalance.value) : 0,
             is_credit: (hasDebtOrInstallment.value || transactionType.value === 'MUTATION') ? 'true' : 'false',
-            
             is_pre_order: isPreOrder.value, 
             status: isPreOrder.value ? 'PENDING' : 'COMPLETED',
-
             due_date: (hasDebtOrInstallment.value) ? paymentLines.value.find(l => l.type !== 'TUNAI')?.dueDate : null,
             customer_name: finalCustName,
             member_uuid: transactionMeta.memberUuid || null,
             bank_uuid: paymentLines.value.find(l => l.subType === 'BANK')?.bankUuid || null,
-            
             target_store_uuid: transactionType.value === 'MUTATION' ? transactionMeta.targetStoreUuid : null,
-            
             courier_uuid: shippingState.enable ? shippingState.courierUuid : null,
             courier_route_uuid: shippingState.enable ? shippingState.routeUuid : null,
             shipping_cost: shippingState.enable ? shippingState.cost : 0,
-
             notes: notesArr.join(' | '),
-
             // [UPDATED] Kirim Items sebagai Array Object, bukan flatten keys
             items: itemsPayload
         };
