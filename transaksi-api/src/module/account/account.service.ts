@@ -123,4 +123,63 @@ export class AccountService {
 
         return this.accountRepository.remove(account);
     }
+
+    async getFinancialReport(storeUuid: string, startDate: string, endDate: string) {
+        // 1. Ambil semua akun milik store
+        const accounts = await this.accountRepository.find({
+            where: { storeUuid },
+            order: { code: 'ASC' }
+        });
+
+        // 2. Hitung saldo per akun menggunakan QueryBuilder ke tabel JournalDetail
+        // Asumsi: tabel database bernama 'journal_detail'
+        const balances = await this.accountRepository.manager.createQueryBuilder()
+            .select('jd.account_uuid', 'account_uuid')
+            .addSelect('SUM(jd.debit)', 'total_debit')
+            .addSelect('SUM(jd.credit)', 'total_credit')
+            .from('journal_detail', 'jd')
+            .leftJoin('journal', 'j', 'j.uuid = jd.journal_uuid') // Join ke jurnal untuk filter tanggal
+            .where('j.store_uuid = :storeUuid', { storeUuid })
+            .andWhere('j.created_at BETWEEN :startDate AND :endDate', { 
+                startDate: new Date(startDate), 
+                endDate: new Date(endDate)  
+            })
+            .groupBy('jd.account_uuid')
+            .getRawMany();
+
+        // 3. Map saldo ke akun
+        const balanceMap = balances.reduce((acc, curr) => {
+            acc[curr.account_uuid] = {
+                debit: Number(curr.total_debit || 0),
+                credit: Number(curr.total_credit || 0)
+            };
+            return acc;
+        }, {});
+
+        // 4. Format hasil akhir
+        const report = accounts.map(acc => {
+            const bal = balanceMap[acc.uuid] || { debit: 0, credit: 0 };
+            
+            // Hitung saldo akhir berdasarkan Normal Balance
+            let finalBalance = 0;
+            if (acc.normalBalance === 'DEBIT') {
+                finalBalance = bal.debit - bal.credit;
+            } else {
+                finalBalance = bal.credit - bal.debit;
+            }
+
+            return {
+                uuid: acc.uuid,
+                code: acc.code,
+                name: acc.name,
+                category: acc.category, // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+                normalBalance: acc.normalBalance,
+                debit: bal.debit,
+                credit: bal.credit,
+                balance: finalBalance
+            };
+        });
+
+        return report;
+    }
 }

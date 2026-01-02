@@ -13,12 +13,14 @@ import { ProductionFlowModule } from '../production_flow/production_flow.module'
 import { CourierModule } from '../courier/courier.module';
 import { BankModule } from '../bank/bank.module';
 import { AccountModule } from '../account/account.module';
+import { JournalConfigModule } from '../journal_config/journal_config.module';
 
 @Module({
   imports: [
     StoreModule,
     AuthModule,
     JournalModule,
+    JournalConfigModule,
     ProductModule,
     ShelveModule,
     CategoryModule,

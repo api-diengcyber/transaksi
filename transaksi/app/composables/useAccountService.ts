@@ -32,11 +32,19 @@ export const useAccountService = () => {
         });
     }
 
+    const getFinancialReport = async (startDate: string, endDate: string) => {
+        return await useApi('/account/report/financial', {
+            method: 'GET',
+            params: { startDate, endDate }
+        });
+    }
+
     return {
         getAll,
         getCategories,
         create,
         update,
-        remove
+        remove,
+        getFinancialReport
     }
 }

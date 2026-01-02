@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { AccountService } from './account.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { GetUser } from 'src/common/decorators/get-user.decorator';
 
 @UseGuards(AtGuard)
 @Controller('account')
@@ -42,5 +43,16 @@ export class AccountController {
     @Delete(':uuid')
     remove(@GetStore() storeUuid: string, @Param('uuid') uuid: string) {
         return this.accountService.remove(storeUuid, uuid);
+    }
+
+    @Get('report/financial')
+    async getFinancialReport(
+        @GetUser('storeUuid') storeUuid: string,
+        @Query('startDate') startDate: string,
+        @Query('endDate') endDate: string,
+    ) {
+        const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+        const end = endDate || new Date().toISOString();
+        return this.accountService.getFinancialReport(storeUuid, start, end);
     }
 }

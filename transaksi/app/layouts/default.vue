@@ -130,6 +130,7 @@ const items = ref([
              { label: 'Retur barang', icon: 'pi pi-replay', route: '/report/return' }, // Replay history
              { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar' }, // Data excel/angka
              { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap' }, // Dokumen tagihan
+             { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial' }, // Dokumen tagihan
         ]
     },
 ]);

@@ -113,6 +113,10 @@ export const useJournalService = () => {
             params: { startDate, endDate }
         });
     };
+    
+    const findAll = async (params: any = {}) => {
+        return await useApi(`${API_BASE}/report/ALL`, { params }); 
+    };
 
     return {
         createSaleTransaction,
@@ -126,6 +130,7 @@ export const useJournalService = () => {
         getSalesReport,
         getPurchaseReport,
         getChartData,
-        findAllByType
+        findAllByType,
+        findAll
     };
 };
