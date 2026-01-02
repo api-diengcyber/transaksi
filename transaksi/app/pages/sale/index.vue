@@ -274,6 +274,28 @@ const processCheckout = async () => {
             else if (l.type === 'CICILAN') notesArr.push(`Cicilan: ${formatCurrency(l.amount)} | ${l.tenor}x @${formatCurrency((l.amount/l.tenor)+l.fee)}`);
         });
 
+        // 1. Siapkan Item Payload (Semua detail) dengan mapping
+        const itemsPayload = cart.value.map(item => {
+            // Hapus referensi data master yang besar agar tidak dikirim ke backend
+            const { availableUnits, allPrices, prices, units, ...cleanItem } = item;
+            
+            return {
+                ...cleanItem,
+                // Pastikan key yang dibutuhkan backend ada (snake_case aman untuk DTO)
+                product_uuid: item.productUuid,
+                unit_uuid: item.unitUuid,
+                qty: item.qty,
+                price: item.price,
+                subtotal: item.qty * item.price,
+                
+                // Tambahan detail spesifik untuk disimpan di journal_detail
+                item_name: item.name,
+                unit_name: item.unitName,
+                note: item.note || '',
+                price_tier_name: item.selectedPriceObj?.name || 'Manual',
+            };
+        });
+
         const payload = {
             total_items_count: cart.value.length,
             subtotal_amount: cartSubtotal.value,
@@ -301,16 +323,11 @@ const processCheckout = async () => {
             courier_route_uuid: shippingState.enable ? shippingState.routeUuid : null,
             shipping_cost: shippingState.enable ? shippingState.cost : 0,
 
-            notes: notesArr.join(' | ')
-        };
+            notes: notesArr.join(' | '),
 
-        cart.value.forEach((item, index) => {
-            payload[`product_uuid#${index}`] = item.productUuid;
-            payload[`unit_uuid#${index}`] = item.unitUuid;
-            payload[`qty#${index}`] = item.qty;
-            payload[`price#${index}`] = item.price;
-            payload[`subtotal#${index}`] = item.qty * item.price;
-        });
+            // [UPDATED] Kirim Items sebagai Array Object, bukan flatten keys
+            items: itemsPayload
+        };
 
         await journalService.createSaleTransaction(payload);
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Transaksi Berhasil', life: 3000 });

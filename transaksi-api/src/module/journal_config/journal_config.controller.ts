@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Delete, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Delete, Param, UseGuards, Query } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { GetStore } from 'src/common/decorators/get-store.decorator';
@@ -14,8 +14,12 @@ export class JournalConfigController {
   constructor(private readonly service: JournalConfigService) {}
 
   @Get('discovery')
-  getDiscovery(@GetStore() storeUuid: string) {
-    return this.service.getDiscovery(storeUuid);
+  @ApiQuery({ name: 'prefix', required: false })
+  getDiscovery(
+    @GetStore() storeUuid: string,
+    @Query('prefix') prefix?: string
+  ) {
+    return this.service.getDiscovery(storeUuid, prefix);
   }
   
   @Get()

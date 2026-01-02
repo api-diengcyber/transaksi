@@ -6,9 +6,10 @@ export const useJournalConfigService = () => {
         }); 
     };
     
-    const getDiscovery = async () => { 
+    const getDiscovery = async (params?: any) => { 
         return await useApi('/journal-config/discovery', {
-            method: 'GET'
+            method: 'GET',
+            params
         }); 
      };
 

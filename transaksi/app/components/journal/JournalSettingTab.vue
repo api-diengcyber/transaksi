@@ -53,7 +53,12 @@ const filters = ref({
 const loadData = async () => {
     loading.value = true;
     try {
-        const [discRes, accRes] = await Promise.all([ getDiscovery(), fetchAccounts() ]) as any[];
+        // [UPDATED] Tambahkan parameter prefix: 'ac_'
+        const [discRes, accRes] = await Promise.all([ 
+            getDiscovery({ prefix: 'ac_' }), 
+            fetchAccounts() 
+        ]) as any[];
+
         discoveryItems.value = (discRes.data || discRes || []) as DiscoveredItem[];
         accounts.value = (accRes.data || accRes || []) as Account[];
     } catch (e) {
@@ -125,10 +130,10 @@ onMounted(loadData);
                         <span class="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
                             <i class="pi pi-sparkles text-lg"></i>
                         </span>
-                        Deteksi Transaksi Otomatis
+                        Konfigurasi Jurnal Otomatis (AC)
                     </h1>
                     <p class="text-slate-500 text-sm leading-relaxed max-w-2xl">
-                        Sistem mendeteksi kode transaksi dari database yang belum memiliki pasangan di Akuntansi. 
+                        Sistem mendeteksi kode transaksi <strong>(Prefix: ac_)</strong> dari database yang belum memiliki pasangan di Akuntansi. 
                         Hubungkan kode-kode ini ke <strong>Akun Perkiraan (COA)</strong> agar jurnal keuangan terbentuk otomatis.
                     </p>
                 </div>
@@ -339,7 +344,7 @@ onMounted(loadData);
                                 v-model="form.detailKey" 
                                 type="text" 
                                 class="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-lg border border-slate-300 text-sm focus:ring-indigo-500 focus:border-indigo-500" 
-                                placeholder="Misal: SALE_INV_"
+                                placeholder="Misal: ac_"
                             >
                             <span class="inline-flex items-center px-3 py-2 rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 text-slate-500 text-sm font-mono font-bold">
                                 _ (Apapun)

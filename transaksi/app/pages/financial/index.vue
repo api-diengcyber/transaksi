@@ -39,18 +39,18 @@ const tabs = [
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-gray-50 p-6 min-h-screen">
+  <div class="flex flex-col h-full bg-surface-50 p-6 min-h-screen">
     
     <div class="mb-8">
-      <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Keuangan</h1>
-      <p class="mt-2 text-sm text-gray-600">
+      <h1 class="text-3xl font-extrabold tracking-tight">Keuangan</h1>
+      <p class="mt-2 text-sm text-gray-400">
         Kelola Chart of Accounts (COA), Jurnal Umum, dan konfigurasi pemetaan otomatis.
       </p>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1">
+    <div class="bg-surface-0 rounded-xl shadow-sm border border-surface-200 overflow-hidden flex flex-col flex-1">
       
-      <div class="border-b border-gray-200 bg-white">
+      <div class="border-b border-gray-200 bg-surface-0">
         <nav class="flex space-x-8 px-6" aria-label="Tabs">
           <button
             v-for="tab in tabs"

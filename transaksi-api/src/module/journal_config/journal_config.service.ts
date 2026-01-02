@@ -11,18 +11,29 @@ export class JournalConfigService {
     @Inject('DATA_SOURCE') private dataSource: DataSource
   ) {}
 
-  async getDiscovery(storeUuid: string) {
-    const discovered = await this.dataSource.query(`
+  async getDiscovery(storeUuid: string, prefix?: string) {
+    // 1. Bangun Query Dynamic
+    let sql = `
       SELECT 
         SUBSTRING_INDEX(j.code, '-', 1) as transactionType,
         jd.key as detailKey,
         COUNT(jd.uuid) as frequency
       FROM journal_detail jd
       JOIN journal j ON j.code = jd.journal_code
-      WHERE j.code LIKE '%-%-%-%' -- Pastikan format code valid
-      GROUP BY transactionType, detailKey
-      ORDER BY transactionType, detailKey
-    `);
+      WHERE j.code LIKE '%-%-%-%' 
+    `;
+
+    const params: any[] = [];
+
+    // Filter berdasarkan prefix jika ada (contoh: 'ac_')
+    if (prefix) {
+      sql += ` AND jd.key LIKE ? `;
+      params.push(`${prefix}%`);
+    }
+
+    sql += ` GROUP BY transactionType, detailKey ORDER BY transactionType, detailKey`;
+
+    const discovered = await this.dataSource.query(sql, params);
 
     // 2. Ambil Config yang sudah ada
     const existingConfigs = await this.repo.find({
