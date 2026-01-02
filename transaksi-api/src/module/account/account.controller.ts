@@ -47,7 +47,7 @@ export class AccountController {
 
     @Get('report/financial')
     async getFinancialReport(
-        @GetUser('storeUuid') storeUuid: string,
+        @GetStore() storeUuid: string,
         @Query('startDate') startDate: string,
         @Query('endDate') endDate: string,
     ) {

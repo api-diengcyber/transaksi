@@ -113,8 +113,9 @@ const items = ref([
             { label: 'Retur barang', icon: 'pi pi-refresh', route: '/return' }, // Panah putar balik
             { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, // Panah masuk (uang masuk)
             { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, // Panah keluar (uang keluar)
-            { label: 'Akun', icon: 'pi pi-tags', route: '/account' }, // Tag akun/kategori
-            { label: 'Jurnal', icon: 'pi pi-book', route: '/journal' }, // Buku pembukuan
+            // { label: 'Akun', icon: 'pi pi-tags', route: '/account' }, // Tag akun/kategori
+            // { label: 'Jurnal', icon: 'pi pi-book', route: '/journal' }, // Buku pembukuan
+            { label: 'Keuangan', icon: 'pi pi-book', route: '/financial' }, // Keuangan
         ]
     },
     { 

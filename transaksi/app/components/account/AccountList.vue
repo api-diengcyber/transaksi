@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import AccountCreateEditModal from './AccountCreateEditModal.vue';
 import AccountGroup from './AccountGroup.vue'; 
 
@@ -9,46 +9,36 @@ export interface Account {
   parentUuid: string | null;
   code: string;
   name: string;
-  category: string; // Dinamis (string), bukan enum hardcoded lagi
+  category: string;
   normalBalance: 'DEBIT' | 'CREDIT';
   isSystem: boolean;
   children?: Account[]; 
   [key: string]: any; 
 }
 
-// Gunakan Record<string, Account[]> agar bisa menampung key kategori apapun secara dinamis
 type AccountMap = Record<string, Account[]>;
 
-// --- LOGIC ---
+// --- COMPOSABLES ---
 const { getAll, remove, update, getCategories } = useAccountService();
 
+// --- STATE ---
 const rawAccounts = ref<Account[]>([]);
 const loading = ref(false);
 const isModalOpen = ref(false);
 const selectedAccount = ref<Account | null>(null);
 const searchQuery = ref('');
-
-// State untuk menyimpan daftar kategori dari API
 const categories = ref<any[]>([]);
-
-// Inisialisasi awal
 const groupedAccounts = ref<AccountMap>({});
 
-// 1. Fetch Categories terlebih dahulu
+// --- FETCH DATA ---
 const fetchCategories = async () => {
   try {
     const res: any = await getCategories();
     categories.value = res || [];
-    
-    // Inisialisasi container untuk setiap kategori yang didapat dari API
-    const groups: AccountMap = {};
-    categories.value.forEach((cat: any) => {
-      groups[cat.value] = [];
-    });
-    groupedAccounts.value = groups;
+    initializeGroups();
   } catch (error) {
-    console.error('Gagal mengambil kategori', error);
-    // Fallback static jika API gagal
+    console.error('Error fetching categories:', error);
+    // Fallback categories jika API gagal
     categories.value = [
       { value: 'ASSET', label: 'Harta (ASSET)' },
       { value: 'LIABILITY', label: 'Kewajiban (LIABILITY)' },
@@ -56,11 +46,16 @@ const fetchCategories = async () => {
       { value: 'REVENUE', label: 'Pendapatan (REVENUE)' },
       { value: 'EXPENSE', label: 'Beban (EXPENSE)' }
     ];
-    // Re-init groups fallback
-    const groups: AccountMap = {};
-    categories.value.forEach((cat: any) => groups[cat.value] = []);
-    groupedAccounts.value = groups;
+    initializeGroups();
   }
+};
+
+const initializeGroups = () => {
+  const groups: AccountMap = {};
+  categories.value.forEach((cat: any) => {
+    groups[cat.value] = [];
+  });
+  groupedAccounts.value = groups;
 };
 
 const fetchAccounts = async () => {
@@ -70,36 +65,36 @@ const fetchAccounts = async () => {
     rawAccounts.value = Array.isArray(res) ? res : [];
     distributeAccounts();
   } catch (error) {
-    console.error('Gagal mengambil data akun', error);
+    console.error('Error fetching accounts:', error);
     rawAccounts.value = [];
   } finally {
     loading.value = false;
   }
 };
 
+// --- LOGIC TREE & GROUPING ---
 const buildTree = (accounts: Account[]) => {
   const map: Record<string, Account> = {};
   const roots: Account[] = [];
 
+  // 1. Buat Map untuk lookup cepat dan reset children
   accounts.forEach(acc => {
     map[acc.uuid] = { ...acc, children: [] }; 
   });
 
+  // 2. Susun hierarki Parent-Child
   accounts.forEach(acc => {
     const currentAccount = map[acc.uuid];
     if (!currentAccount) return;
 
     if (acc.parentUuid && map[acc.parentUuid]) {
-      const parentAccount = map[acc.parentUuid];
-      if (parentAccount) {
-        if (!parentAccount.children) parentAccount.children = [];
-        parentAccount.children.push(currentAccount);
-      }
+      map[acc.parentUuid]!.children?.push(currentAccount);
     } else {
       roots.push(currentAccount);
     }
   });
 
+  // 3. Sorting Recursive berdasarkan Kode Akun
   const sortRecursive = (nodes: Account[]) => {
     nodes.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
     nodes.forEach(node => {
@@ -114,51 +109,40 @@ const buildTree = (accounts: Account[]) => {
 };
 
 const distributeAccounts = () => {
-  // Reset groups: Pastikan setiap key kategori ada isinya array kosong
-  const newGroups: AccountMap = {};
+  // Reset container groups
+  initializeGroups();
   
-  if (categories.value.length > 0) {
-      categories.value.forEach((cat: any) => {
-        newGroups[cat.value] = [];
-      });
-  } else {
-     // Fallback reset keys standar jika categories belum terload
-     ['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE'].forEach(k => newGroups[k] = []);
-  }
-  
-  groupedAccounts.value = newGroups;
-  
+  // Filter pencarian
   const filtered = rawAccounts.value.filter(acc => 
     (acc.name?.toLowerCase() || '').includes(searchQuery.value.toLowerCase()) || 
     (acc.code?.toLowerCase() || '').includes(searchQuery.value.toLowerCase())
   );
 
+  // Bangun Tree Structure dari data yang sudah difilter
   const treeRoots = buildTree(filtered);
 
-  // --- PERBAIKAN LOGIC PUSH (TS Safe) ---
+  // Masukkan Root Nodes ke dalam kategori masing-masing
   treeRoots.forEach(acc => {
     const category = acc.category;
     if (!category) return;
 
-    // 1. Cek apakah array untuk kategori ini ada di groupedAccounts
     if (!groupedAccounts.value[category]) {
-      // Jika belum ada (misal kategori baru yg tdk ada di list categories), inisialisasi
       groupedAccounts.value[category] = [];
     }
-
-    // 2. Gunakan non-null assertion (!) karena kita sudah pastikan array-nya ada di langkah sebelumnya
     groupedAccounts.value[category]!.push(acc);
   });
 };
 
-watch(searchQuery, () => {
-  distributeAccounts();
-});
+watch(searchQuery, () => distributeAccounts());
 
+// --- EVENT HANDLERS ---
 const onMoveAccount = async (payload: { item: Account, newParentUuid: string | null, newCategory: string }) => {
   const { item, newParentUuid, newCategory } = payload;
+  
+  // Optimistic UI check: jika tidak ada perubahan, return
   if (item.parentUuid === newParentUuid && item.category === newCategory) return;
 
+  // Tentukan Normal Balance baru secara otomatis berdasarkan kategori
   let newNormalBalance: 'DEBIT' | 'CREDIT' = item.normalBalance;
   if (item.category !== newCategory) {
      if (['LIABILITY', 'EQUITY', 'REVENUE'].includes(newCategory)) {
@@ -176,10 +160,12 @@ const onMoveAccount = async (payload: { item: Account, newParentUuid: string | n
       name: item.name,
       code: item.code
     });
+    // Refresh data untuk memastikan konsistensi
     await fetchAccounts();
   } catch (e) {
-    alert("Gagal memindahkan akun. Mengembalikan posisi...");
-    await fetchAccounts(); 
+    console.error(e);
+    alert("Gagal memindahkan akun. Silakan coba lagi.");
+    await fetchAccounts(); // Revert UI
   }
 };
 
@@ -194,15 +180,16 @@ const editAccount = (account: Account) => {
 };
 
 const deleteAccount = async (uuid: string) => {
-  if (!confirm('Hapus akun ini?')) return;
+  if (!confirm('Apakah Anda yakin ingin menghapus akun ini?')) return;
   try {
     await remove(uuid);
     fetchAccounts();
   } catch (error: any) {
-    alert('Gagal menghapus akun.');
+    alert('Gagal menghapus akun. Pastikan akun tidak memiliki transaksi.');
   }
 };
 
+// --- LIFECYCLE ---
 onMounted(async () => {
   await fetchCategories();
   await fetchAccounts();
@@ -210,69 +197,68 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col relative">
+  <div class="h-full flex flex-col relative bg-gray-50/50">
     
-    <div class="sticky top-0 z-30 -mx-4 px-4 pb-4 pt-2 backdrop-blur-md border-b border-gray-200/50 mb-6 transition-all duration-300">
-      <div class="bg-surface-0 p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="sticky top-0 z-30 px-4 pt-4 pb-2 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all">
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+        
         <div>
-          <h2 class="text-xl font-bold flex items-center gap-2">
-            <span class="bg-indigo-100 text-indigo-600 p-2 rounded-xl">
+          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <div class="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg">
               <i class="pi pi-sitemap text-lg"></i>
-            </span>
-            Chart of Accounts
+            </div>
+            Daftar Akun (COA)
           </h2>
-          <p class="text-xs text-gray-500 mt-1 ml-11 hidden md:block">Atur struktur akun (COA) dengan drag & drop.</p>
+          <p class="text-xs text-gray-500 mt-0.5 ml-10 hidden md:block">
+            Kelola struktur akun untuk laporan keuangan.
+          </p>
         </div>
         
         <div class="flex gap-3 w-full md:w-auto">
-          <div class="relative flex-1 md:w-72 group">
+          <div class="relative flex-1 md:w-64 group">
+            <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors"></i>
             <input 
               v-model="searchQuery" 
               type="text" 
-              placeholder="Cari akun..." 
-              class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-surface-0 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all outline-none"
+              placeholder="Cari kode atau nama..." 
+              class="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all outline-none"
             >
-            <span class="absolute left-3 top-3 text-gray-400 group-focus-within:text-indigo-500 transition-colors">
-              <i class="pi pi-search"></i>
-            </span>
           </div>
           <button
             @click="openCreateModal"
-            class="inline-flex items-center px-5 py-2.5 bg-primary hover:bg-primary-800 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all"
+            class="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 active:scale-95 text-white text-sm font-medium rounded-lg shadow-sm transition-all"
           >
-            <i class="pi pi-plus mr-2"></i> Baru
+            <i class="pi pi-plus mr-1.5"></i>&nbsp;Akun Baru
           </button>
         </div>
       </div>
     </div>
 
-    <div v-if="loading" class="flex-1 flex flex-col justify-center items-center min-h-[400px]">
-      <div class="animate-spin rounded-full h-12 w-12 border-[3px] border-indigo-100 border-b-indigo-600 mb-4"></div>
+    <div v-if="loading" class="flex-1 flex flex-col justify-center items-center min-h-[300px]">
+      <i class="pi pi-spin pi-spinner text-3xl text-indigo-500 mb-3"></i>
       <span class="text-gray-400 text-sm font-medium animate-pulse">Memuat Struktur Akun...</span>
     </div>
 
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start pb-20">
+    <div v-else class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start pb-24 overflow-y-auto custom-scrollbar">
       
-      <div class="flex flex-col gap-6">
-        <div class="bg-gradient-to-br from-blue-600 to-indigo-600 p-4 rounded-2xl text-white flex justify-between items-center relative overflow-hidden group">
-          <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
-            <i class="pi pi-wallet text-[100px]"></i>
-          </div>
-          <div class="flex items-center gap-4 relative z-10">
-            <div class="bg-surface-0/20 p-3 rounded-xl backdrop-blur-sm">
-              <i class="pi pi-arrow-up-right text-white text-xl"></i>
+      <div class="flex flex-col gap-5">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 rounded-xl text-white shadow-sm flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                 <div class="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                    <i class="pi pi-wallet text-white text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-sm uppercase tracking-wide">Aktiva & Beban</h3>
+                    <p class="text-[10px] text-blue-100 opacity-90">Saldo Normal: DEBIT</p>
+                </div>
             </div>
-            <div>
-              <h3 class="font-bold text-lg tracking-wide">ACTIVA & BEBAN</h3>
-              <p class="text-xs text-blue-100 opacity-90">Saldo Normal: DEBIT</p>
-            </div>
-          </div>
+             <i class="pi pi-arrow-up-right text-white/50 text-2xl"></i>
         </div>
 
         <AccountGroup 
-          title="HARTA / ASSETS (1-xxxx)" 
+          title="HARTA (ASSETS)" 
           color="blue" 
-          icon="pi-wallet"
+          icon="pi-briefcase"
           :list="groupedAccounts['ASSET'] || []"
           group-name="ASSET"
           @edit="editAccount"
@@ -281,7 +267,7 @@ onMounted(async () => {
         />
 
         <AccountGroup 
-          title="BEBAN / EXPENSES (5-xxxx)" 
+          title="BEBAN (EXPENSES)" 
           color="red" 
           icon="pi-shopping-bag"
           :list="groupedAccounts['EXPENSE'] || []"
@@ -292,25 +278,23 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="flex flex-col gap-6">
-        <div class="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-2xl text-white flex justify-between items-center relative overflow-hidden">
-          <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4">
-            <i class="pi pi-money-bill text-[100px]"></i>
-          </div>
-          <div class="flex items-center gap-4 relative z-10">
-            <div class="bg-surface-0/20 p-3 rounded-xl backdrop-blur-sm">
-              <i class="pi pi-arrow-down-left text-white text-xl"></i>
+      <div class="flex flex-col gap-5">
+         <div class="bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 rounded-xl text-white shadow-sm flex items-center justify-between">
+             <div class="flex items-center gap-3">
+                 <div class="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                    <i class="pi pi-building text-white text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-sm uppercase tracking-wide">Pasiva & Pendapatan</h3>
+                    <p class="text-[10px] text-emerald-100 opacity-90">Saldo Normal: KREDIT</p>
+                </div>
             </div>
-            <div>
-              <h3 class="font-bold text-lg tracking-wide">PASIVA & PENDAPATAN</h3>
-              <p class="text-xs text-emerald-100 opacity-90">Saldo Normal: KREDIT</p>
-            </div>
-          </div>
+            <i class="pi pi-arrow-down-left text-white/50 text-2xl"></i>
         </div>
 
         <AccountGroup 
-          title="KEWAJIBAN / LIABILITIES (2-xxxx)" 
-          color="yellow" 
+          title="KEWAJIBAN (LIABILITIES)" 
+          color="orange" 
           icon="pi-exclamation-circle"
           :list="groupedAccounts['LIABILITY'] || []"
           group-name="LIABILITY"
@@ -320,9 +304,9 @@ onMounted(async () => {
         />
 
         <AccountGroup 
-          title="MODAL / EQUITY (3-xxxx)" 
+          title="MODAL (EQUITY)" 
           color="purple" 
-          icon="pi-building"
+          icon="pi-verified"
           :list="groupedAccounts['EQUITY'] || []"
           group-name="EQUITY"
           @edit="editAccount"
@@ -331,9 +315,9 @@ onMounted(async () => {
         />
 
         <AccountGroup 
-          title="PENDAPATAN / REVENUE (4-xxxx)" 
+          title="PENDAPATAN (REVENUE)" 
           color="emerald" 
-          icon="pi-dollar"
+          icon="pi-percentage"
           :list="groupedAccounts['REVENUE'] || []"
           group-name="REVENUE"
           @edit="editAccount"
@@ -355,14 +339,18 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Scrollbar halus untuk container grid */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: #cbd5e1;
-  border-radius: 20px;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 </style>

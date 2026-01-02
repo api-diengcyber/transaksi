@@ -24,26 +24,27 @@ const onRootChange = (event: any, groupName: string) => {
 </script>
 
 <template>
-  <div class="bg-surface-0 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-100 overflow-hidden flex flex-col h-full transition-all hover:shadow-lg">
-    <div :class="`bg-${color}-50/50 border-b border-${color}-100/50 p-4 flex justify-between items-center backdrop-blur-sm`">
-      <div class="flex items-center gap-3">
-        <div :class="`p-1.5 rounded-lg bg-${color}-100 text-${color}-600`">
-          <i :class="`pi ${icon} text-sm`"></i>
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-full overflow-hidden transition-all hover:shadow-md hover:border-gray-300">
+    
+    <div :class="`bg-${color}-50 border-b border-${color}-100 px-3 py-2.5 flex justify-between items-center`">
+      <div class="flex items-center gap-2.5">
+        <div :class="`w-6 h-6 flex items-center justify-center rounded-md bg-${color}-100 text-${color}-600 shadow-sm`">
+          <i :class="`pi ${icon} text-xs font-bold`"></i>
         </div>
-        <span :class="`font-bold text-${color}-900 text-sm tracking-wide`">{{ title }}</span>
+        <span :class="`font-bold text-${color}-900 text-xs uppercase tracking-wide`">{{ title }}</span>
       </div>
-      <span class="text-[10px] font-mono font-medium bg-surface-0 px-2.5 py-1 rounded-md text-gray-500 border border-gray-200/60 shadow-sm">
-        {{ list.length }} Item
+      <span class="text-[10px] font-mono bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-500">
+        {{ list.length }}
       </span>
     </div>
     
-    <div class="p-3 bg-surface-0 min-h-[150px] h-full relative">
+    <div class="p-2 bg-gray-50/30 flex-1 min-h-[100px] relative">
       <draggable 
         :list="list" 
         group="accounts" 
         item-key="uuid"
         @change="onRootChange($event, groupName)"
-        class="space-y-2 min-h-[140px] h-full"
+        class="h-full space-y-1 pb-4" 
         ghost-class="sortable-ghost"
         drag-class="sortable-drag"
         animation="200"
@@ -60,16 +61,15 @@ const onRootChange = (event: any, groupName: string) => {
       </draggable>
 
       <div v-if="list.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-gray-300 pointer-events-none">
-        <div class="bg-gray-50 p-4 rounded-full mb-2">
-          <i class="pi pi-inbox text-2xl"></i>
-        </div>
-        <span class="text-xs font-medium">Belum ada akun</span>
+        <i class="pi pi-inbox text-xl mb-1 opacity-50"></i>
+        <span class="text-[10px] font-medium opacity-60">Kosong</span>
       </div>
     </div>
   </div>
 </template>
 
 <style>
+/* Global styles for drag states needed by vuedraggable */
 .sortable-ghost {
   opacity: 0.5;
   background-color: #f8fafc;
@@ -80,7 +80,8 @@ const onRootChange = (event: any, groupName: string) => {
   cursor: grabbing;
   opacity: 1 !important;
   background: white;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  transform: rotate(1deg);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border-radius: 0.5rem;
+  z-index: 9999;
 }
 </style>
