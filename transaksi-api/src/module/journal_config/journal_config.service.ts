@@ -22,6 +22,7 @@ export class JournalConfigService {
       FROM journal_detail jd
       JOIN journal j ON j.code = jd.journal_code
       WHERE j.code LIKE '%-%-%-%' 
+      AND jd.value REGEXP '^-?[0-9]+(\.[0-9]+)?$'
     `;
 
     const params: any[] = [];

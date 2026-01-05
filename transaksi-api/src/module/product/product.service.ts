@@ -152,7 +152,7 @@ export class ProductService {
             oldQty: 0
           }
         });
-        await this.journalService.processStockAdjustment(mappedAdjustments, userId, manager, storeUuid);
+        // await this.journalService.processStockAdjustment(mappedAdjustments, userId, manager, storeUuid);
       }
 
       // 5. Process Shelves
@@ -286,7 +286,7 @@ export class ProductService {
             unitUuid: realUnitUuid,
           }
         });
-        await this.journalService.processStockAdjustment(mappedAdjustments, userId, manager, storeUuid);
+        // await this.journalService.processStockAdjustment(mappedAdjustments, userId, manager, storeUuid);
       }
 
       // 5. Sinkronisasi Rak (Shelves Allocation)

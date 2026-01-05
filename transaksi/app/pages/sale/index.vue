@@ -78,7 +78,7 @@ const paymentLines = ref([]);
 
 // --- PAGINATION ---
 const currentPage = ref(1);
-const limit = 12; 
+const limit = 12;
 const totalPages = ref(1);
 const totalProducts = ref(0);
 
@@ -243,17 +243,46 @@ const processCheckout = async () => {
     processing.value = true;
 
     try {
-        const totalCashReceived = paymentLines.value.filter(l => l.type === 'TUNAI').reduce((sum, l) => sum + l.amount, 0);
+        // --- 1. Kalkulasi Split Pembayaran ---
+        let amountCash = 0;
+        let amountCredit = 0;
+        let amountInstallment = 0;
+        
+        // Object dinamis untuk menampung pembayaran per bank
+        // Format: { amount_bank_UUID1: 10000, amount_bank_UUID2: 5000 }
+        const bankAmounts = {}; 
+        let totalBankAmount = 0;
+        
+        paymentLines.value.forEach(l => {
+            const amt = Number(l.amount) || 0;
+            if (l.type === 'TUNAI') {
+                if (l.subType === 'CASH') {
+                    amountCash += amt;
+                } else if (l.subType === 'BANK') {
+                    totalBankAmount += amt;
+                    if (l.bankUuid) {
+                        // Kumpulkan nominal per UUID Bank
+                        const key = `amount_bank_${l.bankUuid}`;
+                        bankAmounts[key] = (bankAmounts[key] || 0) + amt;
+                    }
+                }
+            } else if (l.type === 'KREDIT') {
+                amountCredit += amt;
+            } else if (l.type === 'CICILAN') {
+                amountInstallment += amt;
+            }
+        });
 
+        // --- 2. Tentukan Metode Pembayaran Utama ---
         let mainMethod = 'CASH';
         if (transactionType.value === 'MUTATION') mainMethod = 'CREDIT'; 
         else if (hasDebtOrInstallment.value) mainMethod = 'CREDIT';
         else {
-            const types = paymentLines.value.map(l => l.subType);
-            if (types.includes('CASH') && types.includes('BANK')) mainMethod = 'MIXED';
-            else if (types.includes('BANK')) mainMethod = 'TRANSFER';
+            if (amountCash > 0 && totalBankAmount > 0) mainMethod = 'MIXED';
+            else if (totalBankAmount > 0) mainMethod = 'TRANSFER';
         }
 
+        // --- 3. Info Customer ---
         let finalCustName = 'Umum';
         if (transactionType.value === 'MUTATION') {
             finalCustName = `Mutasi: ${myStores.value.find(s => s.uuid === transactionMeta.targetStoreUuid)?.name}`;
@@ -262,70 +291,81 @@ const processCheckout = async () => {
             else if (transactionMeta.customerName) finalCustName = transactionMeta.customerName;
         }
 
+        // --- 4. Notes ---
         const notesArr = [];
         if(isPreOrder.value) notesArr.push('[PRE-ORDER]');
         if (shippingState.enable) notesArr.push(`Ekspedisi: ${formatCurrency(shippingState.cost)}`);
         
         paymentLines.value.forEach(l => {
             if (l.type === 'TUNAI') {
-                const via = l.subType === 'BANK' ? `Transfer ${banks.value.find(b=>b.uuid===l.bankUuid)?.bank_name||''}` : 'Cash';
+                const via = l.subType === 'BANK' 
+                    ? `Transfer ${banks.value.find(b=>b.uuid===l.bankUuid)?.bank_name||''}` 
+                    : 'Cash';
                 notesArr.push(`Bayar: ${formatCurrency(l.amount)} (${via})`);
-            } else if (l.type === 'KREDIT') notesArr.push(`Kredit: ${formatCurrency(l.amount)} (JT: ${new Date(l.dueDate).toLocaleDateString('id-ID')})`);
-            else if (l.type === 'CICILAN') notesArr.push(`Cicilan: ${formatCurrency(l.amount)} | ${l.tenor}x @${formatCurrency((l.amount/l.tenor)+l.fee)}`);
+            } else if (l.type === 'KREDIT') notesArr.push(`Kredit: ${formatCurrency(l.amount)}`);
+            else if (l.type === 'CICILAN') notesArr.push(`Cicilan: ${formatCurrency(l.amount)}`);
         });
 
-        // 1. Siapkan Item Payload (Semua detail) dengan mapping
-        const itemsPayload = cart.value.map(item => {
-            // Hapus referensi data master yang besar agar tidak dikirim ke backend
-            const { availableUnits, allPrices, prices, units, ...cleanItem } = item;
+        // --- 5. Clean Items Payload ---
+        const itemsPayload = cart.value.map(item => ({
+            product_uuid: item.productUuid,
+            unit_uuid: item.unitUuid,
+            qty: item.qty,
+            price: item.price,
+            subtotal: item.qty * item.price,
+            item_name: item.name,
+            unit_name: item.unitName,
+            note: item.note || '',
+            price_tier_name: item.selectedPriceObj?.name || 'Manual',
             
-            return {
-                ...cleanItem,
-                // Pastikan key yang dibutuhkan backend ada (snake_case aman untuk DTO)
-                product_uuid: item.productUuid,
-                unit_uuid: item.unitUuid,
-                qty: item.qty,
-                price: item.price,
-                subtotal: item.qty * item.price,
-                // Tambahan detail spesifik untuk disimpan di journal_detail
-                item_name: item.name,
-                unit_name: item.unitName,
-                note: item.note || '',
-                price_tier_name: item.selectedPriceObj?.name || 'Manual',
-            };
-        });
+            // Param Stok (Optional, jika backend butuh)
+            stok_product_uuid: item.productUuid,
+            stok_unit: item.unitUuid,
+            stok_qty_min: item.qty, 
+        }));
 
+        // --- 6. Final Payload Construction ---
         const payload = {
-            total_items_count: cart.value.length,
-            subtotal_amount: cartSubtotal.value,
-            tax_amount: taxAmount.value,
-            tax_percentage: taxEnabled.value ? taxRate.value : 0,
-            tax_method: taxEnabled.value ? taxMethod.value : null,
+            // Header Utama
             grand_total: grandTotal.value,
+            total_items: cart.value.length,
             payment_method: mainMethod,
-            payment_received: (transactionType.value === 'MUTATION') ? 0 : totalCashReceived,
-            change: (!hasDebtOrInstallment.value && remainingBalance.value < 0) ? Math.abs(remainingBalance.value) : 0,
-            is_credit: (hasDebtOrInstallment.value || transactionType.value === 'MUTATION') ? 'true' : 'false',
-            is_pre_order: isPreOrder.value, 
+            customer_name: finalCustName,
+            notes: notesArr.join(' | '),
+            
             status: isPreOrder.value ? 'PENDING' : 'COMPLETED',
             due_date: (hasDebtOrInstallment.value) ? paymentLines.value.find(l => l.type !== 'TUNAI')?.dueDate : null,
-            customer_name: finalCustName,
-            member_uuid: transactionMeta.memberUuid || null,
-            bank_uuid: paymentLines.value.find(l => l.subType === 'BANK')?.bankUuid || null,
-            target_store_uuid: transactionType.value === 'MUTATION' ? transactionMeta.targetStoreUuid : null,
-            courier_uuid: shippingState.enable ? shippingState.courierUuid : null,
-            courier_route_uuid: shippingState.enable ? shippingState.routeUuid : null,
+            
+            // Nominal Dasar
+            amount_cash: amountCash,
+            amount_credit: amountCredit,
+            amount_installment: amountInstallment,
+            amount_bank_total: totalBankAmount, // Opsional: total semua transfer
+
+            // [SPREAD] Nominal Per Bank (amount_bank_UUID: value)
+            ...bankAmounts,
+            
+            // Shipping
             shipping_cost: shippingState.enable ? shippingState.cost : 0,
-            notes: notesArr.join(' | '),
-            // [UPDATED] Kirim Items sebagai Array Object, bukan flatten keys
+            courier_uuid: shippingState.enable ? shippingState.courierUuid : null,
+            
+            // References
+            member_uuid: transactionMeta.memberUuid || null,
+            target_store_uuid: transactionType.value === 'MUTATION' ? transactionMeta.targetStoreUuid : null,
+            
+            // Items
             items: itemsPayload
         };
 
+        // Kirim ke Backend
         await journalService.createSaleTransaction(payload);
+        
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Transaksi Berhasil', life: 3000 });
         showPaymentModal.value = false; cart.value = []; resetState(); await loadProducts(); 
     } catch (e) {
-        console.error(e); toast.add({ severity: 'error', summary: 'Gagal', detail: 'Error', life: 3000 });
+        console.error(e); 
+        const msg = e.response?._data?.message || 'Terjadi Kesalahan';
+        toast.add({ severity: 'error', summary: 'Gagal', detail: msg, life: 3000 });
     } finally { processing.value = false; }
 };
 

@@ -26,6 +26,9 @@ export class JournalEntity {
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
   deletedAt?: Date;
 
+  @Column({ name: 'verified_at', type: 'timestamp', nullable: true })
+  verifiedAt?: Date;
+
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy?: string;
 
@@ -34,6 +37,9 @@ export class JournalEntity {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string;
+
+  @Column({ name: 'verified_by', type: 'uuid', nullable: true })
+  verifiedBy?: string;
   
   @OneToMany(() => JournalDetailEntity, (detail) => detail.journal)
   details: JournalDetailEntity[];
