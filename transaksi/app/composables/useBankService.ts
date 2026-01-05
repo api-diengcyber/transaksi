@@ -8,6 +8,10 @@ export const useBankService = () => {
     return await useApi('/bank', { method: 'POST', body: data });
   };
 
+  const updateBank = async (id: string, data: any) => {
+    return await useApi(`/bank/${id}`, { method: 'PUT', body: data });
+  };
+
   const deleteBank = async (id: string) => {
     return await useApi(`/bank/${id}`, { method: 'DELETE' });
   };
@@ -15,6 +19,7 @@ export const useBankService = () => {
   return { 
     getBanks, 
     createBank, 
+    updateBank,
     deleteBank 
   };
 };

@@ -83,7 +83,7 @@ defineProps({
                         </div>
                         <div>
                             <span class="font-bold text-sm block text-surface-900 dark:text-surface-100">Bottom Nav</span>
-                            <span class="text-xs text-surface-500 leading-tight block mt-1">Menu di bawah. Ala Mobile App.</span>
+                            <span class="text-xs text-surface-500 leading-tight block mt-1">Menu di bawah. Mobile App.</span>
                         </div>
                         <i v-if="settings.layout_mode === 'tabs'" class="pi pi-check-circle text-primary-600 absolute top-3 right-3 text-lg bg-surface-0 rounded-full"></i>
                     </div>
@@ -116,7 +116,7 @@ defineProps({
                         </div>
                         <div>
                             <span class="font-bold text-sm block text-surface-900 dark:text-surface-100">Multi-Window</span>
-                            <span class="text-xs text-surface-500 leading-tight block mt-1">Ala Visual Studio. Buka banyak menu dalam Tabs.</span>
+                            <span class="text-xs text-surface-500 leading-tight block mt-1">Buka banyak menu dalam Tabs.</span>
                         </div>
                         <i v-if="settings.layout_mode === 'multiwindow'" class="pi pi-check-circle text-primary-600 absolute top-3 right-3 text-lg bg-surface-0 rounded-full"></i>
                     </div>
