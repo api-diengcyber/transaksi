@@ -8,25 +8,35 @@ interface Account {
     name: string; 
 }
 
+interface ConfigItem {
+    uuid?: string;
+    accountName?: string;
+    accountCode?: string;
+    accountUuid: string;
+    position: 'DEBIT' | 'CREDIT';
+}
+
 interface DiscoveredItem {
     transactionType: string;
     detailKey: string;
     frequency: number;
+    totalValue: number; // Field baru untuk menampung SUM value
     isMapped: boolean;
-    mappedAccount?: string;
-    mappedPosition?: string;
-    configUuid?: string;
+    isWildcard: boolean;
+    configs: ConfigItem[];
 }
 
 interface JournalConfigPayload {
     transactionType: string;
     detailKey: string;
-    position: 'DEBIT' | 'CREDIT';
-    accountUuid: string;
+    items: {
+        accountUuid: string;
+        position: 'DEBIT' | 'CREDIT';
+    }[];
 }
 
 // --- Services ---
-const { getDiscovery, create: createConfig, remove: removeConfig } = useJournalConfigService();
+const { getDiscovery, create: createConfig } = useJournalConfigService();
 const { getAll: fetchAccounts } = useAccountService();
 
 // --- State ---
@@ -36,13 +46,10 @@ const loading = ref(false);
 const isDialogVisible = ref(false);
 
 // Form State
-const form = ref<JournalConfigPayload>({
-    transactionType: '',
-    detailKey: '',
-    position: 'DEBIT',
-    accountUuid: ''
-});
+const currentKey = ref('');
+const currentType = ref('');
 const mappingMode = ref<'EXACT' | 'PATTERN'>('EXACT');
+const formItems = ref<{ accountUuid: string; position: 'DEBIT' | 'CREDIT' }[]>([]);
 
 // Filter Table
 const filters = ref({
@@ -67,28 +74,65 @@ const loadData = async () => {
     }
 };
 
+const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(value);
+};
+
 const openMappingDialog = (item: DiscoveredItem) => {
-    form.value = {
-        transactionType: item.transactionType,
-        detailKey: item.detailKey,
-        position: 'DEBIT', 
-        accountUuid: ''
-    };
-    mappingMode.value = 'EXACT'; // Default ke exact match
+    currentKey.value = item.detailKey;
+    currentType.value = item.transactionType;
+    
+    // Jika sudah ada config, load ke form
+    if (item.configs && item.configs.length > 0) {
+        formItems.value = item.configs.map(c => ({
+            accountUuid: c.accountUuid,
+            position: c.position
+        }));
+        
+        // Deteksi mode berdasarkan apakah detailKey source berbeda dengan detailKey item (indikasi wildcard)
+        // Atau gunakan flag isWildcard jika backend mengirimnya
+        mappingMode.value = item.isWildcard ? 'PATTERN' : 'EXACT';
+        
+        // Jika wildcard, kita tampilkan source key-nya (misal: "sale_") bukan item key-nya ("sale_123")
+        if (item.isWildcard && item.configs[0]) {
+             // Asumsi backend mengirim source key di salah satu property config, atau kita edit manual
+             // Di sini kita biarkan user mengedit jika perlu
+             // currentKey.value = (item.configs[0] as any).detailKeySource || item.detailKey;
+        }
+    } else {
+        // Default baru
+        formItems.value = [{ accountUuid: '', position: 'DEBIT' }];
+        mappingMode.value = 'EXACT';
+    }
+    
     isDialogVisible.value = true;
 };
 
+const addFormItem = () => {
+    formItems.value.push({ accountUuid: '', position: 'CREDIT' });
+};
+
+const removeFormItem = (index: number) => {
+    formItems.value.splice(index, 1);
+};
+
 const saveConfig = async () => {
-    if (!form.value.accountUuid) return;
+    // Validasi sederhana
+    const validItems = formItems.value.filter(i => i.accountUuid);
+    if (validItems.length === 0) return;
     
     // Logic Wildcard
-    let finalKey = form.value.detailKey;
+    let finalKey = currentKey.value;
     if (mappingMode.value === 'PATTERN') {
-        // Pastikan diakhiri underscore jika user lupa
+        // Pastikan diakhiri underscore jika user lupa (opsional, tergantung preferensi)
         if (!finalKey.endsWith('_')) finalKey += '_';
     }
 
-    const payload = { ...form.value, detailKey: finalKey };
+    const payload: JournalConfigPayload = {
+        transactionType: currentType.value,
+        detailKey: finalKey,
+        items: validItems
+    };
     
     try {
         await createConfig(payload);
@@ -97,15 +141,6 @@ const saveConfig = async () => {
     } catch (e) {
         console.error("Error save", e);
     }
-};
-
-const deleteConfig = async (uuid: string) => {
-    // Gunakan dialog konfirmasi yang lebih soft di real app, disini pakai native confirm
-    if (!confirm('Putuskan hubungan akun ini? Transaksi dengan kode ini akan kembali berstatus "Belum Terpetakan".')) return;
-    try {
-        await removeConfig(uuid);
-        await loadData();
-    } catch (e) { console.error(e); }
 };
 
 // Computed
@@ -132,8 +167,8 @@ onMounted(loadData);
                         Konfigurasi Jurnal Otomatis
                     </h1>
                     <p class="text-slate-500 text-sm leading-relaxed max-w-2xl">
-                        Sistem mendeteksi kode transaksi dari database yang belum memiliki pasangan di Akuntansi. 
-                        Hubungkan kode-kode ini ke <strong>Akun Perkiraan (COA)</strong> agar jurnal keuangan terbentuk otomatis.
+                        Hubungkan kode transaksi sistem ke <strong>Multi-Akun (Split Journal)</strong>. 
+                        Satu transaksi dapat memecah nilai ke Debit/Kredit berbeda.
                     </p>
                 </div>
                 <div class="absolute right-0 top-0 h-full w-32 bg-gradient-to-l from-indigo-50 to-transparent opacity-50 pointer-events-none"></div>
@@ -150,25 +185,20 @@ onMounted(loadData);
                     <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-1000 ease-out" :style="{ width: `${mappedPercentage}%` }"></div>
                 </div>
                 <div class="flex justify-between text-xs">
-                    <span class="text-slate-500">
-                        <strong class="text-emerald-600">{{ mappedCount }}</strong> Terhubung
-                    </span>
-                    <span class="text-slate-500">
-                        <strong class="text-amber-500">{{ unmappedCount }}</strong> Perlu Tindakan
-                    </span>
+                    <span class="text-slate-500"><strong class="text-emerald-600">{{ mappedCount }}</strong> Terhubung</span>
+                    <span class="text-slate-500"><strong class="text-amber-500">{{ unmappedCount }}</strong> Pending</span>
                 </div>
             </div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[500px]">
-            
             <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white sticky top-0 z-20">
                 <div class="relative w-full sm:w-72">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input 
                         v-model="filters['global'].value" 
                         type="text" 
-                        placeholder="Cari Kode, Tipe, atau Status..." 
+                        placeholder="Cari Kode..." 
                         class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     >
                 </div>
@@ -185,98 +215,87 @@ onMounted(loadData);
                 :value="discoveryItems" 
                 :filters="filters" 
                 :loading="loading" 
-                paginator :rows="10"
+                paginator :rows="10" 
                 class="w-full"
                 :rowClass="() => 'hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0'"
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                            <i class="pi pi-inbox text-3xl opacity-50"></i>
-                        </div>
-                        <p class="font-medium text-slate-600">Tidak ada data ditemukan</p>
-                        <p class="text-sm">Semua transaksi sepertinya sudah aman.</p>
+                        <i class="pi pi-inbox text-3xl opacity-50 mb-2"></i>
+                        <p class="font-medium">Tidak ada data transaksi ditemukan</p>
                     </div>
                 </template>
 
-                <Column field="transactionType" header="Tipe" sortable class="w-[15%]">
+                <Column field="transactionType" header="Tipe" sortable class="w-[10%]">
                     <template #body="{ data }">
-                        <span class="inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
+                        <span class="inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
                             {{ data.transactionType }}
                         </span>
                     </template>
                 </Column>
 
-                <Column field="detailKey" header="Kode Referensi Sistem" sortable class="w-[35%]">
+                <Column field="detailKey" header="Kode Transaksi" sortable class="w-[25%]">
                     <template #body="{ data }">
                         <div class="flex flex-col gap-1">
-                            <div class="flex items-center gap-2">
-                                <code class="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded border border-slate-200 select-all" title="Klik untuk copy">
-                                    {{ data.detailKey }}
-                                </code>
-                                <span v-if="data.frequency > 50" class="flex h-2 w-2 relative" title="Sering muncul">
-                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            <code class="font-mono text-xs font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded w-fit select-all border border-slate-100">
+                                {{ data.detailKey }}
+                            </code>
+                            <span v-if="data.isWildcard" class="text-[10px] text-amber-600 flex items-center gap-1 font-medium">
+                                <i class="pi pi-bolt text-[9px]"></i> Pola Wildcard
+                            </span>
+                        </div>
+                    </template>
+                </Column>
+                
+                <Column field="totalValue" header="Total Nilai" sortable class="w-[15%]">
+                    <template #body="{ data }">
+                        <div class="flex flex-col items-end text-right">
+                            <span class="text-xs font-bold text-slate-700 font-mono">
+                                {{ formatNumber(data.totalValue) }}
+                            </span>
+                            <span class="text-[9px] text-slate-400">
+                                dr {{ data.frequency }} transaksi
+                            </span>
+                        </div>
+                    </template>
+                </Column>
+                
+                <Column header="Konfigurasi Akun (Jurnal)" class="w-[40%]">
+                    <template #body="{ data }">
+                        <div v-if="data.isMapped && data.configs.length" class="flex flex-col gap-1.5 py-1">
+                            <div v-for="cfg in data.configs" :key="cfg.uuid" 
+                                class="flex items-center justify-between text-xs bg-slate-50 border border-slate-100 rounded px-2 py-1 group hover:border-indigo-100 transition-colors"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-slate-400 text-[10px] bg-white px-1 rounded border border-slate-100">{{ cfg.accountCode }}</span>
+                                    <span class="font-semibold text-slate-700 group-hover:text-indigo-700 transition-colors">{{ cfg.accountName }}</span>
+                                </div>
+                                <span 
+                                    class="text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                    :class="cfg.position === 'DEBIT' ? 'text-blue-700 bg-blue-50 border-blue-100' : 'text-red-700 bg-red-50 border-red-100'"
+                                >
+                                    {{ cfg.position }}
                                 </span>
                             </div>
-                            <span v-if="data.detailKey.includes('_')" class="text-[10px] text-slate-400 flex items-center gap-1">
-                                <i class="pi pi-info-circle text-[9px]"></i> Terdeteksi pola berulang
-                            </span>
+                        </div>
+                        <div v-else class="flex items-center gap-2 py-2 opacity-60">
+                            <i class="pi pi-exclamation-circle text-slate-400"></i>
+                            <span class="text-xs text-slate-500 italic">Belum dikonfigurasi</span>
                         </div>
                     </template>
                 </Column>
 
-                <Column header="Akun Terhubung" field="isMapped" sortable class="w-[35%]">
-                    <template #body="{ data }">
-                        <div v-if="data.isMapped" class="flex items-center justify-between p-2 pr-3 rounded-lg border border-transparent hover:border-slate-200 group transition-all">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                                    <i class="pi pi-link text-sm"></i>
-                                </div>
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">
-                                        {{ data.mappedAccount }}
-                                    </span>
-                                    <span class="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                                        <i class="pi pi-check-circle text-[9px]"></i> Aktif
-                                    </span>
-                                </div>
-                            </div>
-                            <span 
-                                class="text-[10px] font-bold px-1.5 py-0.5 rounded border"
-                                :class="data.mappedPosition === 'DEBIT' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-red-50 text-red-700 border-red-100'"
-                            >
-                                {{ data.mappedPosition }}
-                            </span>
-                        </div>
-
-                        <div v-else class="flex items-center gap-2 py-2">
-                            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
-                                <i class="pi pi-unlink text-sm"></i>
-                            </div>
-                            <span class="text-sm text-slate-400 italic">Belum dikonfigurasi</span>
-                        </div>
-                    </template>
-                </Column>
-
-                <Column header="" class="w-[15%] text-right">
+                <Column class="w-[10%] text-right">
                     <template #body="{ data }">
                         <button 
-                            v-if="!data.isMapped"
                             @click="openMappingDialog(data)"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all active:scale-95"
+                            class="inline-flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all border"
+                            :class="data.isMapped 
+                                ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600' 
+                                : 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 hover:border-indigo-700 shadow-sm hover:shadow'"
                         >
-                            <i class="pi pi-plug text-[10px]"></i>
-                            Hubungkan
-                        </button>
-                        
-                        <button 
-                            v-else
-                            @click="deleteConfig(data.configUuid)"
-                            class="inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Hapus Koneksi"
-                        >
-                            <i class="pi pi-trash"></i>
+                            <i class="pi" :class="data.isMapped ? 'pi-pencil' : 'pi-link'"></i>
+                            {{ data.isMapped ? 'Edit' : 'Atur' }}
                         </button>
                     </template>
                 </Column>
@@ -285,140 +304,150 @@ onMounted(loadData);
 
         <Dialog 
             v-model:visible="isDialogVisible" 
-            header="Hubungkan ke Akuntansi" 
+            header="Setting Jurnal Transaksi" 
             modal 
-            :breakpoints="{ '960px': '75vw', '640px': '90vw' }" 
-            :style="{ width: '500px' }"
-            class="font-sans"
+            :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
+            :style="{ width: '600px' }"
             :draggable="false"
+            class="font-sans"
         >
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 flex flex-col gap-1">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sumber Transaksi</span>
-                <div class="flex items-center gap-2">
-                    <code class="text-sm font-mono font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                        {{ form.detailKey }}
-                    </code>
-                    <span class="text-xs text-slate-500">({{ form.transactionType }})</span>
-                </div>
-            </div>
-
-            <div class="flex flex-col gap-6">
+            <div class="flex flex-col gap-5">
                 
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-2">Metode Pencocokan</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div 
-                            @click="mappingMode = 'EXACT'"
-                            class="cursor-pointer border-2 rounded-xl p-3 flex flex-col gap-2 transition-all relative overflow-hidden"
-                            :class="mappingMode === 'EXACT' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100 hover:border-slate-200'"
-                        >
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold uppercase tracking-wide" :class="mappingMode === 'EXACT' ? 'text-indigo-700' : 'text-slate-500'">Persis (Exact)</span>
-                                <i v-if="mappingMode === 'EXACT'" class="pi pi-check-circle text-indigo-600"></i>
-                            </div>
-                            <p class="text-[10px] text-slate-500 leading-snug">
-                                Hanya berlaku untuk kode <strong>{{ form.detailKey }}</strong> saja.
-                            </p>
-                        </div>
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center shadow-sm">
+                    <div>
+                        <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Tipe Transaksi</div>
+                        <div class="font-bold text-slate-800 text-sm">{{ currentType }}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Kode Referensi</div>
+                        <code class="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 text-sm">{{ currentKey }}</code>
+                    </div>
+                </div>
 
-                        <div 
-                            @click="mappingMode = 'PATTERN'"
-                            class="cursor-pointer border-2 rounded-xl p-3 flex flex-col gap-2 transition-all relative overflow-hidden"
-                            :class="mappingMode === 'PATTERN' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100 hover:border-slate-200'"
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Metode Pencocokan</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label 
+                            class="flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all"
+                            :class="mappingMode === 'EXACT' ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-100 hover:border-slate-200'"
                         >
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold uppercase tracking-wide" :class="mappingMode === 'PATTERN' ? 'text-indigo-700' : 'text-slate-500'">Pola (Wildcard)</span>
-                                <i v-if="mappingMode === 'PATTERN'" class="pi pi-check-circle text-indigo-600"></i>
+                            <input type="radio" v-model="mappingMode" value="EXACT" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+                            <div>
+                                <span class="block text-sm font-bold text-slate-700">Persis (Exact)</span>
+                                <span class="block text-[10px] text-slate-500">Hanya kode spesifik ini saja</span>
                             </div>
-                            <p class="text-[10px] text-slate-500 leading-snug">
-                                Berlaku untuk semua kode yang berawalan sama.
-                            </p>
+                        </label>
+                        <label 
+                            class="flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all"
+                            :class="mappingMode === 'PATTERN' ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-100 hover:border-slate-200'"
+                        >
+                            <input type="radio" v-model="mappingMode" value="PATTERN" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+                            <div>
+                                <span class="block text-sm font-bold text-slate-700">Pola (Wildcard)</span>
+                                <span class="block text-[10px] text-slate-500">Semua kode dengan awalan sama</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div v-if="mappingMode === 'PATTERN'" class="mt-3 animate-fade-in-down">
+                        <div class="flex items-center gap-2 bg-amber-50 p-2.5 rounded-lg border border-amber-100 text-amber-800 text-xs">
+                            <i class="pi pi-info-circle text-amber-600"></i>
+                            <span class="flex-1">Edit kode agar diakhiri <strong>"_" (underscore)</strong> untuk menangkap pola.</span>
                         </div>
+                        <input 
+                            v-model="currentKey" 
+                            type="text" 
+                            class="mt-2 w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-mono"
+                            placeholder="Contoh: SALE_"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Jurnal Akuntansi</label>
+                        <button 
+                            @click="addFormItem" 
+                            class="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-bold hover:bg-indigo-50 px-2 py-1 rounded transition-colors"
+                        >
+                            <i class="pi pi-plus"></i> Tambah Akun
+                        </button>
                     </div>
 
-                    <div v-if="mappingMode === 'PATTERN'" class="mt-3 pl-1 animate-fade-in-down">
-                        <label class="text-xs font-bold text-slate-600 mb-1 block">Edit Pola Prefix</label>
-                        <div class="flex items-center">
-                            <input 
-                                v-model="form.detailKey" 
-                                type="text" 
-                                class="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-lg border border-slate-300 text-sm focus:ring-indigo-500 focus:border-indigo-500" 
-                                placeholder="Misal: ac_"
+                    <div class="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-1">
+                        <div v-for="(item, index) in formItems" :key="index" class="flex gap-2 items-start animate-fade-in-down group">
+                            <div class="flex-1">
+                                <Dropdown 
+                                    v-model="item.accountUuid" 
+                                    :options="accounts" 
+                                    optionLabel="name" 
+                                    optionValue="uuid" 
+                                    filter 
+                                    placeholder="Pilih Akun Perkiraan..." 
+                                    class="w-full p-inputtext-sm"
+                                    :virtualScrollerOptions="{ itemSize: 34 }"
+                                >
+                                    <template #option="slotProps">
+                                        <div class="flex items-center justify-between w-full text-xs">
+                                            <span class="text-slate-700">{{ slotProps.option.name }}</span>
+                                            <span class="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 rounded border border-slate-200">{{ slotProps.option.code }}</span>
+                                        </div>
+                                    </template>
+                                    <template #value="slotProps">
+                                        <div v-if="slotProps.value" class="flex items-center gap-2 text-xs">
+                                            <span class="bg-slate-800 text-white text-[10px] font-mono px-1 rounded">{{ accounts.find(a => a.uuid === slotProps.value)?.code }}</span>
+                                            <span class="font-semibold">{{ accounts.find(a => a.uuid === slotProps.value)?.name }}</span>
+                                        </div>
+                                        <span v-else class="text-xs text-slate-400">Pilih Akun...</span>
+                                    </template>
+                                </Dropdown>
+                            </div>
+
+                            <div class="flex bg-slate-100 rounded-lg p-1 shrink-0 border border-slate-200">
+                                <button 
+                                    @click="item.position = 'DEBIT'"
+                                    class="px-3 py-1.5 text-[10px] font-bold rounded-md transition-all"
+                                    :class="item.position === 'DEBIT' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'"
+                                >DEBIT</button>
+                                <button 
+                                    @click="item.position = 'CREDIT'"
+                                    class="px-3 py-1.5 text-[10px] font-bold rounded-md transition-all"
+                                    :class="item.position === 'CREDIT' ? 'bg-white text-red-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'"
+                                >KREDIT</button>
+                            </div>
+
+                            <button 
+                                @click="removeFormItem(index)" 
+                                class="w-9 h-[38px] flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                title="Hapus Baris"
                             >
-                            <span class="inline-flex items-center px-3 py-2 rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 text-slate-500 text-sm font-mono font-bold">
-                                _ (Apapun)
-                            </span>
+                                <i class="pi pi-trash text-xs"></i>
+                            </button>
                         </div>
-                        <p class="text-[10px] text-slate-400 mt-1">Sistem akan menangkap semua kode yang diawali teks tersebut.</p>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-2">
-                        Masuk ke Akun Apa? <span class="text-red-500">*</span>
-                    </label>
-                    <Dropdown 
-                        v-model="form.accountUuid" 
-                        :options="accounts" 
-                        optionLabel="name" 
-                        optionValue="uuid" 
-                        filter 
-                        placeholder="Pilih Akun Perkiraan..." 
-                        class="w-full md:w-full"
-                        :virtualScrollerOptions="{ itemSize: 38 }"
-                    >
-                        <template #option="slotProps">
-                            <div class="flex items-center justify-between w-full">
-                                <span class="text-sm text-slate-700">{{ slotProps.option.name }}</span>
-                                <span class="text-xs font-mono bg-slate-100 text-slate-500 px-1.5 rounded">{{ slotProps.option.code }}</span>
-                            </div>
-                        </template>
-                        <template #value="slotProps">
-                            <div v-if="slotProps.value" class="flex items-center gap-2">
-                                <span class="bg-slate-800 text-white text-[10px] font-mono px-1.5 rounded">{{ accounts.find(a => a.uuid === slotProps.value)?.code }}</span>
-                                <span class="text-sm font-semibold">{{ accounts.find(a => a.uuid === slotProps.value)?.name }}</span>
-                            </div>
-                            <span v-else class="text-slate-400 text-sm">{{ slotProps.placeholder }}</span>
-                        </template>
-                    </Dropdown>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-2">Posisi Nilai</label>
-                    <div class="flex gap-4">
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" v-model="form.position" value="DEBIT" class="peer sr-only">
-                            <div class="rounded-lg border border-slate-200 p-3 text-center transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:text-blue-700 hover:bg-slate-50">
-                                <div class="font-bold text-sm">DEBIT</div>
-                                <div class="text-[10px] opacity-70">Menambah Aset / Beban</div>
-                            </div>
-                        </label>
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" v-model="form.position" value="CREDIT" class="peer sr-only">
-                            <div class="rounded-lg border border-slate-200 p-3 text-center transition-all peer-checked:border-red-500 peer-checked:bg-red-50 peer-checked:text-red-700 hover:bg-slate-50">
-                                <div class="font-bold text-sm">KREDIT</div>
-                                <div class="text-[10px] opacity-70">Menambah Hutang / Modal</div>
-                            </div>
-                        </label>
+                        
+                        <div v-if="formItems.length === 0" class="flex flex-col items-center justify-center py-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 text-xs">
+                            <i class="pi pi-list mb-1"></i>
+                            <span>Belum ada akun dikonfigurasi.</span>
+                        </div>
                     </div>
                 </div>
 
             </div>
 
             <template #footer>
-                <div class="flex justify-between items-center pt-4 border-t border-slate-100 mt-4">
+                <div class="pt-4 border-t border-slate-100 flex justify-end gap-3 mt-2">
                     <button 
-                        @click="isDialogVisible = false"
-                        class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                        @click="isDialogVisible = false" 
+                        class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
                     >
                         Batal
                     </button>
                     <button 
                         @click="saveConfig" 
-                        :disabled="!form.accountUuid"
-                        class="px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all"
+                        class="px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-95"
+                        :disabled="formItems.filter(i => i.accountUuid).length === 0"
                     >
-                        Simpan Koneksi
+                        Simpan Konfigurasi
                     </button>
                 </div>
             </template>
@@ -427,12 +456,27 @@ onMounted(loadData);
 </template>
 
 <style scoped>
-/* Animasi kecil */
-@keyframes fadeInDown {
+.animate-fade-in-down {
+    animation: fadeIn 0.2s ease-out;
+}
+@keyframes fadeIn {
     from { opacity: 0; transform: translateY(-5px); }
     to { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-in-down {
-    animation: fadeInDown 0.2s ease-out forwards;
+
+/* Custom Scrollbar for better UI inside modal */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
 }
 </style>

@@ -1,5 +1,18 @@
-import { IsNotEmpty, IsString, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsString, IsArray, ValidateNested, IsEnum } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
+class JournalConfigItemDto {
+  @ApiProperty({ example: 'DEBIT', enum: ['DEBIT', 'CREDIT'] })
+  @IsNotEmpty()
+  @IsEnum(['DEBIT', 'CREDIT'])
+  position: 'DEBIT' | 'CREDIT';
+
+  @ApiProperty({ example: 'uuid-akun-kas-besar' })
+  @IsNotEmpty()
+  @IsString()
+  accountUuid: string;
+}
 
 export class CreateJournalConfigDto {
   @ApiProperty({ example: 'SALE' })
@@ -12,13 +25,9 @@ export class CreateJournalConfigDto {
   @IsString()
   detailKey: string;
 
-  @ApiProperty({ example: 'DEBIT', enum: ['DEBIT', 'CREDIT'] })
-  @IsNotEmpty()
-  @IsEnum(['DEBIT', 'CREDIT'])
-  position: 'DEBIT' | 'CREDIT';
-
-  @ApiProperty({ example: 'uuid-akun-kas-besar' })
-  @IsNotEmpty()
-  @IsString()
-  accountUuid: string;
+  @ApiProperty({ type: [JournalConfigItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => JournalConfigItemDto)
+  items: JournalConfigItemDto[];
 }

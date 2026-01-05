@@ -1,34 +1,41 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
-const accountService = useAccountService(); //
+import ProfitLossTab from '~/components/financial/ProfitLossTab.vue';
+// Pastikan path import ini sesuai dengan lokasi file BalanceSheetTab di atas
+import BalanceSheetTab from '~/components/financial/BalanceSheetTab.vue';
+
+const accountService = useAccountService(); 
 const toast = useToast();
 
 const loading = ref(false);
-const rawData = ref([]);
+const rawData = ref<any[]>([]);
 const activeTab = ref(0); // 0: Laba Rugi, 1: Neraca
 
 // Filter Tanggal
 const dates = ref([
-    new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Awal bulan
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Awal bulan ini
     new Date() // Hari ini
 ]);
 
-const tabs = [
+const tabs = ref([
     { label: 'Laba Rugi (Profit & Loss)', icon: 'pi pi-chart-line' },
     { label: 'Neraca (Balance Sheet)', icon: 'pi pi-building' }
-];
+]);
 
 // --- LOGIC PERHITUNGAN ---
 
 // 1. Laba Rugi (Revenue & Expense)
 const profitLossData = computed(() => {
-    const revenue = rawData.value.filter(a => a.category === 'REVENUE'); //
-    const expense = rawData.value.filter(a => a.category === 'EXPENSE'); //
+    // Ambil data REVENUE (Pendapatan) dan EXPENSE (Beban)
+    const revenue = rawData.value.filter(a => a.category === 'REVENUE');
+    const expense = rawData.value.filter(a => a.category === 'EXPENSE');
 
-    const totalRevenue = revenue.reduce((sum, item) => sum + item.balance, 0);
-    const totalExpense = expense.reduce((sum, item) => sum + item.balance, 0);
+    const totalRevenue = revenue.reduce((sum, item) => sum + (Number(item.balance) || 0), 0);
+    const totalExpense = expense.reduce((sum, item) => sum + (Number(item.balance) || 0), 0);
+    
+    // Net Profit = Pendapatan - Beban
     const netProfit = totalRevenue - totalExpense;
 
     return { revenue, expense, totalRevenue, totalExpense, netProfit };
@@ -40,13 +47,14 @@ const balanceSheetData = computed(() => {
     const liabilities = rawData.value.filter(a => a.category === 'LIABILITY');
     const equity = rawData.value.filter(a => a.category === 'EQUITY');
 
-    const totalAsset = assets.reduce((sum, item) => sum + item.balance, 0);
-    const totalLiability = liabilities.reduce((sum, item) => sum + item.balance, 0);
+    const totalAsset = assets.reduce((sum, item) => sum + (Number(item.balance) || 0), 0);
+    const totalLiability = liabilities.reduce((sum, item) => sum + (Number(item.balance) || 0), 0);
     
-    // Equity Awal
-    const totalEquityInitial = equity.reduce((sum, item) => sum + item.balance, 0);
+    // Equity Awal (Modal Disetor, dll)
+    const totalEquityInitial = equity.reduce((sum, item) => sum + (Number(item.balance) || 0), 0);
     
     // Laba Berjalan (Retained Earnings) diambil dari perhitungan Laba Rugi
+    // INI KUNCI AGAR SEIMBANG: Laba masuk ke Ekuitas
     const currentEarnings = profitLossData.value.netProfit;
     
     const totalEquityFinal = totalEquityInitial + currentEarnings;
@@ -54,7 +62,8 @@ const balanceSheetData = computed(() => {
     return { 
         assets, liabilities, equity, 
         totalAsset, totalLiability, totalEquityInitial, 
-        currentEarnings, totalEquityFinal 
+        currentEarnings, // Dikirim ke BalanceSheetTab agar bisa dirender sebagai baris akun
+        totalEquityFinal 
     };
 });
 
@@ -67,6 +76,7 @@ const loadData = async () => {
         const start = dates.value[0].toISOString();
         const end = dates.value[1].toISOString();
         
+        // Panggil Backend (yang sudah difix sebelumnya)
         const response = await accountService.getFinancialReport(start, end);
         rawData.value = Array.isArray(response) ? response : response.data || [];
         
@@ -76,10 +86,6 @@ const loadData = async () => {
     } finally {
         loading.value = false;
     }
-};
-
-const formatCurrency = (val) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 };
 
 onMounted(() => {
@@ -105,117 +111,16 @@ onMounted(() => {
              <TabMenu :model="tabs" v-model:activeIndex="activeTab" class="w-full" />
         </div>
 
-        <div v-if="activeTab === 0" class="flex flex-col gap-4 max-w-4xl mx-auto w-full">
-            
-            <div class="p-6 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 text-center relative overflow-hidden">
-                <p class="text-sm font-bold text-surface-500 uppercase tracking-widest mb-2">Laba / Rugi Bersih</p>
-                <h2 class="text-4xl font-black" :class="profitLossData.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'">
-                    {{ formatCurrency(profitLossData.netProfit) }}
-                </h2>
-                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-blue-500"></div>
-            </div>
+        <div class="flex-1 overflow-auto">
+            <ProfitLossTab 
+                v-if="activeTab === 0" 
+                :data="profitLossData" 
+            />
 
-            <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-                <div class="p-4 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center">
-                    <h3 class="font-bold text-surface-800 dark:text-surface-0">PENDAPATAN (REVENUE)</h3>
-                    <span class="font-bold text-emerald-600">{{ formatCurrency(profitLossData.totalRevenue) }}</span>
-                </div>
-                <DataTable :value="profitLossData.revenue" size="small" stripedRows>
-                    <Column field="code" header="Kode" style="width: 15%"></Column>
-                    <Column field="name" header="Nama Akun"></Column>
-                    <Column field="balance" header="Saldo" class="text-right">
-                        <template #body="slotProps">
-                            {{ formatCurrency(slotProps.data.balance) }}
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
-
-            <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-                <div class="p-4 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center">
-                    <h3 class="font-bold text-surface-800 dark:text-surface-0">BEBAN (EXPENSE)</h3>
-                    <span class="font-bold text-rose-600">{{ formatCurrency(profitLossData.totalExpense) }}</span>
-                </div>
-                <DataTable :value="profitLossData.expense" size="small" stripedRows>
-                    <Column field="code" header="Kode" style="width: 15%"></Column>
-                    <Column field="name" header="Nama Akun"></Column>
-                    <Column field="balance" header="Saldo" class="text-right">
-                        <template #body="slotProps">
-                            {{ formatCurrency(slotProps.data.balance) }}
-                        </template>
-                    </Column>
-                </DataTable>
-            </div>
-        </div>
-
-        <div v-if="activeTab === 1" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            <div class="flex flex-col gap-4">
-                <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden h-full">
-                    <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex justify-between items-center">
-                        <h3 class="font-bold text-blue-800 dark:text-blue-300">AKTIVA / HARTA</h3>
-                        <span class="font-black text-lg text-blue-700 dark:text-blue-300">{{ formatCurrency(balanceSheetData.totalAsset) }}</span>
-                    </div>
-                    <DataTable :value="balanceSheetData.assets" size="small" stripedRows>
-                         <Column field="code" header="Kode" style="width: 20%"></Column>
-                         <Column field="name" header="Nama Akun"></Column>
-                         <Column field="balance" header="Nilai" class="text-right">
-                            <template #body="slotProps">
-                                {{ formatCurrency(slotProps.data.balance) }}
-                            </template>
-                        </Column>
-                    </DataTable>
-                </div>
-            </div>
-
-            <div class="flex flex-col gap-4">
-                
-                <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-                    <div class="p-4 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-100 dark:border-orange-800 flex justify-between items-center">
-                        <h3 class="font-bold text-orange-800 dark:text-orange-300">KEWAJIBAN / HUTANG</h3>
-                        <span class="font-bold text-lg text-orange-700 dark:text-orange-300">{{ formatCurrency(balanceSheetData.totalLiability) }}</span>
-                    </div>
-                    <DataTable :value="balanceSheetData.liabilities" size="small" stripedRows>
-                         <Column field="code" header="Kode" style="width: 20%"></Column>
-                         <Column field="name" header="Nama Akun"></Column>
-                         <Column field="balance" header="Nilai" class="text-right">
-                            <template #body="slotProps">
-                                {{ formatCurrency(slotProps.data.balance) }}
-                            </template>
-                        </Column>
-                    </DataTable>
-                </div>
-
-                <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-                    <div class="p-4 bg-purple-50 dark:bg-purple-900/20 border-b border-purple-100 dark:border-purple-800 flex justify-between items-center">
-                        <h3 class="font-bold text-purple-800 dark:text-purple-300">MODAL / EKUITAS</h3>
-                        <span class="font-bold text-lg text-purple-700 dark:text-purple-300">{{ formatCurrency(balanceSheetData.totalEquityFinal) }}</span>
-                    </div>
-                    <DataTable :value="balanceSheetData.equity" size="small" stripedRows>
-                         <Column field="code" header="Kode" style="width: 20%"></Column>
-                         <Column field="name" header="Nama Akun"></Column>
-                         <Column field="balance" header="Nilai" class="text-right">
-                            <template #body="slotProps">
-                                {{ formatCurrency(slotProps.data.balance) }}
-                            </template>
-                        </Column>
-                    </DataTable>
-                    
-                    <div class="p-3 bg-surface-50 dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 flex justify-between items-center text-sm">
-                        <span class="pl-2 font-medium">Laba Tahun Berjalan (Net Profit)</span>
-                        <span class="font-bold" :class="balanceSheetData.currentEarnings >= 0 ? 'text-emerald-600' : 'text-rose-600'">
-                            {{ formatCurrency(balanceSheetData.currentEarnings) }}
-                        </span>
-                    </div>
-                </div>
-
-                 <div class="p-4 rounded-xl bg-surface-200 dark:bg-surface-700 flex justify-between items-center">
-                    <span class="font-bold text-surface-600 dark:text-surface-300 uppercase text-sm">Total Pasiva (Hutang + Modal)</span>
-                    <span class="font-black text-xl text-surface-800 dark:text-surface-0">
-                        {{ formatCurrency(balanceSheetData.totalLiability + balanceSheetData.totalEquityFinal) }}
-                    </span>
-                 </div>
-            </div>
+            <BalanceSheetTab 
+                v-if="activeTab === 1" 
+                :data="balanceSheetData" 
+            />
         </div>
 
     </div>

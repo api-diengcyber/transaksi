@@ -60,8 +60,6 @@ export class AccountService {
         });
     }
 
-    // --- TAMBAHAN FITUR BARU (CRUD) ---
-
     async create(storeUuid: string, dto: CreateAccountDto) {
         const exist = await this.accountRepository.findOne({
             where: { storeUuid, code: dto.code }
@@ -174,84 +172,97 @@ export class AccountService {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        // 1. Ambil semua akun milik store
+        // 1. Ambil Akun & Config
         const accounts = await this.accountRepository.find({
             where: { storeUuid },
             order: { code: 'ASC' }
         });
 
-        // 2. Ambil konfigurasi jurnal
+        // Ambil SEMUA config (jangan di-sort/filter dulu disini)
         const configs = await this.accountRepository.manager.find(JournalConfigEntity, {
             where: { storeUuid }
         });
 
-        // SORTING PENTING:
-        // Urutkan config agar yang spesifik (bukan wildcard) dicek duluan,
-        // dan wildcard yang lebih panjang dicek sebelum yang pendek.
-        configs.sort((a, b) => {
-            const aIsWild = a.detailKey.endsWith('_');
-            const bIsWild = b.detailKey.endsWith('_');
-            if (!aIsWild && bIsWild) return -1;
-            if (aIsWild && !bIsWild) return 1;
-            return b.detailKey.length - a.detailKey.length;
-        });
-
-        // 3. Ambil detail jurnal
-        // Menggunakan filter LIKE di SQL hanya sebagai penyaring kasar (pre-filter)
+        // 2. Query Journal Detail
         const details = await this.accountRepository.manager.createQueryBuilder(JournalDetailEntity, 'jd')
             .leftJoinAndSelect('jd.journal', 'j')
             .where('j.created_at BETWEEN :start AND :end', { start, end })
-            // Pastikan ada hyphen di depan dan belakang UUID untuk mengurangi resiko match partial
-            .andWhere('j.code LIKE :storePattern', { storePattern: `%-${storeUuid}-%` })
+            .andWhere('j.code LIKE :storePattern', { storePattern: `%-${storeUuid}-%` }) 
             .getMany();
 
-        // 4. Inisialisasi Map Saldo
+        // 3. Inisialisasi Map Saldo
         const balanceMap: Record<string, { debit: number, credit: number }> = {};
         accounts.forEach(acc => {
             balanceMap[acc.uuid] = { debit: 0, credit: 0 };
         });
 
-        // 5. Proses Perhitungan
+        // 4. Proses Loop Data
         for (const detail of details) {
-            if (!detail.journal || !detail.value) continue;
-
-            const journalCode = detail.journal.code;
-            const parts = journalCode.split('-');
-            
-            // --- FIX UTAMA: VALIDASI STRICT UUID ---
-            // Asumsi format kode: TYPE-STORE_UUID-DATE-SEQ 
-            // parts[0] = TYPE, parts[1] = STORE_UUID
-            // Kita cek apakah parts[1] benar-benar SAMA PERSIS dengan storeUuid yang diminta
-            if (parts.length < 2 || parts[1] !== storeUuid) {
-                continue; // Skip jika UUID di kode tidak sama persis (korban partial match SQL)
+            // Validasi Value
+            let val = 0;
+            if (typeof detail.value === 'string') {
+                val = parseFloat(detail.value) || 0;
+            } else {
+                val = Number(detail.value) || 0;
             }
 
-            const type = parts[0]; 
+            if (!detail.journal || val === 0) continue;
 
-            // Cari config yang cocok
-            const config = configs.find(c => {
-                if (c.transactionType !== type) return false;
+            // Parsing Type
+            const journalCode = detail.journal.code;
+            const type = journalCode.split('-')[0]; 
 
-                if (c.detailKey.endsWith('_')) {
-                    return detail.key.startsWith(c.detailKey);
-                } else {
-                    return detail.key === c.detailKey;
+            // --- LOGIKA PENCARIAN CONFIG (DIPERBAIKI) ---
+            
+            let targetConfigs: JournalConfigEntity[] = [];
+
+            // A. Coba cari EXACT MATCH dulu (Prioritas Tertinggi)
+            // Kita cari semua config yang transactionType & detailKey-nya persis sama
+            const exactMatches = configs.filter(c => 
+                c.transactionType === type && 
+                c.detailKey === detail.key
+            );
+
+            if (exactMatches.length > 0) {
+                targetConfigs = exactMatches;
+            } else {
+                // B. Jika tidak ada Exact, cari WILDCARD MATCH
+                const wildcardMatches = configs.filter(c => 
+                    c.transactionType === type && 
+                    c.detailKey.endsWith('_') && 
+                    detail.key.startsWith(c.detailKey)
+                );
+
+                if (wildcardMatches.length > 0) {
+                    // Masalah: Bisa ada wildcard "SALE_" dan "SALE_A_" yang match "SALE_A_1".
+                    // Kita harus ambil yang PALING SPESIFIK (paling panjang kuncinya).
+                    
+                    // 1. Urutkan berdasarkan panjang key descending (terpanjang di atas)
+                    wildcardMatches.sort((a, b) => b.detailKey.length - a.detailKey.length);
+                    
+                    // 2. Ambil key terbaik (yang paling atas)
+                    const bestKey = wildcardMatches[0].detailKey;
+
+                    // 3. Ambil SEMUA config yang punya key terbaik tersebut (untuk support split journal)
+                    targetConfigs = wildcardMatches.filter(c => c.detailKey === bestKey);
                 }
-            });
+            }
 
-            // Jika config ditemukan, hitung saldo
-            if (config && balanceMap[config.accountUuid]) {
-                const val = Number(detail.value) || 0;
-                
-                if (config.position === 'DEBIT') {
-                    balanceMap[config.accountUuid].debit += val;
-                } else if (config.position === 'CREDIT') {
-                    balanceMap[config.accountUuid].credit += val;
+            // --- AKHIR LOGIKA PENCARIAN ---
+
+            // C. Loop semua config yang ditemukan dan update saldo
+            for (const config of targetConfigs) {
+                if (balanceMap[config.accountUuid]) {
+                    if (config.position === 'DEBIT') {
+                        balanceMap[config.accountUuid].debit += val;
+                    } else if (config.position === 'CREDIT') {
+                        balanceMap[config.accountUuid].credit += val;
+                    }
                 }
             }
         }
 
-        // 6. Format hasil akhir
+        // 5. Hitung Saldo Akhir
         const report = accounts.map(acc => {
             const bal = balanceMap[acc.uuid];
             
