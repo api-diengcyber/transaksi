@@ -32,26 +32,21 @@ const fetchProducts = async () => {
         const { page, limit, search } = lazyParams.value;
         const response = await productService.getAllProducts(page, limit, search);
 
-        // [FIX] Handle struktur response API yang bervariasi
-        // Kadang response langsung array, kadang dibungkus { data: [...] }
         const rawData = Array.isArray(response) ? response : (response.data || []);
         const meta = response.meta || response.pagination || {};
 
-        // Mapping data agar aman digunakan di template
         products.value = rawData.map(p => ({
             ...p,
-            // Pastikan properti array selalu terisi, minimal []
             prices: Array.isArray(p.prices) ? p.prices : (Array.isArray(p.price) ? p.price : []),
             units: Array.isArray(p.units) ? p.units : [],
             shelve: Array.isArray(p.shelve) ? p.shelve : [],
-            // Ambil nama kategori
+            // Helper untuk status stok total
+            totalStock: (Array.isArray(p.units) ? p.units : []).reduce((acc, curr) => acc + (Number(curr.currentStock) || 0), 0),
             categoryNames: Array.isArray(p.productCategory) 
                 ? p.productCategory.map(pc => pc.category?.name).filter(Boolean) 
                 : []
         }));
 
-        // Set Total Records untuk Pagination
-        // Jika backend mengirim meta total, pakai itu. Jika tidak, pakai panjang array (untuk client-side pagination)
         if (meta.total || meta.total_data) {
             totalRecords.value = meta.total || meta.total_data;
         } else {
@@ -68,12 +63,7 @@ const fetchProducts = async () => {
 };
 
 // --- HANDLERS ---
-
 const handleEdit = (product) => {
-    // [DEBUG] Cek di Console Browser apakah UUID produk benar saat diklik
-    console.log("Edit Clicked for:", product.name, "UUID:", product.uuid);
-    
-    // [FIX] Kirim copy object untuk mencegah referensi reaktif bocor
     emit('edit', { ...product });
 };
 
@@ -87,7 +77,7 @@ const confirmDelete = (prod) => {
             try {
                 await productService.deleteProduct(prod.uuid);
                 toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Produk berhasil dihapus.' });
-                refresh(); // Reload data
+                refresh();
             } catch (err) {
                 toast.add({ severity: 'error', summary: 'Gagal', detail: err.message || 'Gagal menghapus produk.' });
             }
@@ -96,8 +86,7 @@ const confirmDelete = (prod) => {
 };
 
 const onPage = (event) => {
-    const newPage = Math.floor(event.first / event.rows) + 1;
-    lazyParams.value.page = newPage;
+    lazyParams.value.page = event.page + 1;
     lazyParams.value.limit = event.rows;
     fetchProducts();
 };
@@ -109,12 +98,17 @@ const onSearch = () => {
 };
 
 const refresh = () => {
-    // Refresh tanpa mereset page (tetap di halaman yang sama) agar UX lebih baik
     fetchProducts();
 };
 
 // --- HELPERS ---
 const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
+
+const getStockSeverity = (stock) => {
+    if (stock <= 0) return 'danger';
+    if (stock < 10) return 'warning';
+    return 'success';
+};
 
 const getUniqueShelves = (product) => {
     if (!product.shelve || !Array.isArray(product.shelve)) return [];
@@ -129,19 +123,19 @@ defineExpose({ refresh });
 </script>
 
 <template>
-    <div class="flex flex-col h-full">
-        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+    <div class="flex flex-col h-full gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-3 bg-surface-0 dark:bg-surface-900 p-3 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm">
              <div class="relative w-full md:w-96 group">
-                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
+                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-primary-500 transition-colors"></i>
                 <InputText 
                     v-model="searchInput" 
                     placeholder="Cari Nama / Scan Barcode..." 
-                    class="w-full pl-10 rounded-full" 
+                    class="w-full pl-10 rounded-full !bg-surface-50 dark:!bg-surface-800 focus:!bg-surface-0 transition-all border-none ring-1 ring-surface-200 dark:ring-surface-700 focus:ring-primary-500" 
                     @keydown.enter="onSearch"
                 />
             </div>
 
-            <div class="flex gap-2 self-end md:self-auto">
+            <div class="flex gap-2 w-full md:w-auto">
                 <Button 
                     icon="pi pi-refresh" 
                     severity="secondary" 
@@ -156,11 +150,12 @@ defineExpose({ refresh });
                     severity="primary" 
                     rounded 
                     @click="emit('create')" 
+                    class="w-full md:w-auto shadow-lg shadow-primary-500/20"
                 />
             </div>
         </div>
 
-        <div class="flex-1 overflow-hidden border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-0 dark:bg-surface-100 shadow-sm flex flex-col">
+        <div class="flex-1 overflow-hidden border border-surface-200 dark:border-surface-800 rounded-xl bg-surface-0 dark:bg-surface-900 shadow-sm flex flex-col">
             <DataTable 
                 :value="products" 
                 :loading="loading" 
@@ -180,93 +175,112 @@ defineExpose({ refresh });
                 currentPageReportTemplate="{first} - {last} dari {totalRecords}"
             >
                 <template #empty>
-                    <div class="flex flex-col items-center justify-center py-12 text-surface-500">
-                        <i class="pi pi-box text-4xl mb-2 opacity-50"></i>
-                        <p>Tidak ada produk ditemukan.</p>
+                    <div class="flex flex-col items-center justify-center py-16 text-surface-500">
+                        <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center mb-4">
+                            <i class="pi pi-box text-3xl opacity-50"></i>
+                        </div>
+                        <p class="font-medium">Tidak ada produk ditemukan.</p>
+                        <p class="text-sm opacity-70">Coba kata kunci lain atau buat produk baru.</p>
                     </div>
                 </template>
 
                 <template #loading>
-                    <div class="flex justify-center py-12">
-                        <i class="pi pi-spin pi-spinner text-primary-500 text-3xl"></i>
+                    <div class="p-4 space-y-3">
+                        <Skeleton height="4rem" v-for="i in 5" :key="i" class="!rounded-lg" />
                     </div>
                 </template>
 
-                <Column header="Nama Produk" style="min-width: 250px">
+                <Column header="Produk" style="min-width: 280px" frozen>
                     <template #body="{ data }">
-                        <div class="flex gap-3 items-center py-1">
-                            <div class="w-9 h-9 rounded bg-primary-50 dark:bg-primary-900/30 text-primary-600 flex items-center justify-center font-bold text-lg shrink-0">
+                        <div class="flex gap-3 items-start py-1">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/40 dark:to-primary-800/20 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-lg shrink-0 shadow-inner">
                                 {{ data.name.charAt(0).toUpperCase() }}
                             </div>
-                            <div>
-                                <div class="font-bold text-sm">{{ data.name }}</div>
-                                <div class="flex gap-1 flex-wrap mt-1">
-                                    <Tag v-for="cat in data.categoryNames" :key="cat" :value="cat" severity="info" class="!text-[10px] !px-1.5 !py-0.5" />
+                            <div class="flex flex-col gap-1">
+                                <span class="font-bold text-sm text-surface-800 dark:text-surface-100 leading-tight">{{ data.name }}</span>
+                                <div class="flex gap-1 flex-wrap">
+                                    <Badge v-for="cat in data.categoryNames" :key="cat" :value="cat" severity="secondary" class="!text-[10px] !font-normal" />
+                                    <span v-if="data.categoryNames.length === 0" class="text-[10px] text-surface-400 italic">Tanpa Kategori</span>
                                 </div>
                             </div>
                         </div>
                     </template>
                 </Column>
 
-                <Column header="Lokasi Rak" style="width: 15%">
+                <Column header="Satuan & Stok" style="min-width: 200px">
+                    <template #body="{ data }">
+                        <div class="flex flex-col gap-1 py-1">
+                            <div 
+                                v-for="unit in data.units" 
+                                :key="unit.uuid" 
+                                class="flex justify-between items-center text-xs p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded transition-colors"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium min-w-[30px]">{{ unit.unitName }}</span>
+                                    <Badge 
+                                        :value="unit.currentStock || 0" 
+                                        :severity="getStockSeverity(unit.currentStock)" 
+                                        class="!min-w-[1.5rem] !h-[1.25rem] !text-[10px]"
+                                    />
+                                    <i v-if="unit.uuid === data.defaultUnitUuid" class="pi pi-star-fill text-yellow-500 text-[9px]" v-tooltip="'Satuan Utama'"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </Column>
+
+                <Column header="Lokasi" style="min-width: 150px">
                     <template #body="{ data }">
                          <div class="flex flex-wrap gap-1">
-                            <Tag v-for="shelf in getUniqueShelves(data)" :key="shelf" icon="pi pi-map-marker" :value="shelf" severity="warning" class="!text-[10px] !bg-orange-50 !text-orange-700 !border-orange-100" />
+                            <div v-for="shelf in getUniqueShelves(data)" :key="shelf" class="flex items-center gap-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded text-[11px] border border-orange-100 dark:border-orange-800/30">
+                                <i class="pi pi-map-marker text-[9px]"></i>
+                                <span>{{ shelf }}</span>
+                            </div>
                             <span v-if="getUniqueShelves(data).length === 0" class="text-xs text-surface-400">-</span>
                         </div>
                     </template>
                 </Column>
 
-                <Column header="Satuan & Harga" style="width: 40%">
+                <Column header="Daftar Harga" style="min-width: 220px">
                     <template #body="{ data }">
-                        <div class="flex flex-col gap-1.5 py-1">
-                            <div 
-                                v-for="unit in data.units" 
-                                :key="unit.uuid" 
-                                class="flex justify-between items-center text-xs border-b border-surface-100 dark:border-surface-800 pb-1 last:border-0"
-                            >
-                                <div class="flex flex-col">
-                                    <div class="flex items-center gap-1">
-                                        <span class="font-bold">{{ unit.unitName }}</span>
-                                        <span v-if="unit.uuid === data.defaultUnitUuid" class="text-[9px] bg-primary-600 text-white px-1 rounded font-bold">UTAMA</span>
-                                    </div>
-                                    <span class="text-[10px] text-surface-500">Stok: {{ unit.currentStock || 0 }}</span>
-                                </div>
-                                
-                                <div class="text-right">
-                                    <div v-for="price in (data.prices || []).filter(p => p.unitUuid === unit.uuid)" :key="price.uuid" class="flex justify-end gap-1">
+                         <div class="flex flex-col gap-1 py-1">
+                            <div v-for="unit in data.units" :key="unit.uuid + '_price'" class="text-xs">
+                                <div v-for="price in (data.prices || []).filter(p => p.unitUuid === unit.uuid)" :key="price.uuid" class="flex justify-between items-center border-b border-dashed border-surface-200 dark:border-surface-700 last:border-0 py-0.5">
+                                    <span class="text-surface-500 text-[10px] w-12">{{ unit.unitName }}</span>
+                                    <div class="flex flex-col items-end">
                                         <span class="font-mono font-medium">{{ formatCurrency(price.price) }}</span>
-                                        <span v-if="price.minWholesaleQty > 0" class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100">
-                                            Min: {{ price.minWholesaleQty }}
+                                        <span v-if="price.minWholesaleQty > 0" class="text-[9px] text-green-600 bg-green-50 dark:bg-green-900/20 px-1 rounded">
+                                            Grosir ≥ {{ price.minWholesaleQty }}
                                         </span>
                                     </div>
-                                    <span v-if="!(data.prices || []).find(p => p.unitUuid === unit.uuid)" class="text-[10px] text-red-400 italic">Belum ada harga</span>
                                 </div>
                             </div>
                         </div>
                     </template>
                 </Column>
 
-                <Column style="width: 100px; text-align: center" frozen alignFrozen="right">
+                <Column header="Aksi" style="width: 100px; text-align: center" frozen alignFrozen="right">
                     <template #body="{ data }">
                         <div class="flex justify-center gap-1">
                             <Button 
                                 icon="pi pi-pencil" 
-                                severity="secondary" 
-                                text 
+                                outlined
                                 rounded 
+                                severity="info"
+                                size="small"
                                 v-tooltip.top="'Edit'" 
                                 @click="handleEdit(data)" 
-                                class="hover:bg-blue-50 hover:text-blue-600"
+                                class="!w-8 !h-8"
                             />
                             <Button 
                                 icon="pi pi-trash" 
-                                severity="secondary" 
-                                text 
+                                outlined
                                 rounded 
+                                severity="danger" 
+                                size="small"
                                 v-tooltip.top="'Hapus'" 
                                 @click="confirmDelete(data)" 
-                                class="hover:bg-red-50 hover:text-red-600"
+                                class="!w-8 !h-8"
                             />
                         </div>
                     </template>
@@ -278,7 +292,6 @@ defineExpose({ refresh });
 </template>
 
 <style scoped>
-/* Styling Table agar lebih compact */
 :deep(.p-datatable-tbody > tr > td) {
     vertical-align: top;
     padding-top: 0.75rem;

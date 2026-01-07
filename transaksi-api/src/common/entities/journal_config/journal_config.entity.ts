@@ -20,7 +20,7 @@ export class JournalConfigEntity {
   @Column({ name: 'transaction_type', length: 50 })
   transactionType: string;
 
-  // Contoh: 'grand_total', 'nominal_ar', 'stok_min_'
+  // Contoh: 'grand_total', 'nominal_ar', 'stok_qty_'
   // Tips: Akhiri dengan '_' jika ingin menangkap key dinamis (wildcard)
   @Column({ name: 'detail_key', length: 100 })
   detailKey: string;

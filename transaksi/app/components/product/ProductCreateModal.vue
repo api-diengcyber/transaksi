@@ -92,7 +92,7 @@ const initForm = () => {
     submitted.value = false;
 };
 
-// --- LOAD DATA (FIXED) ---
+// --- LOAD DATA (FIXED LOGIC) ---
 const loadProductData = async (uuid) => {
     loading.value = true;
     try {
@@ -110,13 +110,22 @@ const loadProductData = async (uuid) => {
             ? cats.map(pc => pc.category?.uuid).filter(Boolean) 
             : [];
 
+        // [FIX] Map Unit UUID ke TempID baru untuk Frontend
+        // Kita tidak boleh menggunakan UUID sebagai tempId karena akan tercampur dengan number dari Date.now()
+        // Buat map: realUuid -> generatedTempId
+        const unitUuidToTempIdMap = {};
+        
         // 3. Mapping Units 
         const units = data.units || [];
-        configUnits.value = units.map(u => {
-            const currentQty = Number(u.currentStock || 0); 
+        configUnits.value = units.map((u, index) => {
+            const currentQty = Number(u.currentStock || 0);
+            const newTempId = Date.now() + index + Math.random(); // Generate Unique ID
+            
+            unitUuidToTempIdMap[u.uuid] = newTempId; // Simpan mapping
+
             return {
                 uuid: u.uuid, 
-                tempId: u.uuid, 
+                tempId: newTempId, // Gunakan tempId baru
                 unitName: u.unitName,
                 multiplier: Number(u.unitMultiplier),
                 barcode: u.barcode,
@@ -127,12 +136,12 @@ const loadProductData = async (uuid) => {
             };
         });
 
-        // 4. Mapping Prices
+        // 4. Mapping Prices (Gunakan Map tadi untuk link ke unit)
         const prices = data.prices || data.price || [];
-        configPrices.value = prices.map(p => ({
+        configPrices.value = prices.map((p, index) => ({
             uuid: p.uuid,
-            tempId: Date.now() + Math.random(), 
-            unitTempId: p.unitUuid,
+            tempId: Date.now() + index + 1000 + Math.random(), 
+            unitTempId: unitUuidToTempIdMap[p.unitUuid], // Link ke tempId unit yang baru digenerate
             name: p.name,
             price: Number(p.price),
             minWholesaleQty: Number(p.minWholesaleQty) || 0, 
@@ -142,6 +151,7 @@ const loadProductData = async (uuid) => {
         // 5. Mapping Shelves
         const allShelves = data.shelve || [];
         configUnits.value.forEach(unitItem => {
+            // Filter berdasarkan UUID asli unit
             const related = allShelves.filter(s => s.unitUuid === unitItem.uuid);
             if (related.length > 0) {
                 unitItem.allocations = related.map(rs => ({
@@ -160,19 +170,14 @@ const loadProductData = async (uuid) => {
     }
 };
 
-// --- WATCHERS (CRITICAL FIX) ---
+// --- WATCHERS ---
 watch(() => props.visible, async (val) => {
     if (val) {
-        // [PENTING] Tunggu update prop selesai dari parent
         await nextTick(); 
-        
-        // Selalu bersihkan form dulu agar tidak muncul data produk sebelumnya
         initForm();
         
-        // Load referensi
         await Promise.all([fetchShelves(), fetchCategories()]);
         
-        // Cek props.productUuid langsung setelah nextTick
         if (props.productUuid) {
             await loadProductData(props.productUuid);
         }
@@ -187,6 +192,7 @@ const addUnitRow = () => {
         tempId: newId, uuid: null, unitName: 'PCS', multiplier: 1, barcode: '', 
         isDefault: isFirst, allocations: [], oldQty: 0, newQty: 0,
     });
+    // Otomatis tambah 1 harga umum
     configPrices.value.push({ 
         tempId: newId + 1, uuid: null, unitTempId: newId, name: 'Umum', 
         price: 0, minWholesaleQty: 0, isDefault: isFirst 
@@ -194,22 +200,37 @@ const addUnitRow = () => {
 };
 
 const removeUnitRow = (index) => {
-    if (configUnits.value.length <= 1) return;
+    if (configUnits.value.length <= 1) {
+        toast.add({severity:'warn', summary:'Info', detail:'Minimal satu satuan harus ada.'});
+        return;
+    }
     const removed = configUnits.value[index];
     configUnits.value.splice(index, 1);
+    // Hapus harga yang terhubung ke unit ini
     configPrices.value = configPrices.value.filter(p => p.unitTempId !== removed.tempId);
+    
+    // Reset default jika yang dihapus adalah default
     if (removed.isDefault && configUnits.value.length > 0) {
         configUnits.value[0].isDefault = true;
     }
 };
+
 const setUnitDefault = (index) => { configUnits.value.forEach((u, i) => u.isDefault = (i === index)); };
 
 const addPriceRow = () => {
     const defaultUnit = configUnits.value[0];
     if(!defaultUnit) return;
-    configPrices.value.push({ tempId: Date.now(), uuid: null, unitTempId: defaultUnit.tempId, name: '', price: 0, minWholesaleQty: 0, isDefault: false });
+    configPrices.value.push({ 
+        tempId: Date.now(), uuid: null, unitTempId: defaultUnit.tempId, name: '', price: 0, minWholesaleQty: 0, isDefault: false 
+    });
 };
-const removePriceRow = (index) => { configPrices.value.splice(index, 1); };
+
+const removePriceRow = (index) => { 
+    if (configPrices.value.length <= 1 && configUnits.value.length > 0) {
+         // Optional: Prevent deleting the last price
+    }
+    configPrices.value.splice(index, 1); 
+};
 const setPriceDefault = (index) => { configPrices.value.forEach((p, i) => p.isDefault = (i === index)); };
 
 const addStockAllocation = (unitIndex) => { 
@@ -237,33 +258,42 @@ const saveProduct = async () => {
             const newQ = Number(u.newQty) || 0;
             if (newQ !== oldQ) { 
                 stockAdjustments.push({
-                    unitUuid: u.uuid || u.tempId, 
+                    unitUuid: u.uuid, // Kirim UUID jika ada (untuk barang lama)
+                    unitTempId: u.tempId, // Kirim TempId (untuk barang baru, nanti dibaca backend)
                     oldQty: oldQ,
                     newQty: newQ
                 });
             }
         });
 
+        // Construct Payload
+        // Backend mengharapkan struktur ini
         const payload = {
             name: product.name,
             categoryUuids: product.categoryUuids, 
             units: configUnits.value.map(u => ({
                 uuid: u.uuid, 
-                tempId: u.tempId, 
-                name: u.unitName,
+                tempId: u.tempId, // Penting untuk mapping relasi harga/stok di backend
+                name: u.unitName, // Backend pakai 'unitName' di controller tapi 'name' di service? Sesuaikan dengan DTO service Anda
                 multiplier: Number(u.multiplier),
                 barcode: u.barcode,
                 isDefault: u.isDefault
             })),
             prices: configPrices.value.map(p => ({
                 uuid: p.uuid, 
-                unitTempId: p.unitTempId, 
+                unitTempId: p.unitTempId, // Link ke unit via tempId
                 name: p.name || 'Umum',
                 price: Number(p.price),
                 minWholesaleQty: Number(p.minWholesaleQty),
                 isDefault: p.isDefault
             })),
-            stockAdjustments: stockAdjustments,
+            stockAdjustments: stockAdjustments.map(sa => ({
+                // Logic Backend: check unitUuid first, if null check unitTempId map
+                unitUuid: sa.unitUuid ? sa.unitUuid : null,
+                unitTempId: sa.unitTempId, // Backend perlu handle ini untuk unit baru
+                oldQty: sa.oldQty,
+                newQty: sa.newQty
+            })),
             stocks: configUnits.value.map(u => ({
                 unitTempId: u.tempId,
                 qty: 0, 
@@ -288,7 +318,8 @@ const saveProduct = async () => {
         emit('update:visible', false);
     } catch (e) {
         console.error(e);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi kesalahan sistem' });
+        const msg = e.response?._data?.message || e.message || 'Terjadi kesalahan sistem';
+        toast.add({ severity: 'error', summary: 'Gagal', detail: msg });
     } finally {
         loading.value = false;
     }
@@ -304,10 +335,10 @@ const saveProduct = async () => {
         :style="{ width: '900px' }" 
         maximizable 
         class="p-fluid" 
-        :pt="{ content: { class: '!py-2 dark:bg-surface-100' } }"
+        :pt="{ content: { class: '!py-2 dark:bg-surface-900' }, header: { class: 'dark:bg-surface-900 dark:text-surface-0' } }"
     >
         
-        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6 bg-surface-0 dark:bg-surface-100">
+        <div class="p-4 rounded-lg border border-surface-200 dark:border-surface-700 mb-6 bg-surface-0 dark:bg-surface-800">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field mb-0">
                     <label class="font-bold text-xs mb-1 block text-surface-600 dark:text-surface-300">Nama Produk <span class="text-red-500">*</span></label>
@@ -331,17 +362,17 @@ const saveProduct = async () => {
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
-            <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
-                <span class="text-sm font-bold flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">1</span>
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2 text-surface-700 dark:text-surface-200">
+                    <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px]">1</span>
                     Satuan & Barcode
                 </span>
                 <Button label="Tambah" icon="pi pi-plus" size="small" text severity="primary" @click="addUnitRow" class="!py-0.5 !text-xs" />
             </div>
             <div class="p-0 overflow-x-auto">
                 <table class="w-full text-xs">
-                    <thead class="bg-surface-100 dark:bg-surface-700 text-surface-500 uppercase font-bold">
+                    <thead class="bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-300 uppercase font-bold">
                         <tr>
                             <th class="p-2 w-10 text-center">Def</th>
                             <th class="p-2 w-32">Satuan</th>
@@ -371,17 +402,17 @@ const saveProduct = async () => {
             </div>
         </div>
 
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
-            <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
-                <span class="text-sm font-bold flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-[10px]">2</span>
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2 text-surface-700 dark:text-surface-200">
+                    <span class="w-5 h-5 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 flex items-center justify-center text-[10px]">2</span>
                     Harga Jual
                 </span>
                 <Button label="Tambah" icon="pi pi-plus" size="small" text severity="success" @click="addPriceRow" class="!py-0.5 !text-xs" />
             </div>
             <div class="p-0 overflow-x-auto">
                 <table class="w-full text-xs">
-                    <thead class="bg-surface-100 dark:bg-surface-700 text-surface-500 uppercase font-bold">
+                    <thead class="bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-300 uppercase font-bold">
                         <tr>
                             <th class="p-2 w-10 text-center">Def</th>
                             <th class="p-2">Nama Harga</th>
@@ -409,10 +440,10 @@ const saveProduct = async () => {
             </div>
         </div>
         
-        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
-             <div class="p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
-                <span class="text-sm font-bold flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[10px]">3</span>
+        <div class="section-box mb-6 bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+             <div class="p-2 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2 text-surface-700 dark:text-surface-200">
+                    <span class="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 flex items-center justify-center text-[10px]">3</span>
                     {{ isEditMode ? 'Opname Stok' : 'Stok Awal' }}
                 </span>
             </div>
@@ -427,10 +458,10 @@ const saveProduct = async () => {
             </div>
         </div>
 
-        <div class="section-box bg-surface-0 dark:bg-surface-100 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
-             <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-700/50 border-b border-surface-200 dark:border-surface-700">
-                <span class="text-sm font-bold flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[10px]">4</span>
+        <div class="section-box bg-surface-0 dark:bg-surface-800 rounded border border-surface-200 dark:border-surface-700 overflow-hidden">
+             <div class="flex justify-between items-center p-2 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700">
+                <span class="text-sm font-bold flex items-center gap-2 text-surface-700 dark:text-surface-200">
+                    <span class="w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 flex items-center justify-center text-[10px]">4</span>
                     Lokasi Rak
                 </span>
                 <Button label="Rak Baru" icon="pi pi-plus-circle" size="small" text severity="help" @click="showShelfModal = true" class="!py-0.5 !text-xs" />
