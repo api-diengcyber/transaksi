@@ -41,8 +41,8 @@ defineProps({
 </template>
 
 <style scoped>
-.card-section { @apply dark:bg-surface-100 bg-surface-0 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6; }
-.section-title { @apply text-base font-bold text-surface-800 dark:text-surface-100 mb-4 pb-2 border-b border-surface-100 dark:border-surface-700; }
+.card-section { @apply bg-surface-0 rounded-xl shadow-sm border border-surface-200  p-6; }
+.section-title { @apply text-base font-bold  mb-4 pb-2 border-b border-surface-100 ; }
 .field label { @apply text-xs font-bold text-surface-500 uppercase tracking-wide mb-1.5 block; }
 .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }

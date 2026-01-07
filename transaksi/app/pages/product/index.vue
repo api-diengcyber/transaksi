@@ -81,7 +81,7 @@ definePageMeta({ layout: 'default' });
         <Toast />
         <ConfirmDialog />
 
-        <div class="flex items-end gap-3 mb-6 border-b border-surface-300 dark:border-surface-700">
+        <div class="flex items-end gap-3 mb-6 border-b border-surface-300">
 
             <button 
                 @click="activeMainTab = 'products'"
@@ -124,6 +124,7 @@ definePageMeta({ layout: 'default' });
 
                 <ShelveList 
                     v-else-if="activeMainTab === 'shelves'"
+                    fixedFilter="SHELF"
                     ref="shelfListRef"
                     @create="openCreateShelve" 
                     @edit="openEditShelve"
@@ -169,6 +170,6 @@ button {
     to { opacity: 1; transform: translateY(0); }
 }
 /* Catatan: Class .global-tab-active dan .global-tab-inactive sudah didefinisikan 
-   di base.css dan menggunakan dark:bg-surface-100 dan dark:border-surface-700 
+   di base.css dan menggunakan  dan  
    yang menjamin dukungan Dark Mode pada tombol tab. */
 </style>

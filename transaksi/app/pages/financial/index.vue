@@ -76,7 +76,7 @@ const tabs = [
         </nav>
       </div>
 
-      <div class="p-6 flex-1 bg-gray-50/30 overflow-auto relative">
+      <div class="p-6 flex-1 bg-surface-0 overflow-auto relative">
         <Transition name="fade" mode="out-in">
           
           <div v-if="activeTab === 'account'" key="account" class="h-full">

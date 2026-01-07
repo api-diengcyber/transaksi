@@ -158,7 +158,7 @@ onMounted(() => {
                 <h1 class="text-2xl font-bold tracking-tight">
                     Pengguna & Akses
                 </h1>
-                <p class="text-gray-500 dark:text-gray-400 mt-1">
+                <p class="text-gray-500  mt-1">
                     Kelola daftar pengguna, peran, dan hak akses aplikasi.
                 </p>
             </div>
@@ -173,24 +173,24 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-surface-0 dark:bg-surface-100 p-4 rounded-2xl border border-gray-200 dark:border-surface-700 shadow-sm">
+        <div class="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center bg-surface-0 p-4 rounded-2xl border border-surface-200  shadow-sm">
             
-            <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-surface-100 rounded-xl overflow-x-auto max-w-full lg:max-w-3xl no-scrollbar">
+            <div class="flex items-center gap-1 p-1 bg-gray-100  rounded-xl overflow-x-auto max-w-full lg:max-w-3xl no-scrollbar">
                 <button 
                     v-for="tab in roleTabs" 
                     :key="tab.role"
                     @click="activeRole = tab.role"
                     class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap outline-none focus:ring-2 focus:ring-primary/50"
                     :class="activeRole === tab.role 
-                        ? 'bg-surface-0 dark:bg-surface-700 text-primary-600 dark:text-primary-400 shadow-sm' 
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-surface-700/50'"
+                        ? 'bg-surface-0 text-primary-600  shadow-sm' 
+                        : 'text-gray-500  hover:text-gray-700 hover:bg-gray-200/50'"
                 >
                     <span>{{ tab.label }}</span>
                     <span 
                         class="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
                         :class="activeRole === tab.role 
-                            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
-                            : 'bg-gray-200 dark:bg-surface-600 text-gray-600 dark:text-gray-300'"
+                            ? 'bg-primary-50 text-primary-700 ' 
+                            : 'bg-gray-200  text-gray-600 '"
                     >
                         {{ tab.count }}
                     </span>
@@ -202,12 +202,12 @@ onMounted(() => {
                 <InputText 
                     v-model="filters.global.value" 
                     placeholder="Cari nama atau email..." 
-                    class="w-full !pl-10 !rounded-xl !border-gray-200 dark:!border-surface-700 dark:!bg-surface-800 dark:text-white focus:!border-primary !transition-all" 
+                    class="w-full !pl-10 !rounded-xl !border-gray-200 focus:!border-primary !transition-all" 
                 />
             </div>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-100 border border-gray-200 dark:border-surface-700 rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
+        <div class="bg-surface-0 border border-surface-200  rounded-2xl shadow-sm overflow-hidden flex-1 flex flex-col">
             <DataTable 
                 :value="filteredUsers" 
                 :loading="loading" 
@@ -217,17 +217,17 @@ onMounted(() => {
                 tableStyle="min-width: 50rem"
                 class="flex-1"
                 :pt="{
-                    headerRow: { class: 'bg-gray-50 dark:bg-surface-100 text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wider font-semibold border-b border-gray-200 dark:border-surface-700' },
-                    bodyRow: { class: 'hover:bg-gray-50 dark:hover:bg-surface-800/50 transition-colors border-b border-gray-100 dark:border-surface-800 last:border-0' }
+                    headerRow: { class: 'bg-gray-50  text-gray-700  text-xs uppercase tracking-wider font-semibold border-b border-gray-200 ' },
+                    bodyRow: { class: 'hover:bg-gray-50 /50 transition-colors border-b border-gray-100  last:border-0' }
                 }"
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-16 text-center">
-                        <div class="bg-gray-50 dark:bg-surface-100 p-4 rounded-full mb-4">
-                            <i class="pi pi-users text-4xl text-gray-400 dark:text-gray-500"></i>
+                        <div class="bg-gray-50  p-4 rounded-full mb-4">
+                            <i class="pi pi-users text-4xl text-gray-400"></i>
                         </div>
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Data Tidak Ditemukan</h3>
-                        <p class="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                        <h3 class="text-lg font-semibold text-gray-800">Data Tidak Ditemukan</h3>
+                        <p class="text-gray-500  max-w-xs mx-auto">
                             Tidak ada pengguna dengan kriteria pencarian atau filter peran yang dipilih.
                         </p>
                     </div>
@@ -240,8 +240,8 @@ onMounted(() => {
                                 {{ data.username.charAt(0).toUpperCase() }}
                             </div>
                             <div>
-                                <div class="font-bold text-gray-800 dark:text-gray-100 text-sm">{{ data.username }}</div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400">{{ data.email || 'No Email' }}</div>
+                                <div class="font-bold text-gray-800 text-sm">{{ data.username }}</div>
+                                <div class="text-xs text-gray-500 ">{{ data.email || 'No Email' }}</div>
                             </div>
                         </div>
                     </template>
@@ -267,8 +267,8 @@ onMounted(() => {
                         <div 
                             class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border"
                             :class="!data.deletedAt 
-                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800' 
-                                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'"
+                                ? 'bg-green-50 text-green-700 border-green-200 ' 
+                                : 'bg-red-50 text-red-700 border-red-200  '"
                         >
                             <span class="w-1.5 h-1.5 rounded-full mr-2" :class="!data.deletedAt ? 'bg-green-500' : 'bg-red-500'"></span>
                             {{ !data.deletedAt ? 'Aktif' : 'Nonaktif' }}
@@ -284,7 +284,7 @@ onMounted(() => {
                                 text 
                                 rounded 
                                 severity="info" 
-                                class="!w-8 !h-8 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                class="!w-8 !h-8 hover:bg-blue-50"
                                 v-tooltip.top="'Edit'"
                                 @click="openEditUser(data)" 
                             />
@@ -293,7 +293,7 @@ onMounted(() => {
                                 text 
                                 rounded 
                                 severity="danger" 
-                                class="!w-8 !h-8 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                class="!w-8 !h-8 hover:bg-red-50"
                                 v-tooltip.top="'Hapus'"
                                 @click="confirmDeleteUser(data)" 
                             />

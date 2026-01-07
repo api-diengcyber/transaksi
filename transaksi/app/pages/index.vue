@@ -53,12 +53,12 @@ const quickMenu = [
 
 // Menu Sekunder (Grid Kecil)
 const secondaryMenu = [
-    { label: 'Retur Barang', icon: 'pi pi-refresh', route: '/transaction?tab=return', color: 'text-rose-500 bg-rose-50 dark:bg-rose-900/20' },
-    { label: 'Hutang Piutang', icon: 'pi pi-book', route: '/arap', color: 'text-cyan-500 bg-cyan-50 dark:bg-cyan-900/20' },
-    { label: 'Stok Opname', icon: 'pi pi-check-square', route: '/inventory', color: 'text-lime-500 bg-lime-50 dark:bg-lime-900/20' },
-    { label: 'Produksi', icon: 'pi pi-cog', route: '/production', color: 'text-slate-500 bg-slate-100 dark:bg-slate-800' },
-    { label: 'Pelanggan', icon: 'pi pi-users', route: '/member', color: 'text-pink-500 bg-pink-50 dark:bg-pink-900/20' },
-    { label: 'Pengaturan', icon: 'pi pi-cog', route: '/setting', color: 'text-gray-500 bg-gray-100 dark:bg-gray-800' },
+    { label: 'Retur Barang', icon: 'pi pi-refresh', route: '/transaction?tab=return', color: 'text-rose-500 bg-rose-50' },
+    { label: 'Hutang Piutang', icon: 'pi pi-book', route: '/arap', color: 'text-cyan-500 bg-cyan-50' },
+    { label: 'Stok Opname', icon: 'pi pi-check-square', route: '/inventory', color: 'text-lime-500 bg-lime-50 ' },
+    { label: 'Produksi', icon: 'pi pi-cog', route: '/production', color: 'text-slate-500 bg-slate-100' },
+    { label: 'Pelanggan', icon: 'pi pi-users', route: '/member', color: 'text-pink-500 bg-pink-50' },
+    { label: 'Pengaturan', icon: 'pi pi-cog', route: '/setting', color: 'text-gray-500 bg-gray-100' },
 ];
 
 // Mock Data untuk Aktivitas Terbaru (Timeline)
@@ -75,13 +75,13 @@ const navigateTo = (path) => router.push(path);
 <template>
     <div class="animate-fade-in min-h-full flex flex-col gap-8">
         
-        <div class="relative bg-gradient-to-r from-primary-900 to-primary-700 dark:from-surface-800 dark:to-surface-900 rounded-3xl p-8 lg:p-10 shadow-2xl overflow-hidden text-white">
+        <div class="relative bg-gradient-to-r from-primary-500 to-primary-200 rounded-3xl p-8 lg:p-10 shadow-2xl overflow-hidden">
             <div class="absolute top-0 right-0 w-64 h-64 bg-surface-0 opacity-5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
             <div class="absolute bottom-0 left-0 w-48 h-48 bg-primary-400 opacity-10 rounded-full blur-2xl transform -translate-x-1/2 translate-y-1/2"></div>
             
             <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-0 backdrop-blur-md border border-white/10 text-xs font-medium mb-3 text-primary-100">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-0 backdrop-blur-md border border-white/10 text-xs font-medium mb-3">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                         {{ storeName }} Active
                     </div>
@@ -104,13 +104,13 @@ const navigateTo = (path) => router.push(path);
             <div class="lg:col-span-2 space-y-8">
                 
                 <div>
-                    <h3 class="text-lg font-bold text-surface-700 dark:text-surface-100 mb-4 flex items-center gap-2">
+                    <h3 class="text-lg font-bold  mb-4 flex items-center gap-2">
                         <i class="pi pi-bolt text-amber-500"></i> Aksi Cepat
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div v-for="item in quickMenu" :key="item.title" 
                              @click="navigateTo(item.route)"
-                             class="group relative overflow-hidden bg-surface-0 dark:bg-surface-100 p-5 rounded-2xl border border-surface-100 dark:border-surface-700 shadow-sm hover:shadow-lg transition-all cursor-pointer">
+                             class="group relative overflow-hidden bg-surface-0 p-5 rounded-2xl border border-surface-100  shadow-sm hover:shadow-lg transition-all cursor-pointer">
                             
                             <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-10 rounded-bl-full transition-transform group-hover:scale-110" :class="item.color"></div>
                             
@@ -119,8 +119,8 @@ const navigateTo = (path) => router.push(path);
                                     <i :class="[item.icon, 'text-xl']"></i>
                                 </div>
                                 <div>
-                                    <h4 class="font-bold text-surface-800 dark:text-surface-100 text-lg group-hover:text-primary-600 transition-colors">{{ item.title }}</h4>
-                                    <p class="text-xs text-surface-500 dark:text-surface-400 mt-1 line-clamp-2">{{ item.desc }}</p>
+                                    <h4 class="font-bold  text-lg group-hover:text-primary-600 transition-colors">{{ item.title }}</h4>
+                                    <p class="text-xs text-surface-500  mt-1 line-clamp-2">{{ item.desc }}</p>
                                 </div>
                             </div>
                             <div class="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
@@ -131,17 +131,17 @@ const navigateTo = (path) => router.push(path);
                 </div>
 
                 <div>
-                    <h3 class="text-lg font-bold text-surface-700 dark:text-surface-100 mb-4 flex items-center gap-2">
+                    <h3 class="text-lg font-bold  mb-4 flex items-center gap-2">
                         <i class="pi pi-th-large text-primary-500"></i> Menu Lainnya
                     </h3>
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
                         <div v-for="item in secondaryMenu" :key="item.label"
                              @click="navigateTo(item.route)"
-                             class="flex flex-col items-center justify-center gap-2 p-4 bg-surface-0 dark:bg-surface-100 border border-surface-100 dark:border-surface-700 rounded-2xl hover:border-primary-200 dark:hover:border-primary-800 hover:shadow-md cursor-pointer transition-all group">
+                             class="flex flex-col items-center justify-center gap-2 p-4 bg-surface-0 border border-surface-100  rounded-2xl hover:border-primary-200 hover:shadow-md cursor-pointer transition-all group">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110" :class="item.color">
                                 <i :class="[item.icon, 'text-lg']"></i>
                             </div>
-                            <span class="text-xs font-semibold text-surface-600 dark:text-surface-300 text-center">{{ item.label }}</span>
+                            <span class="text-xs font-semibold  text-center">{{ item.label }}</span>
                         </div>
                     </div>
                 </div>
@@ -150,48 +150,48 @@ const navigateTo = (path) => router.push(path);
 
             <div class="space-y-6">
                 
-                <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-100 dark:border-surface-700 p-5">
-                    <h3 class="font-bold text-surface-700 dark:text-surface-100 mb-4 text-sm uppercase tracking-wider">Ringkasan Hari Ini</h3>
+                <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-100  p-5">
+                    <h3 class="font-bold  mb-4 text-sm uppercase tracking-wider">Ringkasan Hari Ini</h3>
                     <div class="space-y-4">
-                        <div class="flex justify-between items-center p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl">
+                        <div class="flex justify-between items-center p-3 bg-surface-50  rounded-xl">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center">
+                                <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
                                     <i class="pi pi-receipt"></i>
                                 </div>
-                                <span class="text-sm font-medium text-surface-600 dark:text-surface-300">Transaksi</span>
+                                <span class="text-sm font-medium ">Transaksi</span>
                             </div>
-                            <span class="font-bold text-surface-800 dark:text-surface-100">24 Nota</span>
+                            <span class="font-bold ">24 Nota</span>
                         </div>
-                        <div class="flex justify-between items-center p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl">
+                        <div class="flex justify-between items-center p-3 bg-surface-50  rounded-xl">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center">
+                                <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
                                     <i class="pi pi-box"></i>
                                 </div>
-                                <span class="text-sm font-medium text-surface-600 dark:text-surface-300">Item Terjual</span>
+                                <span class="text-sm font-medium ">Item Terjual</span>
                             </div>
-                            <span class="font-bold text-surface-800 dark:text-surface-100">145 Pcs</span>
+                            <span class="font-bold ">145 Pcs</span>
                         </div>
-                        <div class="flex justify-between items-center p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl">
+                        <div class="flex justify-between items-center p-3 bg-surface-50  rounded-xl">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center">
+                                <div class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
                                     <i class="pi pi-exclamation-circle"></i>
                                 </div>
-                                <span class="text-sm font-medium text-surface-600 dark:text-surface-300">Piutang Jatuh Tempo</span>
+                                <span class="text-sm font-medium ">Piutang Jatuh Tempo</span>
                             </div>
                             <span class="font-bold text-red-600">3 Orang</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-100 dark:border-surface-700 p-5">
+                <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-100  p-5">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold text-surface-700 dark:text-surface-100 text-sm uppercase tracking-wider">Aktivitas Terakhir</h3>
+                        <h3 class="font-bold  text-sm uppercase tracking-wider">Aktivitas Terakhir</h3>
                         <button class="text-xs text-primary-600 hover:underline">Lihat Semua</button>
                     </div>
                     
-                    <div class="relative pl-2 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-200 dark:before:bg-surface-700">
+                    <div class="relative pl-2 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-200">
                         <div v-for="(act, idx) in recentActivities" :key="idx" class="relative pl-6">
-                            <div class="absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 border-white dark:border-surface-800"
+                            <div class="absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 border-white "
                                 :class="{
                                     'bg-emerald-500': act.type === 'in',
                                     'bg-red-500': act.type === 'out',
@@ -200,7 +200,7 @@ const navigateTo = (path) => router.push(path);
                             
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <h5 class="text-sm font-bold text-surface-800 dark:text-surface-200">{{ act.title }}</h5>
+                                    <h5 class="text-sm font-bold text-surface-800">{{ act.title }}</h5>
                                     <span class="text-xs text-surface-400 block mt-0.5">{{ act.time }}</span>
                                 </div>
                                 <span class="text-xs font-bold"

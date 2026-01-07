@@ -2,11 +2,7 @@ import { Injectable, Inject, NotFoundException, BadRequestException } from "@nes
 import { ProductCategoryEntity } from "src/common/entities/product_category/product_category.entity";
 import { Repository, DataSource, Like, EntityManager } from "typeorm";
 import { CreateCategoryDto, UpdateCategoryDto } from "./dto/create-category.dto";
-
-// [BARU] Helper untuk menghasilkan pengenal lokal
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-// [BARU] Helper untuk menghasilkan UUID dengan prefix Store (Contoh format: [storeUuid]-CAT-[local_identifier])
-const generateCategoryUuid = (storeUuid: string) => `${storeUuid}-CAT-${generateLocalUuid()}`;
+import { generateCategoryUuid } from "src/common/utils/generate_uuid_util";
 
 @Injectable()
 export class CategoryService {

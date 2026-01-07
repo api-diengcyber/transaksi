@@ -30,7 +30,7 @@
           + Tambah Kurir
         </button>
       </div>
-      <div class="bg-surface-0 rounded-xl shadow border border-gray-100 overflow-hidden">
+      <div class="bg-surface-0 rounded-xl shadow border border-surface-100 overflow-hidden">
         <table class="w-full text-left border-collapse">
           <thead class="bg-gray-50 border-b">
             <tr>
@@ -59,7 +59,7 @@
           + Tambah Biaya Rute
         </button>
       </div>
-      <div class="bg-surface-0 rounded-xl shadow border border-gray-100 overflow-hidden">
+      <div class="bg-surface-0 rounded-xl shadow border border-surface-100 overflow-hidden">
         <table class="w-full text-left border-collapse">
           <thead class="bg-gray-50 border-b">
             <tr>

@@ -2,6 +2,7 @@ import { Injectable, Inject, BadRequestException, NotFoundException } from '@nes
 import { Repository, DataSource, EntityManager } from 'typeorm';
 import { ProductService } from '../product/product.service';
 import { ProductRecipeIngredientEntity } from 'src/common/entities/product_recipe_ingredient/product_recipe_ingredient.entity';
+import { generateRecipeIngredientUuid } from 'src/common/utils/generate_uuid_util';
 
 // --- DTO Interface (sesuai dengan payload dari controller) ---
 interface IngredientPayload {
@@ -9,12 +10,6 @@ interface IngredientPayload {
   unitUuid: string;
   qty: number;
 }
-// --- END DTO Interface ---
-
-// [BARU] Helper untuk menghasilkan pengenal lokal
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-// [BARU] Helper untuk menghasilkan UUID Recipe Ingredient (Format: [storeUuid]-RCI-[local_identifier])
-const generateRecipeIngredientUuid = (storeUuid: string) => `${storeUuid}-RCI-${generateLocalUuid()}`;
 
 @Injectable()
 export class RecipeService {

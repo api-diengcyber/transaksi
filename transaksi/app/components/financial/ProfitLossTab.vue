@@ -18,7 +18,7 @@ const formatCurrency = (val: number) => {
 <template>
     <div class="flex flex-col gap-4 max-w-4xl mx-auto w-full animate-fade-in">
         
-        <div class="p-6 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 text-center relative overflow-hidden">
+        <div class="p-6 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  text-center relative overflow-hidden">
             <p class="text-sm font-bold text-surface-500 uppercase tracking-widest mb-2">Laba / Rugi Bersih</p>
             <h2 class="text-4xl font-black" :class="data.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'">
                 {{ formatCurrency(data.netProfit) }}
@@ -26,9 +26,9 @@ const formatCurrency = (val: number) => {
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-blue-500"></div>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-            <div class="p-4 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center">
-                <h3 class="font-bold text-surface-800 dark:text-surface-0">PENDAPATAN (REVENUE)</h3>
+        <div class="bg-surface-0 rounded-xl shadow-sm border border-surface-200  overflow-hidden">
+            <div class="p-4 bg-surface-50 border-b border-surface-200  flex justify-between items-center">
+                <h3 class="font-bold ">PENDAPATAN (REVENUE)</h3>
                 <span class="font-bold text-emerald-600">{{ formatCurrency(data.totalRevenue) }}</span>
             </div>
             <DataTable :value="data.revenue" size="small" stripedRows>
@@ -42,9 +42,9 @@ const formatCurrency = (val: number) => {
             </DataTable>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-100 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-            <div class="p-4 bg-surface-50 dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700 flex justify-between items-center">
-                <h3 class="font-bold text-surface-800 dark:text-surface-0">BEBAN (EXPENSE)</h3>
+        <div class="bg-surface-0 rounded-xl shadow-sm border border-surface-200  overflow-hidden">
+            <div class="p-4 bg-surface-50 border-b border-surface-200  flex justify-between items-center">
+                <h3 class="font-bold ">BEBAN (EXPENSE)</h3>
                 <span class="font-bold text-rose-600">{{ formatCurrency(data.totalExpense) }}</span>
             </div>
             <DataTable :value="data.expense" size="small" stripedRows>

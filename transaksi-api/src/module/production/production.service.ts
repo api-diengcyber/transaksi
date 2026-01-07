@@ -8,10 +8,7 @@ import { Repository } from 'typeorm';
 import { ProductionEntity } from 'src/common/entities/production/production.entity'; // Asumsi path entity
 import { CreateProductionDto } from './dto/create-production.dto';
 import { UpdateProductionDto } from './dto/update-production.dto';
-
-
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-const generateProductionDetailUuid = (storeUuid: string) => `${storeUuid}-PRDN-${generateLocalUuid()}`;
+import { generateProductionDetailUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class ProductionService {

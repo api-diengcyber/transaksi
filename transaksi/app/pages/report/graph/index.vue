@@ -236,19 +236,19 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-surface-50 dark:bg-surface-100 transition-colors duration-300">
+    <div class="flex flex-col h-full bg-surface-50 transition-colors duration-300">
         
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Analisa POS</h1>
-                <p class="text-surface-500 dark:text-surface-400 mt-1 text-sm">Grafik performa pos.</p>
+                <h1 class="text-2xl md:text-3xl font-bold  tracking-tight">Analisa POS</h1>
+                <p class="text-surface-500  mt-1 text-sm">Grafik performa pos.</p>
             </div>
 
-            <div class="w-full md:w-auto p-1.5 rounded-xl bg-surface-0 dark:bg-surface-100 border border-surface-200 dark:border-surface-700 shadow-sm flex flex-col sm:flex-row gap-2">
-                <div class="flex gap-1 bg-surface-100 dark:bg-surface-700 p-1 rounded-lg">
-                    <button @click="applyQuickFilter(7)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-surface-0 dark:hover:bg-surface-600 hover:shadow-sm text-surface-600 dark:text-surface-300">7 Hari</button>
-                    <button @click="applyQuickFilter(30)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-surface-0 dark:hover:bg-surface-600 hover:shadow-sm text-surface-600 dark:text-surface-300">30 Hari</button>
-                    <button @click="applyQuickFilter('thisMonth')" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-surface-0 dark:hover:bg-surface-600 hover:shadow-sm text-surface-600 dark:text-surface-300">Bulan Ini</button>
+            <div class="w-full md:w-auto p-1.5 rounded-xl bg-surface-0 border border-surface-200  shadow-sm flex flex-col sm:flex-row gap-2">
+                <div class="flex gap-1 bg-surface-100 p-1 rounded-lg">
+                    <button @click="applyQuickFilter(7)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-surface-0  hover:shadow-sm ">7 Hari</button>
+                    <button @click="applyQuickFilter(30)" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-surface-0  hover:shadow-sm ">30 Hari</button>
+                    <button @click="applyQuickFilter('thisMonth')" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-surface-0  hover:shadow-sm ">Bulan Ini</button>
                 </div>
 
                 <div class="flex gap-2 w-full sm:w-auto">
@@ -269,13 +269,13 @@ defineExpose({ refreshData });
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
             
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-2">
                         <i class="pi pi-arrow-up-right text-emerald-500 text-sm"></i>
                         <span class="text-xs font-bold text-surface-500 uppercase tracking-wide">Pemasukan</span>
                     </div>
-                    <div class="text-xl font-black text-surface-800 dark:text-surface-100 tracking-tight truncate">
+                    <div class="text-xl font-black  tracking-tight truncate">
                         {{ formatCurrency(summary.totalSale) }}
                     </div>
                 </div>
@@ -284,13 +284,13 @@ defineExpose({ refreshData });
                 </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-2">
                         <i class="pi pi-arrow-down-left text-orange-500 text-sm"></i>
                         <span class="text-xs font-bold text-surface-500 uppercase tracking-wide">Pengeluaran</span>
                     </div>
-                    <div class="text-xl font-black text-surface-800 dark:text-surface-100 tracking-tight truncate">
+                    <div class="text-xl font-black  tracking-tight truncate">
                         {{ formatCurrency(summary.totalBuy) }}
                     </div>
                 </div>
@@ -299,13 +299,13 @@ defineExpose({ refreshData });
                 </div>
             </div>
             
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-2">
                         <i class="pi pi-minus-circle text-red-500 text-sm"></i>
                         <span class="text-xs font-bold text-surface-500 uppercase tracking-wide">Retur Jual</span>
                     </div>
-                    <div class="text-xl font-black text-red-600 dark:text-red-400 tracking-tight truncate">
+                    <div class="text-xl font-black text-red-600  tracking-tight truncate">
                         - {{ formatCurrency(summary.totalReturnSale) }}
                     </div>
                 </div>
@@ -314,13 +314,13 @@ defineExpose({ refreshData });
                 </div>
             </div>
             
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-2">
                         <i class="pi pi-plus-circle text-blue-500 text-sm"></i>
                         <span class="text-xs font-bold text-surface-500 uppercase tracking-wide">Retur Beli</span>
                     </div>
-                    <div class="text-xl font-black text-blue-600 dark:text-blue-400 tracking-tight truncate">
+                    <div class="text-xl font-black text-blue-600  tracking-tight truncate">
                         + {{ formatCurrency(summary.totalReturnBuy) }}
                     </div>
                 </div>
@@ -345,15 +345,15 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700 relative flex-1 p-6 flex flex-col">
+        <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200  relative flex-1 p-6 flex flex-col">
             <div class="flex justify-between items-center mb-6">
                 <div>
-                    <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100">Tren Arus Kas</h3>
+                    <h3 class="font-bold text-lg ">Tren Arus Kas</h3>
                     <p class="text-xs text-surface-500">Pergerakan omset vs pengeluaran harian</p>
                 </div>
                 </div>
 
-            <div v-if="loading" class="absolute inset-0 bg-surface-0/80 dark:bg-surface-100/80 z-20 flex items-center justify-center backdrop-blur-sm rounded-2xl">
+            <div v-if="loading" class="absolute inset-0 bg-surface-0/80 /80 z-20 flex items-center justify-center backdrop-blur-sm rounded-2xl">
                 <div class="flex flex-col items-center gap-3">
                     <i class="pi pi-spin pi-spinner text-3xl text-primary-500"></i>
                     <span class="text-xs font-bold text-surface-500">Memproses Data...</span>

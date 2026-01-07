@@ -34,10 +34,10 @@ const handleLogin = async () => {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col lg:flex-row bg-surface-0 dark:bg-surface-100 overflow-hidden">
+    <div class="min-h-screen flex flex-col lg:flex-row bg-surface-0 overflow-hidden">
         <Toast />
 
-        <div class="hidden lg:flex w-1/2 bg-primary-600 dark:bg-primary-900 relative items-center justify-center p-12 overflow-hidden">
+        <div class="hidden lg:flex w-1/2 bg-primary-600 relative items-center justify-center p-12 overflow-hidden">
             <div class="absolute top-[-20%] left-[-20%] w-[800px] h-[800px] bg-surface-0/10 rounded-full blur-3xl"></div>
             <div class="absolute bottom-[-20%] right-[-20%] w-[600px] h-[600px] bg-primary-400/20 rounded-full blur-3xl"></div>
             
@@ -57,25 +57,25 @@ const handleLogin = async () => {
         </div>
 
         <div class="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
-            <div class="w-full max-w-md bg-surface-0 dark:bg-surface-100 p-8 sm:p-10 rounded-3xl shadow-xl border border-surface-100 dark:border-surface-800 relative z-10 animate-fade-up">
+            <div class="w-full max-w-md bg-surface-0 p-8 sm:p-10 rounded-3xl shadow-xl border border-surface-100  relative z-10 animate-fade-up">
                 
                 <div class="text-center mb-10 lg:text-left">
                     <div class="lg:hidden w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mb-4 mx-auto shadow-lg">R</div>
-                    <h3 class="text-3xl font-bold text-surface-900 dark:text-surface-0 mb-2">Selamat Datang!</h3>
-                    <p class="text-surface-500 dark:text-surface-400">Masukkan detail akun untuk melanjutkan.</p>
+                    <h3 class="text-3xl font-bold  mb-2">Selamat Datang!</h3>
+                    <p class="text-surface-500 ">Masukkan detail akun untuk melanjutkan.</p>
                 </div>
 
                 <form @submit.prevent="handleLogin" class="flex flex-col gap-6">
                     
                     <div class="flex flex-col gap-2">
-                        <label class="text-sm font-bold text-surface-700 dark:text-surface-300 ml-1">Username</label>
+                        <label class="text-sm font-bold text-surface-700  ml-1">Username</label>
                         <div class="relative">
                             <i class="pi pi-user absolute left-4 top-1/2 -translate-y-1/2 text-surface-400 text-lg z-10"></i>
                             
                             <InputText 
                                 v-model="form.username" 
                                 placeholder="admin" 
-                                class="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 dark:bg-surface-100 border-none focus:ring-2 focus:ring-primary-500 transition-all text-surface-800 dark:text-surface-100" 
+                                class="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 border-none focus:ring-2 focus:ring-primary-500 transition-all " 
                                 :class="{'p-invalid': !form.username && loading}"
                             />
                         </div>
@@ -83,7 +83,7 @@ const handleLogin = async () => {
 
                     <div class="flex flex-col gap-2">
                         <div class="flex justify-between items-center ml-1">
-                            <label class="text-sm font-bold text-surface-700 dark:text-surface-300">Password</label>
+                            <label class="text-sm font-bold text-surface-700 ">Password</label>
                             <a href="#" class="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline">Lupa Sandi?</a>
                         </div>
                         <div class="relative">
@@ -94,7 +94,7 @@ const handleLogin = async () => {
                                 :feedback="false" 
                                 toggleMask 
                                 placeholder="••••••" 
-                                inputClass="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 dark:bg-surface-100 border-none focus:ring-2 focus:ring-primary-500 !text-surface-900 dark:!text-surface-0 shadow-sm placeholder:text-surface-400" 
+                                inputClass="w-full !pl-12 !py-3 !rounded-xl bg-surface-50 border-none focus:ring-2 focus:ring-primary-500 !text-surface-900 shadow-sm placeholder:text-surface-400" 
                                 class="w-full"
                             />
                         </div>
@@ -112,16 +112,16 @@ const handleLogin = async () => {
 
                 <div class="mt-8 text-center">
                     <p class="text-xs text-surface-400">
-                        Belum punya akun? <span class="text-surface-600 dark:text-surface-300 font-medium">Hubungi Administrator</span>
+                        Belum punya akun? <span class=" font-medium">Hubungi Administrator</span>
                     </p>
                 </div>
 
                 <div class="mt-8 text-center">
-                    <p class="text-sm text-surface-500 dark:text-surface-400">
+                    <p class="text-sm text-surface-500 ">
                         Belum punya akun atau toko? 
                         <NuxtLink 
                             to="/install" 
-                            class="text-primary-600 dark:text-primary-400 font-bold hover:underline cursor-pointer ml-1"
+                            class="text-primary-600  font-bold hover:underline cursor-pointer ml-1"
                         >
                             Buat Toko Sekarang
                         </NuxtLink>

@@ -4,11 +4,7 @@ import { Repository, DataSource, Like } from "typeorm";
 import { CreateTableDto, UpdateTableDto } from "./dto/create-table.dto";
 import { BookTableDto } from "./dto/update-status.dto";
 import { JournalService } from "../journal/journal.service";
-
-// Helper untuk menghasilkan pengenal lokal
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-// Helper untuk menghasilkan UUID Meja dengan prefix Store
-const generateTableUuid = (storeUuid: string) => `${storeUuid}-TBL-${generateLocalUuid()}`;
+import { generateTableUuid } from "src/common/utils/generate_uuid_util";
 
 @Injectable()
 export class TableService {

@@ -66,14 +66,14 @@ const onRemoveLogo = () => {
             <h3 class="section-title">Logo Toko</h3>
             <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                 <div class="shrink-0 relative">
-                    <img :src="currentLogoUrl" alt="Store Logo" class="w-24 h-24 object-cover rounded-full shadow-md border-4 border-surface-0 dark:border-surface-900" />
+                    <img :src="currentLogoUrl" alt="Store Logo" class="w-24 h-24 object-cover rounded-full shadow-md border-4 border-surface-0 " />
                     <div v-if="logoLoading" class="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
                         <ProgressSpinner style="width: 30px; height: 30px" strokeWidth="6" class="text-white" />
                     </div>
                 </div>
 
                 <div class="flex flex-col items-center sm:items-start">
-                    <p class="text-sm text-surface-600 dark:text-surface-400 mb-3">
+                    <p class="text-sm text-surface-600  mb-3">
                         Unggah logo baru (Max 1MB, format: JPG/PNG).
                     </p>
                     <div class="flex gap-2">
@@ -113,8 +113,8 @@ const onRemoveLogo = () => {
 </template>
 
 <style scoped>
-.card-section { @apply dark:bg-surface-100 bg-surface-0 rounded-xl shadow-sm border border-surface-200 dark:border-surface-800 p-6; }
-.section-title { @apply text-base font-bold text-surface-800 dark:text-surface-100 mb-4 pb-2 border-b border-surface-100 dark:border-surface-700; }
+.card-section { @apply bg-surface-0 rounded-xl shadow-sm border border-surface-200  p-6; }
+.section-title { @apply text-base font-bold  mb-4 pb-2 border-b border-surface-100 ; }
 .field label { @apply text-xs font-bold text-surface-500 uppercase tracking-wide mb-1.5 block; }
 .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }

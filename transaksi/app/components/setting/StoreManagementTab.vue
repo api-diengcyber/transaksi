@@ -137,14 +137,14 @@ const getStoreTypeConfig = (store) => {
         type: 'CABANG',
         label: 'CABANG',
         icon: 'pi pi-sitemap',
-        colorClass: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20 border-l-4 border-l-orange-500',
+        colorClass: 'text-orange-600 bg-orange-50 border-l-4 border-l-orange-500',
         badgeSeverity: 'warning',
         desc: store.description || 'Cabang Toko'
     } : {
         type: 'PUSAT',
         label: 'PUSAT',
         icon: 'pi pi-building',
-        colorClass: 'text-primary-600 bg-surface-0 dark:bg-surface-100 border-l-4 border-l-primary-600',
+        colorClass: 'text-primary-600 bg-surface-0 border-l-4 border-l-primary-600',
         badgeSeverity: 'info',
         desc: store.description || 'Pusat Operasional'
     };
@@ -153,13 +153,13 @@ const getStoreTypeConfig = (store) => {
 
 <template>
     <div class="animate-fade-in space-y-8">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-0 dark:bg-surface-100 p-5 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-0 p-5 rounded-xl border border-surface-200  shadow-sm gap-4">
             <div>
-                <h3 class="text-lg font-bold text-surface-900 dark:text-surface-100 flex items-center gap-2">
+                <h3 class="text-lg font-bold text-surface-900  flex items-center gap-2">
                     <i class="pi pi-briefcase text-primary-600"></i>
                     Manajemen Toko & Cabang
                 </h3>
-                <p class="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                <p class="text-sm text-surface-500  mt-1">
                     Kelola toko utama dan struktur hierarki cabang usaha Anda.
                 </p>
             </div>
@@ -177,12 +177,12 @@ const getStoreTypeConfig = (store) => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div v-for="store in sortedStores" :key="store.uuid" 
                     @click="authStore.switchStore(store.uuid)"
-                    class="group relative rounded-xl border transition-all cursor-pointer shadow-sm hover:shadow-md overflow-hidden bg-surface-0 dark:bg-surface-100"
+                    class="group relative rounded-xl border transition-all cursor-pointer shadow-sm hover:shadow-md overflow-hidden bg-surface-0"
                     :class="[
                         getStoreTypeConfig(store).colorClass,
                         store.uuid === authStore.activeStore?.uuid 
-                            ? 'ring-2 ring-offset-2 ring-primary-500 dark:ring-offset-surface-950 border-transparent' 
-                            : 'border-surface-200 dark:border-surface-700 hover:border-primary-300'
+                            ? 'ring-2 ring-offset-2 ring-primary-500 border-transparent' 
+                            : 'border-surface-200  hover:border-primary-300'
                     ]"
                 >
                     <div v-if="store.uuid === authStore.activeStore?.uuid" 
@@ -193,7 +193,7 @@ const getStoreTypeConfig = (store) => {
                     <div class="p-5">
                         <div class="flex items-start gap-4">
                             <div class="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 shadow-inner"
-                                 :class="store.parentId ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600' : 'bg-primary-50 dark:bg-primary-900/30 text-primary-600'">
+                                 :class="store.parentId ? 'bg-orange-100 text-orange-600' : 'bg-primary-50 text-primary-600'">
                                 <i :class="[getStoreTypeConfig(store).icon, 'text-xl']"></i>
                             </div>
 
@@ -208,40 +208,40 @@ const getStoreTypeConfig = (store) => {
                                     </span>
                                 </div>
                                 
-                                <h4 class="font-bold text-lg text-surface-900 dark:text-surface-50 truncate leading-tight mb-1">
+                                <h4 class="font-bold text-lg text-surface-900 truncate leading-tight mb-1">
                                     {{ store.name }}
                                 </h4>
                                 
-                                <p class="text-xs font-medium text-surface-500 dark:text-surface-400 flex items-center gap-1">
+                                <p class="text-xs font-medium text-surface-500  flex items-center gap-1">
                                     <i class="pi pi-info-circle text-[10px]"></i>
                                     {{ getStoreTypeConfig(store).desc }}
                                 </p>
                             </div>
                         </div>
 
-                        <hr class="my-4 border-dashed border-surface-200 dark:border-surface-700" />
+                        <hr class="my-4 border-dashed border-surface-200 " />
 
                         <div class="space-y-2">
-                            <div class="flex items-start gap-2 text-sm text-surface-600 dark:text-surface-300">
+                            <div class="flex items-start gap-2 text-sm ">
                                 <i class="pi pi-map-marker mt-0.5 text-surface-400"></i>
                                 <span class="line-clamp-2 text-xs leading-relaxed">
                                     {{ store.address || "Belum ada alamat" }}
                                 </span>
                             </div>
-                            <div class="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-300">
+                            <div class="flex items-center gap-2 text-sm ">
                                 <i class="pi pi-phone text-surface-400"></i>
                                 <span class="text-xs">{{ store.phone || "-" }}</span>
                             </div>
                         </div>
 
-                        <div v-if="store.branches && store.branches.length > 0" class="mt-4 pt-3 border-t border-dashed border-surface-200 dark:border-surface-700">
+                        <div v-if="store.branches && store.branches.length > 0" class="mt-4 pt-3 border-t border-dashed border-surface-200 ">
                             <span class="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-2 block flex items-center gap-1">
                                 <i class="pi pi-sitemap text-[10px]"></i>
                                 Memiliki {{ store.branches.length }} Cabang:
                             </span>
                             <div class="flex flex-wrap gap-2">
                                 <span v-for="branch in store.branches" :key="branch.uuid" 
-                                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-xs font-medium border border-orange-100 dark:border-orange-800 shadow-sm">
+                                      class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 text-orange-700  text-xs font-medium border border-orange-100  shadow-sm">
                                     <i class="pi pi-building text-[9px] opacity-70"></i>
                                     {{ branch.name }}
                                 </span>
@@ -249,7 +249,7 @@ const getStoreTypeConfig = (store) => {
                         </div>
                     </div>
 
-                    <div class="bg-surface-50 dark:bg-surface-100 px-5 py-3 flex justify-between items-center text-xs font-medium text-surface-500 transition-colors group-hover:bg-primary-50 dark:group-hover:bg-primary-900/10">
+                    <div class="bg-surface-50 px-5 py-3 flex justify-between items-center text-xs font-medium text-surface-500 transition-colors group-hover:bg-primary-50">
                         <span>ID: {{ store.uuid.substring(0, 8) }}...</span>
                         <span class="text-primary-600 group-hover:underline flex items-center gap-1">
                             Kelola Toko Ini <i class="pi pi-arrow-right"></i>
@@ -259,25 +259,25 @@ const getStoreTypeConfig = (store) => {
             </div>
         </div>
 
-        <div class="mt-8 pt-8 border-t border-surface-0 dark:border-surface-700">
+        <div class="mt-8 pt-8 border-t border-surface-0 ">
             <h4 class="text-sm font-bold text-surface-500 uppercase tracking-wider mb-4 flex items-center gap-2 px-1">
                 <i class="pi pi-sitemap"></i> Struktur Hierarki Cabang: <span class="text-primary-600">{{ authStore.activeStore?.name }}</span>
             </h4>
 
-            <div v-if="branchTreeNodes.length === 0" class="flex flex-col items-center justify-center py-12 bg-surface-0 dark:bg-surface-100 rounded-xl border border-dashed border-surface-300 dark:border-surface-700">
-                <div class="w-16 h-16 bg-surface-100 dark:bg-surface-100 rounded-full flex items-center justify-center mb-3">
+            <div v-if="branchTreeNodes.length === 0" class="flex flex-col items-center justify-center py-12 bg-surface-0 rounded-xl border border-dashed border-surface-300">
+                <div class="w-16 h-16 bg-surface-100 rounded-full flex items-center justify-center mb-3">
                     <i class="pi pi-sitemap text-2xl text-surface-400"></i>
                 </div>
-                <p class="text-surface-600 dark:text-surface-300 font-medium mb-1">Belum ada struktur cabang</p>
+                <p class=" font-medium mb-1">Belum ada struktur cabang</p>
                 <p class="text-surface-500 text-xs mb-4">Toko ini belum memiliki cabang di bawahnya.</p>
                 <Button label="Buat Cabang Pertama" icon="pi pi-plus" size="small" @click="openBranchModal(null)" />
             </div>
 
-            <div v-else class="card border border-surface-200 dark:border-surface-700 rounded-xl overflow-hidden bg-surface-0 dark:bg-surface-100 shadow-sm">
+            <div v-else class="card border border-surface-200  rounded-xl overflow-hidden bg-surface-0 shadow-sm">
                 <TreeTable :value="branchTreeNodes" :autoLayout="true" class="text-sm">
                     <Column field="name" header="Nama Cabang" :expander="true">
                         <template #body="slotProps">
-                            <span class="font-bold text-surface-700 dark:text-surface-100">{{ slotProps.node.data.name }}</span>
+                            <span class="font-bold ">{{ slotProps.node.data.name }}</span>
                         </template>
                     </Column>
                     <Column field="address" header="Alamat" style="min-width: 200px">
@@ -297,10 +297,10 @@ const getStoreTypeConfig = (store) => {
 
         <Dialog v-model:visible="isCreateStoreModalOpen" modal header="Buat Toko Baru" :style="{ width: '600px' }" :draggable="false" class="p-fluid">
              <div class="flex flex-col gap-6 pt-2">
-                 <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-start gap-3 border border-blue-100 dark:border-blue-800">
+                 <div class="bg-blue-50 p-4 rounded-lg flex items-start gap-3 border border-blue-100 ">
                     <i class="pi pi-building text-blue-600 text-xl mt-0.5"></i>
-                    <div class="text-sm text-surface-700 dark:text-surface-200">
-                        <span class="font-bold text-blue-700 dark:text-blue-300 block mb-1">Pusat Operasional Baru</span>
+                    <div class="text-sm ">
+                        <span class="font-bold text-blue-700  block mb-1">Pusat Operasional Baru</span>
                         <span>Anda akan membuat entitas toko baru yang berdiri sendiri (bukan cabang). Toko ini akan memiliki stok, laporan, dan manajemen terpisah.</span>
                     </div>
                 </div>
@@ -337,9 +337,9 @@ const getStoreTypeConfig = (store) => {
 
         <Dialog v-model:visible="isBranchModalOpen" modal :header="selectedParentBranch ? 'Tambah Sub-Cabang' : 'Tambah Cabang Utama'" :style="{ width: '600px' }" :draggable="false">
             <div class="flex flex-col gap-6 pt-2">
-                 <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg flex items-start gap-3 border border-orange-100 dark:border-orange-800">
+                 <div class="bg-orange-50 p-4 rounded-lg flex items-start gap-3 border border-orange-100 ">
                     <i class="pi pi-sitemap text-orange-600 text-xl mt-0.5"></i>
-                    <div class="text-sm text-surface-700 dark:text-surface-200">
+                    <div class="text-sm ">
                         <span v-if="selectedParentBranch">
                             Cabang baru ini akan menjadi bawahan dari <strong>{{ selectedParentBranch.name }}</strong>.
                         </span>

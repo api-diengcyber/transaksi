@@ -135,11 +135,11 @@ const handleClearTable = (event, table) => {
 const getCardClass = (status) => {
     switch (status) {
         case 'OCCUPIED':
-            return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
+            return 'bg-red-50 border-red-200';
         case 'BOOKED':
-            return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800';
+            return 'bg-yellow-50 border-yellow-200';
         default: // AVAILABLE
-            return 'bg-surface-0 dark:bg-surface-100 border-surface-200 dark:border-surface-700';
+            return 'bg-surface-0 border-surface-200 ';
     }
 };
 
@@ -175,7 +175,7 @@ defineExpose({ refresh: fetchTables });
 <template>
     <div class="animate-fade-in h-full flex flex-col">
         <div class="flex justify-between items-center mb-6">
-             <h2 class="font-bold text-xl text-surface-700 dark:text-surface-100 flex items-center gap-2">
+             <h2 class="font-bold text-xl  flex items-center gap-2">
                 <i class="pi pi-th-large"></i> Manajemen Meja
              </h2>
              <div class="flex gap-2">
@@ -190,17 +190,17 @@ defineExpose({ refresh: fetchTables });
         <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 overflow-y-auto pb-4 content-start">
             
             <div @click="emit('create')" 
-                class="min-h-[180px] rounded-xl border-2 border-dashed border-surface-300 dark:border-surface-600 p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800/50 hover:border-primary-400 transition-all group"
+                class="min-h-[180px] rounded-xl border-2 border-dashed border-surface-300 p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-surface-50 /50 hover:border-primary-400 transition-all group"
             >
-                <div class="w-12 h-12 rounded-full bg-surface-100 dark:bg-surface-700 group-hover:bg-primary-50 dark:group-hover:bg-primary-900/30 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
+                <div class="w-12 h-12 rounded-full bg-surface-100 group-hover:bg-primary-50 text-surface-400 group-hover:text-primary-500 flex items-center justify-center mb-3 transition-colors">
                     <i class="pi pi-plus text-xl"></i>
                 </div>
-                <span class="font-semibold text-surface-500 dark:text-surface-400 group-hover:text-primary-600 dark:group-hover:text-primary-400">Tambah Meja</span>
+                <span class="font-semibold text-surface-500  group-hover:text-primary-600">Tambah Meja</span>
             </div>
 
             <div v-for="table in tables" :key="table.uuid" 
                 :class="['rounded-xl shadow-sm border p-4 flex flex-col justify-between transition-all relative group hover:shadow-md', getCardClass(table.status)]"
-                class="min-h-[180px] bg-surface-0 dark:bg-surface-100"
+                class="min-h-[180px] bg-surface-0"
             >
                 <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                     <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" @click.stop="emit('edit', table)" v-tooltip.top="'Edit Data Meja'" />
@@ -214,23 +214,23 @@ defineExpose({ refresh: fetchTables });
                 <div class="flex flex-col items-center justify-center flex-1 mt-6 mb-2 text-center">
                     <i class="pi pi-table text-5xl mb-3 transition-colors" 
                        :class="{
-                           'text-green-500 dark:text-green-400': table.status === 'AVAILABLE',
-                           'text-yellow-500 dark:text-yellow-400': table.status === 'BOOKED',
-                           'text-red-500 dark:text-red-400': table.status === 'OCCUPIED'
+                           'text-green-500': table.status === 'AVAILABLE',
+                           'text-yellow-500': table.status === 'BOOKED',
+                           'text-red-500 ': table.status === 'OCCUPIED'
                        }"
                     ></i>
-                    <h3 class="font-bold text-lg text-surface-800 dark:text-surface-100 line-clamp-1">{{ table.name }}</h3>
+                    <h3 class="font-bold text-lg  line-clamp-1">{{ table.name }}</h3>
                     <p class="text-sm text-surface-500 mb-1">Kapasitas: {{ table.capacity }} Org</p>
 
-                    <div v-if="table.status === 'BOOKED'" class="mt-2 p-2 bg-surface-0/50 dark:bg-black/20 rounded text-xs w-full">
-                        <div class="font-semibold text-surface-700 dark:text-surface-200 truncate">{{ table.bookingName }}</div>
+                    <div v-if="table.status === 'BOOKED'" class="mt-2 p-2 bg-surface-0/50 rounded text-xs w-full">
+                        <div class="font-semibold  truncate">{{ table.bookingName }}</div>
                         <div class="text-surface-500 flex items-center justify-center gap-1">
                             <i class="pi pi-clock text-[10px]"></i> {{ formatTime(table.bookingTime) }}
                         </div>
                     </div>
                 </div>
 
-                <div class="flex justify-center gap-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-600/50">
+                <div class="flex justify-center gap-2 mt-2 pt-3 border-t border-surface-200 /50">
                     
                     <Button 
                         v-if="table.status === 'AVAILABLE'" 
@@ -272,13 +272,13 @@ defineExpose({ refresh: fetchTables });
             </div>
         </div>
 
-        <Dialog v-model:visible="showBookingModal" modal header="Booking Meja" :style="{ width: '400px' }" class="bg-surface-0 dark:bg-surface-100">
+        <Dialog v-model:visible="showBookingModal" modal header="Booking Meja" :style="{ width: '400px' }" class="bg-surface-0">
             <div class="flex flex-col gap-4">
-                <div class="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-center gap-3">
+                <div class="p-3 bg-primary-50 rounded-lg flex items-center gap-3">
                     <i class="pi pi-info-circle text-primary-600 text-xl"></i>
                     <div>
                         <p class="text-xs text-surface-500 uppercase font-bold tracking-wider">Meja Dipilih</p>
-                        <p class="font-bold text-lg text-primary-700 dark:text-primary-400">{{ bookingForm.tableName }}</p>
+                        <p class="font-bold text-lg text-primary-700 ">{{ bookingForm.tableName }}</p>
                     </div>
                 </div>
 

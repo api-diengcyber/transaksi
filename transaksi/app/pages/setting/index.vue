@@ -166,14 +166,14 @@ definePageMeta({ layout: "default" });
 </script>
 
 <template>
-  <div class="min-h-screen bg-surface-50 dark:bg-surface-950 p-4 md:p-6 animate-fade-in">
+  <div class="min-h-screen bg-surface-0 p-4 md:p-6 animate-fade-in">
     <Toast />
     <ConfirmDialog />
 
     <div class="max-w-6xl mx-auto">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
-          <h1 class="text-2xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Pengaturan Toko</h1>
+          <h1 class="text-2xl font-black  tracking-tight">Pengaturan Toko</h1>
           <p class="text-surface-500 text-sm mt-1">Kelola profil, toko, preferensi transaksi, dan sistem.</p>
         </div>
         <div class="flex gap-3" v-if="activeTab !== 'stores'">
@@ -184,11 +184,11 @@ definePageMeta({ layout: "default" });
 
       <div class="flex flex-col lg:flex-row gap-8">
         <aside class="w-full lg:w-64 shrink-0 space-y-2">
-          <div class="bg-surface-0 dark:bg-surface-100 rounded-xl border border-surface-200 dark:border-surface-800 overflow-hidden shadow-sm sticky top-24">
+          <div class="bg-surface-0 rounded-xl border border-surface-200  overflow-hidden shadow-sm sticky top-24">
             <div class="p-2">
               <button v-for="item in menuItems" :key="item.id" @click="changeTab(item.id)"
                 class="w-full text-left p-3 rounded-lg flex items-start gap-3 transition-all duration-200 group relative overflow-hidden"
-                :class="activeTab === item.id ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-bold ring-1 ring-primary-200 dark:ring-primary-800' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800 hover:text-surface-900'">
+                :class="activeTab === item.id ? 'bg-primary-50 text-primary-700  font-bold ring-1 ring-primary-200' : 'text-surface-600  hover:bg-surface-50  hover:text-surface-900'">
                 <div class="mt-0.5" :class="activeTab === item.id ? 'text-primary-600' : 'text-surface-400 group-hover:text-surface-600'"><i :class="item.icon"></i></div>
                 <div><div class="text-sm">{{ item.label }}</div><div class="text-[10px] opacity-70 font-normal mt-0.5 leading-tight">{{ item.desc }}</div></div>
                 <div v-if="activeTab === item.id" class="absolute left-0 top-2 bottom-2 w-1 bg-primary-500 rounded-r-full"></div>

@@ -5,10 +5,7 @@ import { UserEntity } from 'src/common/entities/user/user.entity';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { StoreEntity } from 'src/common/entities/store/store.entity';
-
-// Helper generate ID
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-const generateUserUuid = (storeUuid: string) => `${storeUuid}-USR-${generateLocalUuid()}`;
+import { generateUserUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class UserService {

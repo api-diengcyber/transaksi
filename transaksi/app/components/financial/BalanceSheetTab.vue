@@ -137,13 +137,13 @@ const equityTree = computed(() => {
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 animate-fade-in font-sans pb-10">
             
         <div class="flex flex-col h-full">
-            <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden flex flex-col h-full">
-                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex justify-between items-center">
+            <div class="bg-surface-0  rounded-xl shadow-sm border border-surface-200  overflow-hidden flex flex-col h-full">
+                <div class="p-4 bg-blue-50 border-b border-blue-100  flex justify-between items-center">
                     <div class="flex items-center gap-2">
-                        <i class="pi pi-briefcase text-blue-600 dark:text-blue-400"></i>
-                        <h3 class="font-bold text-blue-900 dark:text-blue-300">AKTIVA / ASET</h3>
+                        <i class="pi pi-briefcase text-blue-600 "></i>
+                        <h3 class="font-bold text-blue-900 ">AKTIVA / ASET</h3>
                     </div>
-                    <span class="font-black text-lg text-blue-700 dark:text-blue-300">
+                    <span class="font-black text-lg text-blue-700 ">
                         {{ formatCurrency(data.totalAsset) }}
                     </span>
                 </div>
@@ -152,7 +152,7 @@ const equityTree = computed(() => {
                     <TreeTable :value="assetTree" class="custom-treetable" :autoLayout="true">
                         <Column field="name" header="Nama Akun" expander>
                             <template #body="slotProps">
-                                <span :class="{ 'font-bold text-surface-800 dark:text-surface-100': !slotProps.node.leaf }">
+                                <span :class="{ 'font-bold ': !slotProps.node.leaf }">
                                     {{ slotProps.node.data.name }}
                                 </span>
                             </template>
@@ -176,13 +176,13 @@ const equityTree = computed(() => {
 
         <div class="flex flex-col gap-6">
             
-            <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-                <div class="p-4 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-100 dark:border-orange-800 flex justify-between items-center">
+            <div class="bg-surface-0  rounded-xl shadow-sm border border-surface-200  overflow-hidden">
+                <div class="p-4 bg-orange-50 border-b border-orange-100  flex justify-between items-center">
                     <div class="flex items-center gap-2">
-                        <i class="pi pi-exclamation-circle text-orange-600 dark:text-orange-400"></i>
-                        <h3 class="font-bold text-orange-900 dark:text-orange-300">KEWAJIBAN / HUTANG</h3>
+                        <i class="pi pi-exclamation-circle text-orange-600 "></i>
+                        <h3 class="font-bold text-orange-900 ">KEWAJIBAN / HUTANG</h3>
                     </div>
-                    <span class="font-bold text-lg text-orange-700 dark:text-orange-300">
+                    <span class="font-bold text-lg text-orange-700 ">
                         {{ formatCurrency(data.totalLiability) }}
                     </span>
                 </div>
@@ -190,7 +190,7 @@ const equityTree = computed(() => {
                 <TreeTable :value="liabilityTree" class="custom-treetable" :autoLayout="true">
                     <Column field="name" header="Nama Akun" expander>
                         <template #body="slotProps">
-                            <span :class="{ 'font-bold text-surface-800 dark:text-surface-100': !slotProps.node.leaf }">
+                            <span :class="{ 'font-bold ': !slotProps.node.leaf }">
                                 {{ slotProps.node.data.name }}
                             </span>
                         </template>
@@ -210,13 +210,13 @@ const equityTree = computed(() => {
                 </TreeTable>
             </div>
 
-            <div class="bg-white dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
-                <div class="p-4 bg-purple-50 dark:bg-purple-900/20 border-b border-purple-100 dark:border-purple-800 flex justify-between items-center">
+            <div class="bg-surface-0  rounded-xl shadow-sm border border-surface-200  overflow-hidden">
+                <div class="p-4 bg-purple-50 border-b border-purple-100 flex justify-between items-center">
                     <div class="flex items-center gap-2">
-                        <i class="pi pi-wallet text-purple-600 dark:text-purple-400"></i>
-                        <h3 class="font-bold text-purple-900 dark:text-purple-300">MODAL / EKUITAS</h3>
+                        <i class="pi pi-wallet text-purple-600 "></i>
+                        <h3 class="font-bold text-purple-900 ">MODAL / EKUITAS</h3>
                     </div>
-                    <span class="font-bold text-lg text-purple-700 dark:text-purple-300">
+                    <span class="font-bold text-lg text-purple-700 ">
                         {{ formatCurrency(data.totalEquityFinal) }}
                     </span>
                 </div>
@@ -226,7 +226,7 @@ const equityTree = computed(() => {
                         <template #body="slotProps">
                             <div :class="[
                                 slotProps.node.styleClass ? 'px-2 py-1 rounded -ml-2 w-full ' + slotProps.node.styleClass : '',
-                                { 'font-bold text-surface-800 dark:text-surface-100': !slotProps.node.leaf }
+                                { 'font-bold ': !slotProps.node.leaf }
                             ]">
                                 {{ slotProps.node.data.name }}
                             </div>

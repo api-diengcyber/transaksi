@@ -197,13 +197,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col relative bg-gray-50/50">
+  <div class="h-full flex flex-col relative bg-surface-0">
     
-    <div class="sticky top-0 z-30 px-4 pt-4 pb-2 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all">
+    <div class="sticky top-0 z-30 px-4 pt-4 pb-2 bg-surface-0 backdrop-blur-md border-b border-gray-200 transition-all">
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">
         
         <div>
-          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <h2 class="text-xl font-bold flex items-center gap-2">
             <div class="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg">
               <i class="pi pi-sitemap text-lg"></i>
             </div>
@@ -221,7 +221,7 @@ onMounted(async () => {
               v-model="searchQuery" 
               type="text" 
               placeholder="Cari kode atau nama..." 
-              class="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all outline-none"
+              class="w-full pl-9 pr-4 py-2 rounded-lg border border-surface-200 bg-gray-50 focus:bg-surface-0 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all outline-none"
             >
           </div>
           <button
@@ -244,7 +244,7 @@ onMounted(async () => {
       <div class="flex flex-col gap-5">
         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 rounded-xl text-white shadow-sm flex items-center justify-between">
             <div class="flex items-center gap-3">
-                 <div class="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                 <div class="bg-surface-0 p-1.5 rounded-lg backdrop-blur-sm">
                     <i class="pi pi-wallet text-white text-lg"></i>
                 </div>
                 <div>
@@ -281,7 +281,7 @@ onMounted(async () => {
       <div class="flex flex-col gap-5">
          <div class="bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 rounded-xl text-white shadow-sm flex items-center justify-between">
              <div class="flex items-center gap-3">
-                 <div class="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                 <div class="bg-surface-0 p-1.5 rounded-lg backdrop-blur-sm">
                     <i class="pi pi-building text-white text-lg"></i>
                 </div>
                 <div>

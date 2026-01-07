@@ -146,7 +146,7 @@ const closeDialog = () => {
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field">
-                    <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">Username <span class="text-red-500">*</span></label>
+                    <label class="text-sm font-bold  mb-1 block">Username <span class="text-red-500">*</span></label>
                     <InputText 
                         v-model="form.username" 
                         placeholder="Contoh: ujangkasir" 
@@ -156,7 +156,7 @@ const closeDialog = () => {
                 </div>
 
                 <div class="field">
-                    <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">Email (Opsional)</label>
+                    <label class="text-sm font-bold  mb-1 block">Email (Opsional)</label>
                     <InputText 
                         v-model="form.email" 
                         placeholder="email@toko.com" 
@@ -166,7 +166,7 @@ const closeDialog = () => {
             </div>
 
             <div class="field">
-                <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">Role Pengguna <span class="text-red-500">*</span></label>
+                <label class="text-sm font-bold  mb-1 block">Role Pengguna <span class="text-red-500">*</span></label>
                 <MultiSelect 
                     v-model="form.roleValues" 
                     :options="roleOptions" 
@@ -180,13 +180,13 @@ const closeDialog = () => {
                 />
             </div>
             
-            <div class="space-y-4 pt-2 border-t border-surface-100 dark:border-surface-700">
+            <div class="space-y-4 pt-2 border-t border-surface-100 ">
                 <p class="text-xs text-surface-500 italic mb-3">
                     {{ isEditMode ? 'Isi hanya jika Anda ingin mengganti password.' : 'Password wajib diisi untuk pengguna baru.' }}
                 </p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="field">
-                        <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">
+                        <label class="text-sm font-bold  mb-1 block">
                             Password {{ isEditMode ? 'Baru' : '' }}
                         </label>
                         <Password 
@@ -198,7 +198,7 @@ const closeDialog = () => {
                         />
                     </div>
                     <div class="field">
-                        <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">Konfirmasi Password</label>
+                        <label class="text-sm font-bold  mb-1 block">Konfirmasi Password</label>
                         <Password 
                             v-model="form.confirmPassword" 
                             :feedback="false" 
@@ -213,7 +213,7 @@ const closeDialog = () => {
         </div>
 
         <template #footer>
-            <div class="flex justify-end gap-2 pt-4 border-t border-surface-100 dark:border-surface-700 mt-2">
+            <div class="flex justify-end gap-2 pt-4 border-t border-surface-100  mt-2">
                 <Button label="Batal" icon="pi pi-times" text severity="secondary" @click="closeDialog" />
                 <Button :label="isEditMode ? 'Simpan Perubahan' : 'Buat Pengguna'" icon="pi pi-check" :loading="loading" @click="handleSave" />
             </div>

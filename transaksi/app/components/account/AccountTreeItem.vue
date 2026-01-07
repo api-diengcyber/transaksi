@@ -26,7 +26,7 @@ const onChildChange = (event: any) => {
 <template>
   <div class="relative font-sans text-gray-700">
     <div 
-      class="group relative bg-white border border-gray-200/60 rounded-lg hover:border-indigo-400 hover:shadow-sm transition-all duration-200 cursor-move flex items-center justify-between mb-1 py-1.5 px-2"
+      class="group relative bg-surface-0 border border-surface-200/60 rounded-lg hover:border-indigo-400 hover:shadow-sm transition-all duration-200 cursor-move flex items-center justify-between mb-1 py-1.5 px-2"
     >
       <div class="flex items-center gap-2 overflow-hidden flex-1">
         <button 
@@ -41,7 +41,7 @@ const onChildChange = (event: any) => {
         <div :class="`h-6 w-1 rounded-full bg-${color}-500/80 shrink-0`"></div>
         
         <div class="truncate flex items-center gap-2">
-           <span class="font-mono text-[10px] font-bold text-gray-600 bg-gray-100/80 px-1.5 py-0.5 rounded border border-gray-200 tracking-tight shrink-0">
+           <span class="font-mono text-[10px] font-bold text-gray-600 bg-gray-100/80 px-1.5 py-0.5 rounded border border-surface-200 tracking-tight shrink-0">
               {{ element.code }}
             </span>
             <span class="font-medium text-xs truncate group-hover:text-indigo-700 transition-colors" :title="element.name">
@@ -53,7 +53,7 @@ const onChildChange = (event: any) => {
         </div>
       </div>
 
-      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-1 bg-white/95 pl-2 backdrop-blur-[2px] shadow-[-8px_0_12px_rgba(255,255,255,1)]">
+      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-1 bg-surface-0 pl-2 backdrop-blur-[2px] shadow-[-8px_0_12px_rgba(255,255,255,1)]">
         <button @click.stop="$emit('edit', element)" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Edit">
           <i class="pi pi-pencil text-[10px]"></i>
         </button>

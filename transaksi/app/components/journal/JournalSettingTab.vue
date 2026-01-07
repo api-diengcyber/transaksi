@@ -158,9 +158,9 @@ onMounted(loadData);
     <div class="flex flex-col gap-4 p-2">
         
         <div class="flex flex-col md:flex-row gap-6">
-            <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+            <div class="flex-1 bg-surface-0 p-6 rounded-2xl shadow-sm border border-surface-100 relative overflow-hidden">
                 <div class="relative z-10">
-                    <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2 mb-2">
+                    <h1 class="text-xl font-bold flex items-center gap-2 mb-2">
                         <span class="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
                             <i class="pi pi-sparkles text-lg"></i>
                         </span>
@@ -174,7 +174,7 @@ onMounted(loadData);
                 <div class="absolute right-0 top-0 h-full w-32 bg-gradient-to-l from-indigo-50 to-transparent opacity-50 pointer-events-none"></div>
             </div>
 
-            <div class="w-full md:w-80 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
+            <div class="w-full md:w-80 bg-surface-0 p-6 rounded-2xl shadow-sm border border-surface-100 flex flex-col justify-center">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Kesehatan Mapping</span>
                     <span class="text-2xl font-bold" :class="mappedPercentage === 100 ? 'text-emerald-600' : 'text-indigo-600'">
@@ -191,20 +191,20 @@ onMounted(loadData);
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[500px]">
-            <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white sticky top-0 z-20">
+        <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200 overflow-hidden flex flex-col min-h-[500px]">
+            <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-0 sticky top-0 z-20">
                 <div class="relative w-full sm:w-72">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input 
                         v-model="filters['global'].value" 
                         type="text" 
                         placeholder="Cari Kode..." 
-                        class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     >
                 </div>
                 <button 
                     @click="loadData" 
-                    class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                    class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-surface-0 border border-surface-200 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors"
                 >
                     <i class="pi pi-refresh" :class="{'animate-spin': loading}"></i>
                     <span>Scan Ulang</span>
@@ -228,7 +228,7 @@ onMounted(loadData);
 
                 <Column field="transactionType" header="Tipe" sortable class="w-[10%]">
                     <template #body="{ data }">
-                        <span class="inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
+                        <span class="inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-surface-200">
                             {{ data.transactionType }}
                         </span>
                     </template>
@@ -237,7 +237,7 @@ onMounted(loadData);
                 <Column field="detailKey" header="Kode Transaksi" sortable class="w-[25%]">
                     <template #body="{ data }">
                         <div class="flex flex-col gap-1">
-                            <code class="font-mono text-xs font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded w-fit select-all border border-slate-100">
+                            <code class="font-mono text-xs font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded w-fit select-all border border-surface-100">
                                 {{ data.detailKey }}
                             </code>
                             <span v-if="data.isWildcard" class="text-[10px] text-amber-600 flex items-center gap-1 font-medium">
@@ -264,10 +264,10 @@ onMounted(loadData);
                     <template #body="{ data }">
                         <div v-if="data.isMapped && data.configs.length" class="flex flex-col gap-1.5 py-1">
                             <div v-for="cfg in data.configs" :key="cfg.uuid" 
-                                class="flex items-center justify-between text-xs bg-slate-50 border border-slate-100 rounded px-2 py-1 group hover:border-indigo-100 transition-colors"
+                                class="flex items-center justify-between text-xs bg-slate-50 border border-surface-100 rounded px-2 py-1 group hover:border-indigo-100 transition-colors"
                             >
                                 <div class="flex items-center gap-2">
-                                    <span class="font-mono text-slate-400 text-[10px] bg-white px-1 rounded border border-slate-100">{{ cfg.accountCode }}</span>
+                                    <span class="font-mono text-slate-400 text-[10px] bg-surface-0 px-1 rounded border border-surface-100">{{ cfg.accountCode }}</span>
                                     <span class="font-semibold text-slate-700 group-hover:text-indigo-700 transition-colors">{{ cfg.accountName }}</span>
                                 </div>
                                 <span 
@@ -291,7 +291,7 @@ onMounted(loadData);
                             @click="openMappingDialog(data)"
                             class="inline-flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all border"
                             :class="data.isMapped 
-                                ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600' 
+                                ? 'bg-surface-0 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600' 
                                 : 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 hover:border-indigo-700 shadow-sm hover:shadow'"
                         >
                             <i class="pi" :class="data.isMapped ? 'pi-pencil' : 'pi-link'"></i>
@@ -313,7 +313,7 @@ onMounted(loadData);
         >
             <div class="flex flex-col gap-5">
                 
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center shadow-sm">
+                <div class="bg-slate-50 p-3 rounded-lg border border-surface-200 flex justify-between items-center shadow-sm">
                     <div>
                         <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Tipe Transaksi</div>
                         <div class="font-bold text-slate-800 text-sm">{{ currentType }}</div>
@@ -357,7 +357,7 @@ onMounted(loadData);
                         <input 
                             v-model="currentKey" 
                             type="text" 
-                            class="mt-2 w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-mono"
+                            class="mt-2 w-full px-3 py-2 text-sm border border-surface-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-mono"
                             placeholder="Contoh: SALE_"
                         >
                     </div>
@@ -390,7 +390,7 @@ onMounted(loadData);
                                     <template #option="slotProps">
                                         <div class="flex items-center justify-between w-full text-xs">
                                             <span class="text-slate-700">{{ slotProps.option.name }}</span>
-                                            <span class="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 rounded border border-slate-200">{{ slotProps.option.code }}</span>
+                                            <span class="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 rounded border border-surface-200">{{ slotProps.option.code }}</span>
                                         </div>
                                     </template>
                                     <template #value="slotProps">
@@ -403,16 +403,16 @@ onMounted(loadData);
                                 </Dropdown>
                             </div>
 
-                            <div class="flex bg-slate-100 rounded-lg p-1 shrink-0 border border-slate-200">
+                            <div class="flex bg-slate-100 rounded-lg p-1 shrink-0 border border-surface-200">
                                 <button 
                                     @click="item.position = 'DEBIT'"
                                     class="px-3 py-1.5 text-[10px] font-bold rounded-md transition-all"
-                                    :class="item.position === 'DEBIT' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'"
+                                    :class="item.position === 'DEBIT' ? 'bg-surface-0 text-blue-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'"
                                 >DEBIT</button>
                                 <button 
                                     @click="item.position = 'CREDIT'"
                                     class="px-3 py-1.5 text-[10px] font-bold rounded-md transition-all"
-                                    :class="item.position === 'CREDIT' ? 'bg-white text-red-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'"
+                                    :class="item.position === 'CREDIT' ? 'bg-surface-0 text-red-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'"
                                 >KREDIT</button>
                             </div>
 

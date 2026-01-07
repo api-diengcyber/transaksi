@@ -178,4 +178,19 @@ export class ProductController {
   async deleteUnit(@Param('unitUuid') unitUuid: string) {
     return this.productService.removeUnit(unitUuid);
   }
+
+  @Post('break-unit')
+  @ApiOperation({ summary: 'Break larger unit into smaller unit (Pecah Satuan)' })
+  async breakUnit(
+    @Body() body: {
+      productUuid: string;
+      sourceUnitUuid: string;
+      targetUnitUuid: string;
+      qtyToBreak: number;
+    },
+    @GetUser('sub') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return this.productService.breakUnit(body, userId, storeUuid);
+  }
 }

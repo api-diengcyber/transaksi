@@ -13,13 +13,13 @@
       </button>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="bg-surface-0 rounded-xl shadow-sm border border-surface-100 overflow-hidden">
       <div v-if="isLoadingData" class="p-8 text-center text-gray-400">
         Memuat data...
       </div>
 
       <table v-else class="w-full text-left border-collapse">
-        <thead class="bg-gray-50/50 border-b border-gray-100">
+        <thead class="bg-surface-0 border-b border-gray-100">
           <tr>
             <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Bank</th>
             <th class="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">No. Rekening</th>
@@ -70,8 +70,8 @@
     </div>
 
     <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 transition-all">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
-        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+      <div class="bg-surface-0 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+        <div class="px-6 py-4 border-b border-gray-100 bg-surface-0 flex justify-between items-center">
           <h2 class="text-lg font-bold text-gray-800">
             {{ isEditing ? 'Edit Rekening Bank' : 'Tambah Rekening Baru' }}
           </h2>
@@ -86,7 +86,7 @@
             <input 
               v-model="form.bank_name" 
               placeholder="Contoh: BCA, Mandiri, BRI" 
-              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition text-sm"
+              class="w-full border border-surface-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition text-sm"
             />
           </div>
           <div>
@@ -95,7 +95,7 @@
               v-model="form.account_number" 
               type="text"
               placeholder="Contoh: 1234567890" 
-              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition text-sm font-mono"
+              class="w-full border border-surface-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition text-sm font-mono"
             />
           </div>
           <div>
@@ -103,7 +103,7 @@
             <input 
               v-model="form.account_holder" 
               placeholder="Nama pemilik rekening" 
-              class="w-full border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition text-sm"
+              class="w-full border border-surface-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition text-sm"
             />
           </div>
         </div>

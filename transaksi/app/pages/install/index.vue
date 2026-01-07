@@ -138,12 +138,12 @@ const goToLogin = () => {
     <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-600 to-primary-900 p-4">
         <Toast />
 
-        <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
+        <div class="bg-surface-0 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
             
-            <div class="w-full md:w-1/3 bg-surface-50 dark:bg-surface-100 p-8 flex flex-col justify-between border-r border-surface-200 dark:border-surface-700">
+            <div class="w-full md:w-1/3 bg-surface-50 p-8 flex flex-col justify-between border-r border-surface-200 ">
                 <div>
                     <div class="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-6 shadow-lg">R</div>
-                    <h1 class="text-2xl font-bold text-surface-800 dark:text-surface-100 mb-2">Setup Wizard</h1>
+                    <h1 class="text-2xl font-bold  mb-2">Setup Wizard</h1>
                     <p class="text-surface-500 text-sm leading-relaxed">
                         Selamat datang! Mari siapkan Toko dan Akun Admin Anda.
                     </p>
@@ -153,7 +153,7 @@ const goToLogin = () => {
                 </div>
             </div>
 
-            <div class="w-full md:w-2/3 p-8 md:p-12 relative flex flex-col justify-center bg-surface-0 dark:bg-surface-100">
+            <div class="w-full md:w-2/3 p-8 md:p-12 relative flex flex-col justify-center bg-surface-0">
                 
                 <div v-if="activeStep === 0" class="animate-fade-in">
                     <h2 class="text-xl font-bold mb-1 text-primary-600">1. Profil Toko</h2>
@@ -162,10 +162,10 @@ const goToLogin = () => {
                     <div class="flex flex-col gap-4">
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Logo Toko (Opsional)</label>
-                            <div class="flex items-center gap-4 p-3 border border-surface-200 dark:border-surface-700 rounded-xl bg-surface-50 dark:bg-surface-100">
+                            <div class="flex items-center gap-4 p-3 border border-surface-200  rounded-xl bg-surface-50">
                                 
                                 <div class="relative shrink-0">
-                                    <img :src="logoPreviewUrl || 'https://placehold.co/70x70/FFFFFF/4c51bf?text=LOGO'" alt="Logo Preview" class="w-[70px] h-[70px] object-cover rounded-full border-4 border-white dark:border-surface-900 shadow-md" />
+                                    <img :src="logoPreviewUrl || 'https://placehold.co/70x70/FFFFFF/4c51bf?text=LOGO'" alt="Logo Preview" class="w-[70px] h-[70px] object-cover rounded-full border-4 border-white  shadow-md" />
                                     <Button v-if="logoFile" icon="pi pi-times" severity="danger" rounded text size="small" class="absolute top-0 right-0 !w-6 !h-6" @click="handleRemoveLogo" />
                                 </div>
 
@@ -240,7 +240,7 @@ const goToLogin = () => {
                     <div class="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 animate-bounce shadow-sm">
                         <i class="pi pi-check text-5xl font-bold"></i>
                     </div>
-                    <h2 class="text-3xl font-bold text-surface-900 dark:text-surface-0 mb-3">Instalasi Berhasil!</h2>
+                    <h2 class="text-3xl font-bold  mb-3">Instalasi Berhasil!</h2>
                     <p class="text-surface-500 mb-8 max-w-md leading-relaxed">
                         Toko <strong>{{ form.name }}</strong> telah dibuat.<br>
                         Silakan login menggunakan akun <strong>{{ form.username }}</strong> yang telah dibuat.

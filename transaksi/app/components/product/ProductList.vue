@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
+import ProductBreakModal from './ProductBreakModal.vue';
 
 const emit = defineEmits(['create', 'edit']);
 
@@ -22,6 +23,10 @@ const lazyParams = ref({
     limit: 10,
     search: '',
 });
+
+// State untuk Break Modal
+const showBreakModal = ref(false);
+const selectedProductForBreak = ref(null);
 
 const firstRow = computed(() => (lazyParams.value.page - 1) * lazyParams.value.limit);
 
@@ -101,6 +106,22 @@ const refresh = () => {
     fetchProducts();
 };
 
+// --- BREAK UNIT HANDLERS ---
+const openBreakModal = (product) => {
+    // Validasi sederhana: minimal punya 2 satuan (misal BOX dan PCS)
+    const hasMultipleUnits = product.units && product.units.length > 1;
+    if (!hasMultipleUnits) {
+        toast.add({ severity: 'info', summary: 'Info', detail: 'Produk ini hanya memiliki 1 satuan, tidak bisa dipecah.' });
+        return;
+    }
+    selectedProductForBreak.value = product;
+    showBreakModal.value = true;
+};
+
+const onBreakSuccess = () => {
+    refresh(); // Refresh data tabel untuk melihat update stok
+};
+
 // --- HELPERS ---
 const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 
@@ -124,13 +145,13 @@ defineExpose({ refresh });
 
 <template>
     <div class="flex flex-col h-full gap-4">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-3 bg-surface-0 dark:bg-surface-900 p-3 rounded-xl border border-surface-200 dark:border-surface-800 shadow-sm">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-3 bg-surface-0  p-3 rounded-xl border border-surface-200  shadow-sm">
              <div class="relative w-full md:w-96 group">
                 <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-primary-500 transition-colors"></i>
                 <InputText 
                     v-model="searchInput" 
                     placeholder="Cari Nama / Scan Barcode..." 
-                    class="w-full pl-10 rounded-full !bg-surface-50 dark:!bg-surface-800 focus:!bg-surface-0 transition-all border-none ring-1 ring-surface-200 dark:ring-surface-700 focus:ring-primary-500" 
+                    class="w-full pl-10 rounded-full !bg-surface-50  focus:!bg-surface-0 transition-all border-none ring-1 ring-surface-200 focus:ring-primary-500" 
                     @keydown.enter="onSearch"
                 />
             </div>
@@ -155,7 +176,7 @@ defineExpose({ refresh });
             </div>
         </div>
 
-        <div class="flex-1 overflow-hidden border border-surface-200 dark:border-surface-800 rounded-xl bg-surface-0 dark:bg-surface-900 shadow-sm flex flex-col">
+        <div class="flex-1 overflow-hidden border border-surface-200  rounded-xl bg-surface-0  shadow-sm flex flex-col">
             <DataTable 
                 :value="products" 
                 :loading="loading" 
@@ -167,7 +188,7 @@ defineExpose({ refresh });
                 @page="onPage" 
                 dataKey="uuid" 
                 stripedRows 
-                class="flex-1 p-datatable-sm"
+                class="flex-1 p-datatable-sm bg-surface-0"
                 scrollable 
                 scrollHeight="flex"
                 :rowsPerPageOptions="[10, 25, 50, 100]"
@@ -176,7 +197,7 @@ defineExpose({ refresh });
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-16 text-surface-500">
-                        <div class="w-16 h-16 bg-surface-100 dark:bg-surface-800 rounded-full flex items-center justify-center mb-4">
+                        <div class="w-16 h-16 bg-surface-100 rounded-full flex items-center justify-center mb-4">
                             <i class="pi pi-box text-3xl opacity-50"></i>
                         </div>
                         <p class="font-medium">Tidak ada produk ditemukan.</p>
@@ -193,11 +214,11 @@ defineExpose({ refresh });
                 <Column header="Produk" style="min-width: 280px" frozen>
                     <template #body="{ data }">
                         <div class="flex gap-3 items-start py-1">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/40 dark:to-primary-800/20 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-lg shrink-0 shadow-inner">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-50 to-primary-100 text-primary-600  flex items-center justify-center font-bold text-lg shrink-0 shadow-inner">
                                 {{ data.name.charAt(0).toUpperCase() }}
                             </div>
                             <div class="flex flex-col gap-1">
-                                <span class="font-bold text-sm text-surface-800 dark:text-surface-100 leading-tight">{{ data.name }}</span>
+                                <span class="font-bold text-sm  leading-tight">{{ data.name }}</span>
                                 <div class="flex gap-1 flex-wrap">
                                     <Badge v-for="cat in data.categoryNames" :key="cat" :value="cat" severity="secondary" class="!text-[10px] !font-normal" />
                                     <span v-if="data.categoryNames.length === 0" class="text-[10px] text-surface-400 italic">Tanpa Kategori</span>
@@ -213,7 +234,7 @@ defineExpose({ refresh });
                             <div 
                                 v-for="unit in data.units" 
                                 :key="unit.uuid" 
-                                class="flex justify-between items-center text-xs p-1 hover:bg-surface-50 dark:hover:bg-surface-800 rounded transition-colors"
+                                class="flex justify-between items-center text-xs p-1 hover:bg-surface-50  rounded transition-colors"
                             >
                                 <div class="flex items-center gap-2">
                                     <span class="font-medium min-w-[30px]">{{ unit.unitName }}</span>
@@ -232,7 +253,7 @@ defineExpose({ refresh });
                 <Column header="Lokasi" style="min-width: 150px">
                     <template #body="{ data }">
                          <div class="flex flex-wrap gap-1">
-                            <div v-for="shelf in getUniqueShelves(data)" :key="shelf" class="flex items-center gap-1 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded text-[11px] border border-orange-100 dark:border-orange-800/30">
+                            <div v-for="shelf in getUniqueShelves(data)" :key="shelf" class="flex items-center gap-1 bg-orange-50 text-orange-700  px-2 py-0.5 rounded text-[11px] border border-orange-100 /30">
                                 <i class="pi pi-map-marker text-[9px]"></i>
                                 <span>{{ shelf }}</span>
                             </div>
@@ -245,11 +266,11 @@ defineExpose({ refresh });
                     <template #body="{ data }">
                          <div class="flex flex-col gap-1 py-1">
                             <div v-for="unit in data.units" :key="unit.uuid + '_price'" class="text-xs">
-                                <div v-for="price in (data.prices || []).filter(p => p.unitUuid === unit.uuid)" :key="price.uuid" class="flex justify-between items-center border-b border-dashed border-surface-200 dark:border-surface-700 last:border-0 py-0.5">
+                                <div v-for="price in (data.prices || []).filter(p => p.unitUuid === unit.uuid)" :key="price.uuid" class="flex justify-between items-center border-b border-dashed border-surface-200  last:border-0 py-0.5">
                                     <span class="text-surface-500 text-[10px] w-12">{{ unit.unitName }}</span>
                                     <div class="flex flex-col items-end">
                                         <span class="font-mono font-medium">{{ formatCurrency(price.price) }}</span>
-                                        <span v-if="price.minWholesaleQty > 0" class="text-[9px] text-green-600 bg-green-50 dark:bg-green-900/20 px-1 rounded">
+                                        <span v-if="price.minWholesaleQty > 0" class="text-[9px] text-green-600 bg-green-50 px-1 rounded">
                                             Grosir ≥ {{ price.minWholesaleQty }}
                                         </span>
                                     </div>
@@ -259,7 +280,7 @@ defineExpose({ refresh });
                     </template>
                 </Column>
 
-                <Column header="Aksi" style="width: 100px; text-align: center" frozen alignFrozen="right">
+                <Column header="Aksi" style="width: 120px; text-align: center" frozen alignFrozen="right">
                     <template #body="{ data }">
                         <div class="flex justify-center gap-1">
                             <Button 
@@ -272,6 +293,19 @@ defineExpose({ refresh });
                                 @click="handleEdit(data)" 
                                 class="!w-8 !h-8"
                             />
+                            
+                            <Button 
+                                v-if="data.units && data.units.length > 1"
+                                icon="pi pi-box" 
+                                outlined 
+                                rounded 
+                                severity="help" 
+                                size="small"
+                                v-tooltip.top="'Pecah Satuan'"
+                                @click="openBreakModal(data)" 
+                                class="!w-8 !h-8"
+                            />
+
                             <Button 
                                 icon="pi pi-trash" 
                                 outlined
@@ -288,6 +322,12 @@ defineExpose({ refresh });
 
             </DataTable>
         </div>
+
+        <ProductBreakModal 
+            v-model:visible="showBreakModal"
+            :product="selectedProductForBreak"
+            @saved="onBreakSuccess"
+        />
     </div>
 </template>
 

@@ -3,9 +3,7 @@ import { Repository } from 'typeorm';
 import { BankEntity } from '../../common/entities/bank/bank.entity';
 import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
-
-// Helper untuk generate ID unik pendek
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class BankService {

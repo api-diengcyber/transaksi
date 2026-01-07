@@ -1,12 +1,8 @@
 import { Injectable, Inject, NotFoundException, BadRequestException } from "@nestjs/common";
 import { Repository, DataSource, Like } from "typeorm";
 import { CreateShelveDto, UpdateShelveDto } from "./dto/create-shelve.dto";
-import { ProductShelveEntity } from "src/common/entities/product_shelve/product_shelve.entity";
-
-// [BARU] Helper untuk menghasilkan pengenal lokal
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-// [BARU] Helper untuk menghasilkan UUID dengan prefix Store (Contoh format: [storeUuid]-SHL-[local_identifier])
-const generateShelveUuid = (storeUuid: string) => `${storeUuid}-SHL-${generateLocalUuid()}`;
+import { ProductShelveEntity, ShelveType } from "src/common/entities/product_shelve/product_shelve.entity";
+import { generateShelveUuid } from "src/common/utils/generate_uuid_util";
 
 @Injectable()
 export class ShelveService {
@@ -32,19 +28,24 @@ export class ShelveService {
     return await this.shelveRepo.save(newShelve);
   }
 
-  // [UPDATED] Tambah storeUuid
-  async findAll(storeUuid: string) {
-    const whereCondition: { uuid?: any } = {};
+  async findAll(storeUuid: string, type?: ShelveType) {
+    const whereCondition: any = {};
 
-    // [UPDATED] Filtering berdasarkan UUID dengan prefix storeUuid
+    // Filter by Store UUID pattern
     if (storeUuid) {
       whereCondition.uuid = Like(`${storeUuid}-SHL-%`);
     }
+
+    // [BARU] Filter by Type jika diminta
+    if (type) {
+      whereCondition.type = type;
+    }
     
     const shelves = await this.shelveRepo.createQueryBuilder('shelve')
-      .where(whereCondition) // <-- TAMBAH FILTER
+      .where(whereCondition)
       .loadRelationCountAndMap('shelve.totalItems', 'shelve.productShelves')
-      .orderBy('shelve.createdAt', 'DESC')
+      .orderBy('shelve.isDefault', 'DESC') // Tampilkan Default/Gudang paling atas
+      .addOrderBy('shelve.createdAt', 'DESC')
       .getMany();
 
     return shelves;

@@ -2,9 +2,7 @@ import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { Repository, DataSource, Like, EntityManager } from 'typeorm';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-const generateJournalDetailUuid = (storeUuid: string) => `${storeUuid}-JDT-${generateLocalUuid()}`;
+import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class JournalService {

@@ -11,16 +11,8 @@ import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_rol
 import { CategoryService } from '../category/category.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
-
-// [BARU] Helper untuk menghasilkan pengenal lokal
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-// [BARU] Helper untuk menghasilkan Store UUID (STR-[local_identifier])
-const generateStoreUuid = () => `STR-${generateLocalUuid()}`;
-// [BARU] Helper untuk menghasilkan User UUID (prefix dengan Store UUID)
-const generateUserUuid = (storeUuid: string) => `${storeUuid}-USR-${generateLocalUuid()}`;
-// [BARU] Helper untuk menghasilkan Store Setting UUID (prefix dengan Store UUID)
-const generateStoreSettingUuid = (storeUuid: string) => `${storeUuid}-STG-${generateLocalUuid()}`;
-const generateUserRoleUuid = (storeUuid: string) => `${storeUuid}-ROLE-${generateLocalUuid()}`;
+import { ProductShelveEntity, ShelveType } from 'src/common/entities/product_shelve/product_shelve.entity';
+import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateShelveUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class StoreService {
@@ -143,6 +135,19 @@ export class StoreService {
       const rtHash = await bcrypt.hash(tokens.refreshToken, 10);
       savedUser.refreshToken = rtHash;
       await manager.save(savedUser);
+
+      // 7. CREATE DEFAULT WAREHOUSE (Gudang Utama)
+      const defaultShelve = manager.create(ProductShelveEntity, {
+        uuid: generateShelveUuid(savedStore.uuid),
+        storeUuid: savedStore.uuid,
+        name: 'Gudang Utama',
+        type: ShelveType.WAREHOUSE, 
+        isDefault: true, 
+        description: 'Penyimpanan Utama Toko',
+        capacity: 999999,
+        createdBy: savedUser.uuid,
+      });
+      await manager.save(defaultShelve);
 
       return {
         store: { ...savedStore, isActive: true },

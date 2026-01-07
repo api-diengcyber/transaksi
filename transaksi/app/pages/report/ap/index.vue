@@ -148,83 +148,83 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-surface-50 dark:bg-surface-100 transition-colors duration-300">
+    <div class="flex flex-col h-full bg-surface-50 transition-colors duration-300">
         
         <div class="mb-8">
-            <h1 class="text-2xl md:text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Laporan Hutang (AP)</h1>
-            <p class="text-surface-500 dark:text-surface-400 mt-1 text-sm">Monitoring kewajiban pembayaran ke supplier dan jatuh tempo.</p>
+            <h1 class="text-2xl md:text-3xl font-bold  tracking-tight">Laporan Hutang (AP)</h1>
+            <p class="text-surface-500  mt-1 text-sm">Monitoring kewajiban pembayaran ke supplier dan jatuh tempo.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
             
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-red-600 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Total Tagihan Hutang</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ formatCurrency(stats.totalTagihan) }}</h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Total Tagihan Hutang</p>
+                        <h3 class="text-2xl font-black ">{{ formatCurrency(stats.totalTagihan) }}</h3>
                     </div>
-                    <div class="bg-red-50 dark:bg-red-500/10 p-2.5 rounded-xl text-red-600 dark:text-red-400">
+                    <div class="bg-red-50 p-2.5 rounded-xl text-red-600 ">
                         <i class="pi pi-wallet text-xl"></i>
                     </div>
                 </div>
-                <p class="text-xs text-surface-500 dark:text-surface-400">Akumulasi seluruh nota hutang</p>
+                <p class="text-xs text-surface-500 ">Akumulasi seluruh nota hutang</p>
             </div>
 
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-blue-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Lunas</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ stats.totalLunas }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Lunas</p>
+                        <h3 class="text-2xl font-black ">{{ stats.totalLunas }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
                     </div>
-                    <div class="bg-blue-50 dark:bg-blue-500/10 p-2.5 rounded-xl text-blue-600 dark:text-blue-400">
+                    <div class="bg-blue-50  p-2.5 rounded-xl text-blue-600 ">
                         <i class="pi pi-check-circle text-xl"></i>
                     </div>
                 </div>
-                <p class="text-xs text-surface-500 dark:text-surface-400">Hutang selesai dibayar</p>
+                <p class="text-xs text-surface-500 ">Hutang selesai dibayar</p>
             </div>
 
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-orange-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Belum Lunas</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ stats.totalBelumLunas }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Belum Lunas</p>
+                        <h3 class="text-2xl font-black ">{{ stats.totalBelumLunas }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
                     </div>
-                    <div class="bg-orange-50 dark:bg-orange-500/10 p-2.5 rounded-xl text-orange-600 dark:text-orange-400">
+                    <div class="bg-orange-50  p-2.5 rounded-xl text-orange-600 ">
                         <i class="pi pi-hourglass text-xl"></i>
                     </div>
                 </div>
-                <p class="text-xs text-surface-500 dark:text-surface-400">Kewajiban tertunda</p>
+                <p class="text-xs text-surface-500 ">Kewajiban tertunda</p>
             </div>
 
-             <div class="p-5 rounded-2xl bg-red-50 dark:bg-red-900/20 shadow-sm border border-red-200 dark:border-red-800 relative overflow-hidden group hover:shadow-md transition-all">
+             <div class="p-5 rounded-2xl bg-red-50 shadow-sm border border-red-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                     <div class="bg-red-600 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-red-700 dark:text-red-300 text-xs font-bold uppercase tracking-widest mb-1">Sisa Hutang (Balance)</p>
-                        <h3 class="text-2xl font-black text-red-800 dark:text-red-100">{{ formatCurrency(stats.totalSisa) }}</h3>
+                        <p class="text-red-700  text-xs font-bold uppercase tracking-widest mb-1">Sisa Hutang (Balance)</p>
+                        <h3 class="text-2xl font-black text-red-800">{{ formatCurrency(stats.totalSisa) }}</h3>
                     </div>
-                    <div class="bg-surface-0/50 dark:bg-surface-100/50 p-2.5 rounded-xl text-red-700 dark:text-red-400 shadow-sm">
+                    <div class="bg-surface-0/50 /50 p-2.5 rounded-xl text-red-700  shadow-sm">
                         <i class="pi pi-calculator text-xl"></i>
                     </div>
                 </div>
-                <p class="text-xs text-red-700/70 dark:text-red-300/70 font-medium">Total yang harus dibayar</p>
+                <p class="text-xs text-red-700/70 /70 font-medium">Total yang harus dibayar</p>
             </div>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700 flex-1 flex flex-col overflow-hidden">
+        <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200  flex-1 flex flex-col overflow-hidden">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0 dark:bg-surface-100">
+            <div class="p-4 border-b border-surface-200  flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0">
                 <div class="w-full sm:w-auto relative">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
                     <InputText v-model="filters['global'].value" placeholder="Cari Nota, Supplier..." class="w-full sm:w-80 !pl-10 !rounded-xl" size="small" />
@@ -249,7 +249,7 @@ defineExpose({ refreshData });
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-12 text-surface-400">
-                        <div class="bg-surface-50 dark:bg-surface-700 p-4 rounded-full mb-3">
+                        <div class="bg-surface-50 p-4 rounded-full mb-3">
                             <i class="pi pi-inbox text-4xl opacity-50"></i>
                         </div>
                         <p class="font-medium">Belum ada data hutang.</p>
@@ -261,7 +261,7 @@ defineExpose({ refreshData });
                 <Column field="code" header="Info Nota" sortable>
                     <template #body="slotProps">
                         <div class="flex flex-col py-1">
-                            <span class="font-bold font-mono text-sm tracking-tight text-red-700 dark:text-red-400">{{ slotProps.data.code }}</span>
+                            <span class="font-bold font-mono text-sm tracking-tight text-red-700 ">{{ slotProps.data.code }}</span>
                             <div class="text-[11px] text-surface-500 mt-1 flex items-center gap-1">
                                 <i class="pi pi-calendar text-[9px]"></i>
                                 {{ formatDate(slotProps.data.date) }}
@@ -274,9 +274,9 @@ defineExpose({ refreshData });
                 <Column field="contact" header="Supplier" sortable>
                     <template #body="slotProps">
                          <div class="flex items-center gap-2">
-                            <Avatar :label="slotProps.data.contact ? slotProps.data.contact.charAt(0).toUpperCase() : 'S'" shape="circle" size="small" class="!bg-surface-200 dark:!bg-surface-700 !text-surface-600 dark:!text-surface-300 !text-xs" />
+                            <Avatar :label="slotProps.data.contact ? slotProps.data.contact.charAt(0).toUpperCase() : 'S'" shape="circle" size="small" class="!bg-surface-200  !text-surface-600  !text-xs" />
                             <div class="flex flex-col">
-                                <span class="font-medium text-surface-700 dark:text-surface-200 text-sm">{{ slotProps.data.contact }}</span>
+                                <span class="font-medium  text-sm">{{ slotProps.data.contact }}</span>
                             </div>
                         </div>
                     </template>
@@ -288,7 +288,7 @@ defineExpose({ refreshData });
                             <i class="pi pi-check text-[9px]"></i> Selesai
                         </div>
                         <div v-else-if="slotProps.data.dueDate">
-                            <span class="text-xs" :class="isOverdue(slotProps.data) ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-surface-600 dark:text-surface-300'">
+                            <span class="text-xs" :class="isOverdue(slotProps.data) ? 'text-rose-600  font-bold' : ''">
                                  {{ formatDate(slotProps.data.dueDate) }}
                             </span>
                             <div v-if="isOverdue(slotProps.data)" class="text-[9px] text-rose-500 mt-0.5">Lewat Jatuh Tempo</div>
@@ -299,20 +299,20 @@ defineExpose({ refreshData });
                 
                 <Column field="total" header="Total Tagihan" sortable class="text-right">
                     <template #body="slotProps">
-                        <span class="font-medium text-sm text-surface-600 dark:text-surface-300">{{ formatCurrency(slotProps.data.total) }}</span>
+                        <span class="font-medium text-sm ">{{ formatCurrency(slotProps.data.total) }}</span>
                     </template>
                 </Column>
 
                  <Column field="paid" header="Dibayar" sortable class="text-right">
                     <template #body="slotProps">
-                        <span class="font-medium text-sm text-emerald-600 dark:text-emerald-400">{{ formatCurrency(slotProps.data.paid) }}</span>
+                        <span class="font-medium text-sm text-emerald-600">{{ formatCurrency(slotProps.data.paid) }}</span>
                     </template>
                 </Column>
 
                  <Column field="remaining" header="Sisa" sortable class="text-right">
                     <template #body="slotProps">
                         <div class="flex flex-col items-end gap-1">
-                            <span class="font-black text-sm" :class="slotProps.data.isPaidOff ? 'text-surface-400 dark:text-surface-600 decoration-line-through' : 'text-red-600 dark:text-red-400'">
+                            <span class="font-black text-sm" :class="slotProps.data.isPaidOff ? 'text-surface-400  decoration-line-through' : 'text-red-600 '">
                                 {{ formatCurrency(slotProps.data.remaining) }}
                             </span>
                             <Tag v-if="slotProps.data.isPaidOff" value="LUNAS" severity="success" rounded class="!text-[9px] !font-bold !px-1.5" />
@@ -322,13 +322,13 @@ defineExpose({ refreshData });
                 </Column>
 
                 <template #expansion="slotProps">
-                    <div class="p-4 bg-surface-50 dark:bg-surface-100/50 border-y border-surface-200 dark:border-surface-700">
+                    <div class="p-4 bg-surface-50/50 border-y border-surface-200 ">
                         <div class="flex items-center gap-2 mb-3 ml-1">
                             <i class="pi pi-history text-blue-500"></i>
-                            <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Riwayat Pembayaran Keluar</h5>
+                            <h5 class="font-bold  text-xs uppercase tracking-wide">Riwayat Pembayaran Keluar</h5>
                         </div>
                         
-                        <div class="rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden bg-surface-0 dark:bg-surface-100 shadow-sm max-w-3xl">
+                        <div class="rounded-xl border border-surface-200  overflow-hidden bg-surface-0 shadow-sm max-w-3xl">
                             <DataTable :value="slotProps.data.paymentHistory" size="small" class="text-xs">
                                 <Column field="code" header="No. Pembayaran" />
                                 <Column field="date" header="Tanggal">
@@ -345,10 +345,10 @@ defineExpose({ refreshData });
                                     </template>
                                 </Column>
                                 <Column field="total" header="Jumlah Keluar" class="text-right">
-                                    <template #body="i"><span class="font-bold text-red-600 dark:text-red-400">- {{ formatCurrency(i.data.total) }}</span></template>
+                                    <template #body="i"><span class="font-bold text-red-600 ">- {{ formatCurrency(i.data.total) }}</span></template>
                                 </Column>
                             </DataTable>
-                             <div v-if="slotProps.data.paymentHistory.length === 0" class="px-4 py-8 text-center text-surface-400 italic text-xs bg-surface-0 dark:bg-surface-100">
+                             <div v-if="slotProps.data.paymentHistory.length === 0" class="px-4 py-8 text-center text-surface-400 italic text-xs bg-surface-0">
                                 Belum ada riwayat pembayaran untuk nota ini.
                             </div>
                         </div>

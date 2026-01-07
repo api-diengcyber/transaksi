@@ -146,7 +146,7 @@ const onSubmit = async () => {
                     <div class="relative">
                       <select
                         v-model="form.category"
-                        class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-surface-0 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
+                        class="block w-full appearance-none rounded-xl border border-surface-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-surface-0 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
                       >
                         <option 
                           v-for="cat in categories" 
@@ -169,7 +169,7 @@ const onSubmit = async () => {
                     <div class="relative">
                       <select
                         v-model="form.parentUuid"
-                        class="block w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-surface-0 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
+                        class="block w-full appearance-none rounded-xl border border-surface-200 bg-gray-50 px-4 py-2.5 text-gray-700 focus:bg-surface-0 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
                       >
                         <option value="">- Akun Utama (Root) -</option>
                         <option v-for="parent in parentOptions" :key="parent.uuid" :value="parent.uuid">
@@ -190,7 +190,7 @@ const onSubmit = async () => {
                         v-model="form.code"
                         type="text"
                         required
-                        class="block w-full rounded-xl border border-gray-200 px-4 py-2.5 text-gray-700 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm font-mono transition-all"
+                        class="block w-full rounded-xl border border-surface-200 px-4 py-2.5 text-gray-700 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm font-mono transition-all"
                         placeholder="1-001"
                       />
                     </div>
@@ -201,7 +201,7 @@ const onSubmit = async () => {
                         v-model="form.name"
                         type="text"
                         required
-                        class="block w-full rounded-xl border border-gray-200 px-4 py-2.5 text-gray-700 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
+                        class="block w-full rounded-xl border border-surface-200 px-4 py-2.5 text-gray-700 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 sm:text-sm transition-all"
                         placeholder="Contoh: Kas Besar"
                       />
                     </div>

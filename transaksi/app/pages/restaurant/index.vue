@@ -93,7 +93,7 @@ definePageMeta({ layout: 'default' });
 <template>
     <div class="h-[calc(100vh-5rem)]">
         
-        <div class="flex items-end gap-3 mb-6 border-b border-surface-300 dark:border-surface-700">
+        <div class="flex items-end gap-3 mb-6 border-b border-surface-300">
 
             <button 
                 @click="activeMainTab = 'tables'"

@@ -147,88 +147,88 @@ defineExpose({ refreshData });
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-surface-50 dark:bg-surface-100 transition-colors duration-300">
+    <div class="flex flex-col h-full bg-surface-50 transition-colors duration-300">
         
         <div class="mb-8">
-            <h1 class="text-2xl md:text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Laporan Penjualan</h1>
-            <p class="text-surface-500 dark:text-surface-400 mt-1 text-sm">Ringkasan transaksi penjualan, retur, dan piutang toko Anda.</p>
+            <h1 class="text-2xl md:text-3xl font-bold  tracking-tight">Laporan Penjualan</h1>
+            <p class="text-surface-500  mt-1 text-sm">Ringkasan transaksi penjualan, retur, dan piutang toko Anda.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-emerald-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Total Omset</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ formatCurrency(stats.totalOmset) }}</h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Total Omset</p>
+                        <h3 class="text-2xl font-black ">{{ formatCurrency(stats.totalOmset) }}</h3>
                     </div>
-                    <div class="bg-emerald-50 dark:bg-emerald-500/10 p-2.5 rounded-xl text-emerald-600 dark:text-emerald-400">
+                    <div class="bg-emerald-50  p-2.5 rounded-xl text-emerald-600">
                         <i class="pi pi-money-bill text-xl"></i>
                     </div>
                 </div>
-                <div class="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-500/10 w-fit px-2 py-1 rounded-lg">
+                <div class="flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50  w-fit px-2 py-1 rounded-lg">
                     <i class="pi pi-arrow-up text-[10px]"></i>
                     <span>Pendapatan Kotor</span>
                 </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-blue-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Transaksi</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ stats.totalTrx }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Transaksi</p>
+                        <h3 class="text-2xl font-black ">{{ stats.totalTrx }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
                     </div>
-                    <div class="bg-blue-50 dark:bg-blue-500/10 p-2.5 rounded-xl text-blue-600 dark:text-blue-400">
+                    <div class="bg-blue-50  p-2.5 rounded-xl text-blue-600 ">
                         <i class="pi pi-receipt text-xl"></i>
                     </div>
                 </div>
-                <p class="text-xs text-surface-500 dark:text-surface-400">Akumulasi Penjualan & Retur</p>
+                <p class="text-xs text-surface-500 ">Akumulasi Penjualan & Retur</p>
             </div>
 
-            <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+            <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-rose-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Total Retur</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ stats.totalReturnNotes }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Total Retur</p>
+                        <h3 class="text-2xl font-black ">{{ stats.totalReturnNotes }} <span class="text-sm font-medium text-surface-400">Nota</span></h3>
                     </div>
-                    <div class="bg-rose-50 dark:bg-rose-500/10 p-2.5 rounded-xl text-rose-600 dark:text-rose-400">
+                    <div class="bg-rose-50  p-2.5 rounded-xl text-rose-600 ">
                         <i class="pi pi-refresh text-xl"></i>
                     </div>
                 </div>
-                 <div class="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-500/10 w-fit px-2 py-1 rounded-lg">
+                 <div class="flex items-center gap-1.5 text-xs text-rose-600  font-medium bg-rose-50  w-fit px-2 py-1 rounded-lg">
                     <i class="pi pi-exclamation-circle text-[10px]"></i>
                     <span>Barang Kembali</span>
                 </div>
             </div>
 
-             <div class="p-5 rounded-2xl bg-surface-0 dark:bg-surface-100 shadow-sm border border-surface-200 dark:border-surface-700 relative overflow-hidden group hover:shadow-md transition-all">
+             <div class="p-5 rounded-2xl bg-surface-0 shadow-sm border border-surface-200  relative overflow-hidden group hover:shadow-md transition-all">
                 <div class="absolute -right-6 -top-6 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <div class="bg-orange-500 rounded-full w-24 h-24 blur-xl"></div>
                 </div>
                 <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <p class="text-surface-500 dark:text-surface-400 text-xs font-bold uppercase tracking-widest mb-1">Piutang Aktif</p>
-                        <h3 class="text-2xl font-black text-surface-800 dark:text-surface-0">{{ formatCurrency(stats.totalPiutang) }}</h3>
+                        <p class="text-surface-500  text-xs font-bold uppercase tracking-widest mb-1">Piutang Aktif</p>
+                        <h3 class="text-2xl font-black ">{{ formatCurrency(stats.totalPiutang) }}</h3>
                     </div>
-                    <div class="bg-orange-50 dark:bg-orange-500/10 p-2.5 rounded-xl text-orange-600 dark:text-orange-400">
+                    <div class="bg-orange-50  p-2.5 rounded-xl text-orange-600 ">
                         <i class="pi pi-wallet text-xl"></i>
                     </div>
                 </div>
-                <p class="text-xs text-surface-500 dark:text-surface-400">Pembayaran Kredit / Tempo</p>
+                <p class="text-xs text-surface-500 ">Pembayaran Kredit / Tempo</p>
             </div>
         </div>
 
-        <div class="bg-surface-0 dark:bg-surface-100 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700 flex-1 flex flex-col overflow-hidden">
+        <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200  flex-1 flex flex-col overflow-hidden">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-700 flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0 dark:bg-surface-100">
+            <div class="p-4 border-b border-surface-200  flex flex-col sm:flex-row justify-between gap-4 items-center bg-surface-0">
                 <div class="w-full sm:w-auto relative">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
                     <InputText v-model="filters['global'].value" placeholder="Cari No. Nota, Pelanggan..." class="w-full sm:w-80 !pl-10 !rounded-xl" size="small" />
@@ -252,7 +252,7 @@ defineExpose({ refreshData });
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-12 text-surface-400">
-                        <div class="bg-surface-50 dark:bg-surface-700 p-4 rounded-full mb-3">
+                        <div class="bg-surface-50 p-4 rounded-full mb-3">
                             <i class="pi pi-inbox text-4xl opacity-50"></i>
                         </div>
                         <p class="font-medium">Belum ada transaksi penjualan.</p>
@@ -265,7 +265,7 @@ defineExpose({ refreshData });
                     <template #body="slotProps">
                         <div class="flex flex-col py-1">
                             <span class="font-bold font-mono text-sm tracking-tight"
-                                :class="slotProps.data.isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-primary-600 dark:text-primary-400'"
+                                :class="slotProps.data.isReturn ? 'text-rose-600 ' : 'text-primary-600 '"
                             >
                                 {{ slotProps.data.code }}
                             </span>
@@ -280,8 +280,8 @@ defineExpose({ refreshData });
                 <Column field="customer" header="Pelanggan" sortable>
                      <template #body="slotProps">
                         <div class="flex items-center gap-2">
-                            <Avatar :label="slotProps.data.customer ? slotProps.data.customer.charAt(0).toUpperCase() : 'U'" shape="circle" size="small" class="!bg-surface-200 dark:!bg-surface-700 !text-surface-600 dark:!text-surface-300 !text-xs" />
-                            <span class="font-medium text-surface-700 dark:text-surface-200">{{ slotProps.data.customer || 'Pelanggan Umum' }}</span>
+                            <Avatar :label="slotProps.data.customer ? slotProps.data.customer.charAt(0).toUpperCase() : 'U'" shape="circle" size="small" class="!bg-surface-200  !text-surface-600  !text-xs" />
+                            <span class="font-medium ">{{ slotProps.data.customer || 'Pelanggan Umum' }}</span>
                         </div>
                     </template>
                 </Column>
@@ -290,7 +290,7 @@ defineExpose({ refreshData });
                     <template #body="slotProps">
                         <div class="flex flex-col gap-1 items-start">
                             <Tag :value="slotProps.data.method" :severity="getMethodSeverity(slotProps.data.method)" rounded class="!text-[10px] !font-bold !px-2 uppercase tracking-wide" />
-                            <span v-if="slotProps.data.isReturn" class="text-[10px] text-rose-500 font-medium bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded">RETUR</span>
+                            <span v-if="slotProps.data.isReturn" class="text-[10px] text-rose-500 font-medium bg-rose-50  px-1.5 py-0.5 rounded">RETUR</span>
                             <span v-if="slotProps.data.isCredit" class="text-[10px] text-orange-500 font-medium">Jatuh Tempo: {{ slotProps.data.dueDate ? new Date(slotProps.data.dueDate).toLocaleDateString('id-ID') : '-' }}</span>
                         </div>
                     </template>
@@ -298,7 +298,7 @@ defineExpose({ refreshData });
 
                 <Column field="items.length" header="Item" sortable class="text-center">
                     <template #body="slotProps">
-                         <span class="inline-flex items-center justify-center bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-300 text-xs font-bold px-2.5 py-1 rounded-md min-w-[2rem]">
+                         <span class="inline-flex items-center justify-center bg-surface-100  text-xs font-bold px-2.5 py-1 rounded-md min-w-[2rem]">
                             {{ slotProps.data.items.length }}
                          </span>
                     </template>
@@ -307,7 +307,7 @@ defineExpose({ refreshData });
                 <Column field="total" header="Total" sortable class="text-right">
                     <template #body="slotProps">
                         <span class="font-bold text-sm"
-                           :class="slotProps.data.isReturn ? 'text-rose-600 dark:text-rose-400' : 'text-surface-900 dark:text-surface-0'"
+                           :class="slotProps.data.isReturn ? 'text-rose-600 ' : ''"
                         >
                             {{ slotProps.data.isReturn ? '-' : '' }}{{ formatCurrency(Math.abs(slotProps.data.total)) }}
                         </span>
@@ -316,27 +316,27 @@ defineExpose({ refreshData });
 
                 <Column style="width: 4rem; text-align: center">
                     <template #body>
-                        <Button icon="pi pi-print" text rounded severity="secondary" size="small" class="hover:bg-surface-100 dark:hover:bg-surface-700" v-tooltip.left="'Cetak Struk'" />
+                        <Button icon="pi pi-print" text rounded severity="secondary" size="small" class="hover:bg-surface-100" v-tooltip.left="'Cetak Struk'" />
                     </template>
                 </Column>
 
                 <template #expansion="slotProps">
-                    <div class="p-4 bg-surface-50 dark:bg-surface-100/50 border-y border-surface-200 dark:border-surface-700">
+                    <div class="p-4 bg-surface-50/50 border-y border-surface-200 ">
                         <div class="flex items-center gap-2 mb-3">
                             <i class="pi pi-list text-primary-500"></i>
-                            <h5 class="font-bold text-surface-700 dark:text-surface-200 text-xs uppercase tracking-wide">Detail Produk</h5>
+                            <h5 class="font-bold  text-xs uppercase tracking-wide">Detail Produk</h5>
                         </div>
                         
-                        <div class="rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden bg-surface-0 dark:bg-surface-100 shadow-sm max-w-3xl">
+                        <div class="rounded-xl border border-surface-200  overflow-hidden bg-surface-0 shadow-sm max-w-3xl">
                             <DataTable :value="slotProps.data.items" size="small" class="text-xs">
                                 <Column field="productName" header="Nama Produk">
                                     <template #body="i">
-                                        <span class="font-medium text-surface-700 dark:text-surface-200">{{ i.data.productName }}</span>
+                                        <span class="font-medium ">{{ i.data.productName }}</span>
                                     </template>
                                 </Column>
                                 <Column field="qty" header="Qty" class="text-center" style="width: 80px">
                                     <template #body="i">
-                                        <span class="font-mono font-bold text-surface-600 dark:text-surface-300">x{{ i.data.qty }}</span>
+                                        <span class="font-mono font-bold ">x{{ i.data.qty }}</span>
                                     </template>
                                 </Column>
                                 <Column field="price" header="Harga" class="text-right">
@@ -346,7 +346,7 @@ defineExpose({ refreshData });
                                 </Column>
                                 <Column field="subtotal" header="Subtotal" class="text-right" style="width: 150px">
                                     <template #body="i">
-                                        <span class="font-bold text-surface-900 dark:text-surface-100">{{ formatCurrency(Math.abs(i.data.subtotal)) }}</span>
+                                        <span class="font-bold text-surface-900 ">{{ formatCurrency(Math.abs(i.data.subtotal)) }}</span>
                                     </template>
                                 </Column>
                             </DataTable>

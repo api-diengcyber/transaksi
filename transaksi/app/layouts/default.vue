@@ -93,9 +93,9 @@ const items = ref([
         key: 'manajemen',
         items: [
             { label: 'Produk', icon: 'pi pi-box', route: '/product' }, // Box barang
+            { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, // Database stok
             { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, // Layout meja/grid
             { label: 'Produksi', icon: 'pi pi-cog', route: '/production' }, // Gear/Proses produksi
-            { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, // Database stok
             { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, // Truk pengiriman
             { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, // Gedung bank/Institusi
             { label: 'Member', icon: 'pi pi-user', route: '/member' }, // User personal

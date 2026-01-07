@@ -80,11 +80,11 @@ const closeDialog = () => {
         :header="isEditMode ? 'Edit Meja' : 'Buat Meja Baru'" 
         :modal="true" 
         :style="{ width: '400px' }" 
-        class="p-fluid bg-surface-0 dark:bg-surface-100"
+        class="p-fluid bg-surface-0"
     >
         <div class="flex flex-col gap-5 pt-2">
             <div class="field">
-                <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">
+                <label class="text-sm font-bold  mb-1 block">
                     Nama Meja <span class="text-red-500">*</span>
                 </label>
                 <InputText 
@@ -97,7 +97,7 @@ const closeDialog = () => {
             </div>
 
             <div class="field">
-                <label class="text-sm font-bold text-surface-700 dark:text-surface-200 mb-1 block">
+                <label class="text-sm font-bold  mb-1 block">
                     Kapasitas (Orang) <span class="text-red-500">*</span>
                 </label>
                 <InputNumber 
@@ -113,7 +113,7 @@ const closeDialog = () => {
         </div>
 
         <template #footer>
-            <div class="flex justify-end gap-2 pt-4 border-t border-surface-100 dark:border-surface-700 mt-2">
+            <div class="flex justify-end gap-2 pt-4 border-t border-surface-100  mt-2">
                 <Button label="Batal" icon="pi pi-times" text severity="secondary" @click="closeDialog" />
                 <Button :label="isEditMode ? 'Simpan Perubahan' : 'Buat Meja'" icon="pi pi-check" :loading="loading" @click="handleSave" />
             </div>

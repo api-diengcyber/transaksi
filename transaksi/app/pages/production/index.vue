@@ -71,13 +71,13 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-100 p-4">
+    <div class="h-full flex flex-col bg-surface-50 p-4">
         <Toast />
         <ConfirmDialog />
 
         <div class="flex items-center justify-between mb-4">
             <div>
-                <h1 class="text-2xl font-black text-surface-900 dark:text-surface-0 tracking-tight">Produksi</h1>
+                <h1 class="text-2xl font-black  tracking-tight">Produksi</h1>
                 <p class="text-surface-500 text-sm">Input data hasil produksi pegawai per langkah.</p>
             </div>
             <div class="flex gap-2">
@@ -86,7 +86,7 @@ onMounted(() => {
             </div>
         </div>
 
-        <div class="flex-1 overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-100 shadow-sm">
+        <div class="flex-1 overflow-hidden rounded-xl border border-surface-200  bg-surface-0 shadow-sm">
             
             <div v-if="loading && productionOrders.length === 0" class="p-8 flex justify-center">
                 <ProgressSpinner />

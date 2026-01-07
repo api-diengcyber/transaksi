@@ -7,9 +7,7 @@ import { ProductShelvePivotEntity } from 'src/common/entities/product_shelve_piv
 import { ProductCategoryPivotEntity } from 'src/common/entities/product_category_pivot/product_category_pivot.entity';
 import { JournalService } from '../journal/journal.service';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-
-// HANYA UNTUK TUJUAN DEMO: Fungsi utilitas untuk menghasilkan pengenal lokal unik 
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class ProductService {
@@ -151,15 +149,20 @@ export class ProductService {
       // 5. Catat Stok Awal ke Journal
       if (stockAdjustments && Array.isArray(stockAdjustments) && stockAdjustments.length > 0) {
         const mappedAdjustments = stockAdjustments.map(adj => {
-          const realUnitUuid = unitUuidMap.get(adj.unitUuid) || adj.unitUuid;
+          // Resolve UUID Unit
+          const realUnitUuid = unitUuidMap.get(adj.unitTempId) || unitUuidMap.get(adj.unitUuid) || adj.unitUuid;
+          if (!realUnitUuid) return null; // Skip jika unit tidak ditemukan
           return {
             ...adj,
             productUuid: savedProduct.uuid,
             unitUuid: realUnitUuid,
-            oldQty: 0
           }
-        });
-        await this.journalService.processStockAdjustment(mappedAdjustments, userId, manager, storeUuid);
+        }).filter(Boolean); // Hapus yang null
+
+        if (mappedAdjustments.length > 0) {
+           // Pastikan method ini ada di JournalService Anda
+           await this.journalService.processStockAdjustment(mappedAdjustments, userId, manager, storeUuid);
+        }
       }
 
       // 6. Process Shelves
@@ -596,5 +599,74 @@ export class ProductService {
       await this.productRepo.save(product);
     }
     return savedPrice;
+  }
+  
+  // ==========================================================
+  // BREAK UNIT (PECAH SATUAN)
+  // ==========================================================
+  async breakUnit(payload: any, userId: string, storeUuid: string) {
+    const { productUuid, sourceUnitUuid, targetUnitUuid, qtyToBreak } = payload;
+
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Ambil Data Produk & Unit
+      const product = await this.findOne(productUuid, storeUuid);
+      if (!product) throw new BadRequestException('Produk tidak ditemukan');
+
+      const sourceUnit = product.units.find(u => u.uuid === sourceUnitUuid);
+      const targetUnit = product.units.find(u => u.uuid === targetUnitUuid);
+
+      if (!sourceUnit || !targetUnit) throw new BadRequestException('Satuan asal atau tujuan tidak ditemukan');
+
+      // 2. Validasi Multiplier (Source harus lebih besar dari Target)
+      if (sourceUnit.unitMultiplier <= targetUnit.unitMultiplier) {
+        throw new BadRequestException('Satuan asal harus lebih besar dari satuan tujuan (Contoh: BOX ke PCS)');
+      }
+
+      // 3. Cek Stok Saat Ini
+      // Kita perlu menghitung stok real-time dari jurnal untuk validasi
+      // (Asumsi function calculateStockForUnits sudah ada di class ini seperti di file sebelumnya)
+      const stockMap = await this.calculateStockForUnits(product.units, manager);
+      const currentSourceQty = stockMap.get(sourceUnitUuid) || 0;
+      const currentTargetQty = stockMap.get(targetUnitUuid) || 0;
+
+      if (currentSourceQty < qtyToBreak) {
+        throw new BadRequestException(`Stok ${sourceUnit.unitName} tidak cukup. Tersedia: ${currentSourceQty}`);
+      }
+
+      // 4. Hitung Konversi
+      // Rumus: QtyBaru = QtyPecah * (MultiplierAsal / MultiplierTujuan)
+      // Contoh: 1 BOX (12) -> PCS (1). 1 * (12/1) = 12 PCS.
+      const conversionRatio = sourceUnit.unitMultiplier / targetUnit.unitMultiplier;
+      const qtyResult = qtyToBreak * conversionRatio;
+
+      // 5. Siapkan Payload untuk Journal Adjustment
+      // Kita menggunakan mekanisme stock adjustment yang sudah ada agar tercatat di ledger
+      const adjustments = [
+        {
+          productUuid: product.uuid,
+          unitUuid: sourceUnitUuid,
+          oldQty: currentSourceQty,
+          newQty: currentSourceQty - qtyToBreak, // Kurangi stok asal
+        },
+        {
+          productUuid: product.uuid,
+          unitUuid: targetUnitUuid,
+          oldQty: currentTargetQty,
+          newQty: currentTargetQty + qtyResult, // Tambah stok tujuan
+        }
+      ];
+
+      // 6. Eksekusi Jurnal
+      // Menggunakan journalService yang sudah di-inject
+      await this.journalService.processStockAdjustment(adjustments, userId, manager, storeUuid);
+
+      return {
+        message: 'Berhasil memecah satuan',
+        brokenStock: qtyToBreak,
+        gainedStock: qtyResult,
+        sourceUnit: sourceUnit.unitName,
+        targetUnit: targetUnit.unitName
+      };
+    });
   }
 }

@@ -1,5 +1,3 @@
-// composables/useProductService.ts
-
 export const useProductService = () => {
     const config = useRuntimeConfig();
     const API_BASE = `${config.public.apiBase}/product`;
@@ -66,6 +64,13 @@ export const useProductService = () => {
         });
     };
 
+    const breakUnit = async (payload: any) => {
+        return await useApi(`${API_BASE}/break-unit`, {
+            method: 'POST',
+            body: { ...payload }
+        });
+    };
+
     return {
         getAllProducts,
         getProduct,
@@ -74,6 +79,7 @@ export const useProductService = () => {
         deleteProduct,
         addPrice,
         addUnit,
-        deleteUnit
+        deleteUnit,
+        breakUnit
     };
 };

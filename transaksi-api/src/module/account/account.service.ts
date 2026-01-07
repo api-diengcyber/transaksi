@@ -5,8 +5,7 @@ import { JournalConfigEntity } from 'src/common/entities/journal_config/journal_
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
-
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class AccountService {

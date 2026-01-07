@@ -153,16 +153,16 @@ onMounted(() => { loadData(); });
 </script>
 
 <template>
-    <div class="h-full flex flex-col bg-surface-50 dark:bg-surface-100 p-4">
+    <div class="h-full flex flex-col bg-surface-50 p-4">
         
-        <div class="mb-4 pb-2 border-b border-surface-200 dark:border-surface-700 flex items-center gap-2 text-xl font-semibold text-red-600">
+        <div class="mb-4 pb-2 border-b border-surface-200  flex items-center gap-2 text-xl font-semibold text-red-600">
             <i class="pi pi-arrow-down-left"></i>
             <span>Daftar Hutang (AP)</span>
         </div>
 
-        <div class="rounded-2xl shadow-sm border border-surface-200 dark:border-surface-800 overflow-hidden flex-1 bg-surface-50/50 dark:bg-surface-100">
+        <div class="rounded-2xl shadow-sm border border-surface-200  overflow-hidden flex-1 bg-surface-50/50 ">
             
-            <div class="p-4 border-b border-surface-200 dark:border-surface-800 flex flex-col sm:flex-row justify-between gap-4 items-center">
+            <div class="p-4 border-b border-surface-200  flex flex-col sm:flex-row justify-between gap-4 items-center">
                 <IconField iconPosition="left">
                     <InputIcon class="pi pi-search text-surface-400" />
                     <InputText v-model="filters['global'].value" placeholder="Cari Nota / Supplier..." class="w-full sm:w-80 !rounded-lg pl-10" />
@@ -256,7 +256,7 @@ onMounted(() => { loadData(); });
 
         <Dialog v-model:visible="showPaymentModal" header="Bayar Hutang Supplier" :modal="true" class="w-11 md:w-3/5 lg:w-2/5">
             <div v-if="selectedDebt" class="p-fluid">
-                <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100">
+                <div class="mb-4 p-3 bg-red-50 rounded-lg border border-red-100">
                     <div class="flex justify-between items-center">
                          <span class="text-xs text-surface-500">Nota Referensi:</span>
                         <span class="font-bold text-sm">{{ selectedDebt.code }}</span>

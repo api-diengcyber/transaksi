@@ -136,7 +136,7 @@ watch(dates, loadData); // React to date changes
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-gray-50/50 rounded-xl">
+    <div class="flex flex-col h-full bg-surface-0 rounded-xl">
         
         <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 p-1">
             <div class="flex items-center gap-2">
@@ -144,13 +144,13 @@ watch(dates, loadData); // React to date changes
                     <i class="pi pi-book text-lg"></i>
                 </div>
                 <div>
-                    <h3 class="font-bold text-gray-800 text-sm">Jurnal Umum</h3>
+                    <h3 class="font-bold text-sm">Jurnal Umum</h3>
                     <p class="text-xs text-gray-500">Rekapitulasi transaksi keuangan</p>
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
-                <div class="px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-2">
+            <div class="flex items-center gap-2 bg-surface-0 p-1.5 rounded-xl border border-surface-200 shadow-sm">
+                <div class="px-3 py-1.5 bg-gray-50 rounded-lg border border-surface-100 flex items-center gap-2">
                     <i class="pi pi-calendar text-gray-400 text-xs"></i>
                     <Calendar 
                         v-model="dates" 
@@ -179,9 +179,8 @@ watch(dates, loadData); // React to date changes
             :loading="loading"
             paginator :rows="10"
             :rowsPerPageOptions="[10, 20, 50]"
-            
             tableStyle="min-width: 50rem"
-            class="p-datatable-sm text-sm border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white"
+            class="p-datatable-sm text-sm border border-surface-200 rounded-xl overflow-hidden shadow-sm bg-surface-0"
             rowHover
         >
             <template #empty>
@@ -214,7 +213,7 @@ watch(dates, loadData); // React to date changes
 
             <Column header="Tipe Transaksi" field="code" style="width: 20%">
                 <template #body="{ data }">
-                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-surface-200">
                         {{ data.code.split('-')[0] }}
                     </span>
                 </template>
@@ -235,7 +234,7 @@ watch(dates, loadData); // React to date changes
 
             <template #expansion="{ data }">
                 <div class="bg-gray-50/80 p-4 border-y border-gray-200 shadow-inner">
-                    <div class="max-w-4xl mx-auto bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                    <div class="max-w-4xl mx-auto bg-surface-0 border border-surface-200 rounded-lg overflow-hidden shadow-sm">
                         <div class="grid grid-cols-12 bg-gray-100/50 text-[11px] uppercase tracking-wider font-bold text-gray-500 py-2 px-4 border-b border-gray-200">
                             <div class="col-span-2">Kode Akun</div>
                             <div class="col-span-6">Nama Akun (Keterangan)</div>

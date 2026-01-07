@@ -100,7 +100,7 @@ const processTransaction = async () => {
             </div>
         </template>
 
-        <div class="flex flex-col h-full bg-surface-0 dark:bg-surface-100">
+        <div class="flex flex-col h-full bg-surface-0">
             <div class="p-6 space-y-5">
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">

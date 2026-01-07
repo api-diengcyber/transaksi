@@ -55,6 +55,18 @@
 
 /* [BARU] Dark mode overrides (.dark class applied to html tag) */
 .dark {
+    --p-primary-50: color-mix(in srgb, var(--app-primary-color), black 95%);
+    --p-primary-100: color-mix(in srgb, var(--app-primary-color), black 80%);
+    --p-primary-200: color-mix(in srgb, var(--app-primary-color), black 75%);
+    --p-primary-300: color-mix(in srgb, var(--app-primary-color), black 60%);
+    --p-primary-400: color-mix(in srgb, var(--app-primary-color), black 50%);
+    --p-primary-500: color-mix(in srgb, var(--app-primary-color), black 20%);
+    --p-primary-600: var(--app-primary-color);
+    --p-primary-700: color-mix(in srgb, var(--app-primary-color), white 15%);
+    --p-primary-800: color-mix(in srgb, var(--app-primary-color), white 40%);
+    --p-primary-900: color-mix(in srgb, var(--app-primary-color), white 70%);
+    --p-primary-950: color-mix(in srgb, var(--app-primary-color), white 95%);
+
     /* Dark Surface Overrides */
     --p-surface-0: #0a0e14;
     --p-surface-50: #10161f;
@@ -82,9 +94,9 @@ body {
 
 /* Global Tab Styling */
 .global-tab-inactive {
-    @apply px-4 py-2 text-sm font-medium text-surface-500 transition-colors duration-200 hover:text-primary-600 dark:text-surface-400 dark:hover:text-primary-400;
+    @apply px-4 py-2 text-sm font-medium text-surface-500 transition-colors duration-200 hover:text-primary-600;
 }
 
 .global-tab-active {
-    @apply px-4 py-2 text-sm font-extrabold text-primary-600 dark:text-primary-400 bg-surface-0 dark:bg-surface-100 border border-surface-300 dark:border-surface-700 border-b-0 rounded-t-lg shadow-md;
+    @apply px-4 py-2 text-sm font-extrabold text-primary-600 bg-surface-0 border border-surface-300 border-b-0 rounded-t-lg shadow-md;
 }

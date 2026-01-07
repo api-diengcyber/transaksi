@@ -8,8 +8,7 @@ import { ProductionFlowEntity } from 'src/common/entities/production_flow/produc
 import { ProductionFlowUserEntity } from 'src/common/entities/production_flow_user/production_flow_user.entity'; //
 import { CreateProductionFlowDto } from './dto/create-production-flow.dto';
 import { UpdateProductionFlowDto } from './dto/update-production-flow.dto';
-
-const generateLocalUuid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class ProductionFlowService {
