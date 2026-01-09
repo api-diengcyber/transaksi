@@ -11,9 +11,9 @@ import {
 } from 'typeorm';
 import { ProductUnitEntity } from '../product_unit/product_unit.entity';
 import { ProductPriceEntity } from '../product_price/product_price.entity';
-import { ProductShelvePivotEntity } from '../product_shelve_pivot/product_shelve_pivot.entity';
 import { ProductCategoryPivotEntity } from '../product_category_pivot/product_category_pivot.entity';
 import { UserEntity } from '../user/user.entity';
+import { ProductVariantEntity } from '../product_variant/product_variant.entity';
 
 @Entity('product')
 export class ProductEntity {
@@ -65,9 +65,12 @@ export class ProductEntity {
   @OneToMany(() => ProductPriceEntity, (price) => price.product)
   price: ProductPriceEntity[];
 
-  @OneToMany(() => ProductShelvePivotEntity, (shelve) => shelve.product)
-  shelve: ProductShelvePivotEntity[];
+  @OneToMany(() => ProductVariantEntity, (shelve) => shelve.product)
+  shelve: ProductVariantEntity[];
 
   @OneToMany(() => ProductCategoryPivotEntity, (category) => category.product)
   productCategory: ProductCategoryPivotEntity[];
+
+  @OneToMany(() => ProductVariantEntity, (variant) => variant.product)
+  variants: ProductVariantEntity[];
 }

@@ -12,6 +12,7 @@ import {
 import { ProductEntity } from '../product/product.entity';
 import { ProductPriceEntity } from '../product_price/product_price.entity';
 import { UserEntity } from '../user/user.entity';
+import { ProductVariantEntity } from '../product_variant/product_variant.entity';
 
 export enum ProductUnitEnum {
   PCS = 'PCS',
@@ -87,4 +88,11 @@ export class ProductUnitEntity {
 
   @OneToMany(() => ProductPriceEntity, (price) => price.unit)
   prices: ProductPriceEntity[];
+
+  @Column({ name: 'variant_uuid', type: 'uuid', nullable: true })
+  variantUuid: string;
+
+  @ManyToOne(() => ProductVariantEntity, (variant) => variant.units)
+  @JoinColumn({ name: 'variant_uuid' })
+  variant: ProductVariantEntity;
 }
