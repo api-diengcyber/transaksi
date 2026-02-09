@@ -1,18 +1,15 @@
-
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from 'src/common/db/database.module';
-import { CategoryController } from './category.controller';
 import { CategoryService } from './category.service';
-import { productCategoryProvider } from 'src/common/entities/product_category/product_category.provider';
-import { productCategoryPivotProvider } from 'src/common/entities/product_category_pivot/product_category_pivot.provider';
+import { DatabaseModule } from '../../common/db/database.module';
+import { categoryProvider } from 'src/common/entities/category/category.provider';
+import { CategoryController } from './category.controller';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [CategoryController],
   providers: [
-    ...productCategoryProvider,
-    ...productCategoryPivotProvider,
     CategoryService,
+    ...categoryProvider
   ],
   exports: [CategoryService],
 })

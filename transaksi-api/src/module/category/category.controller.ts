@@ -6,93 +6,65 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
-  ParseUUIDPipe
+  HttpCode,
+  HttpStatus,
+  UsePipes,
+  ValidationPipe
 } from '@nestjs/common';
+import { CategoryService } from './category.service';
+import { AtGuard } from 'src/common/guards/at.guard';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { AtGuard } from 'src/common/guards/at.guard';
-import { GetUser } from 'src/common/decorators/get-user.decorator';
-import { CategoryService } from './category.service';
-import { CreateCategoryDto, UpdateCategoryDto } from './dto/create-category.dto';
-import { GetStore } from 'src/common/decorators/get-store.decorator';
+// Import DTOs
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CategoryQueryDto } from './dto/category-query.dto';
 
-@ApiTags('Product Category')
+@ApiTags('Category')
 @ApiBearerAuth()
 @UseGuards(AtGuard)
 @Controller('category')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) { }
 
-  // ================================
-  // CREATE
-  // ================================
-  @Post('create')
-  @ApiOperation({ summary: 'Create new category (support parentUuid)' })
-  async create(
-    @Body() body: CreateCategoryDto,
-    @GetUser('sub') userId: string,
-    @GetStore() storeUuid: string,
-  ) {
-    return this.categoryService.create(body, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
-  }
-
-  // ================================
-  // FIND ALL
-  // ================================
   @Get('find-all')
-  @ApiOperation({ summary: 'Get all categories' })
-  async findAll(
-    @GetStore() storeUuid: string,
-  ) {
-    return this.categoryService.findAll(storeUuid); // <-- [UPDATED] Teruskan storeUuid
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get Categories with Pagination & Parent Info' })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async findAll(@Query() query: CategoryQueryDto) {
+    return await this.categoryService.findAll(query);
   }
 
-  // ================================
-  // FIND ONE
-  // ================================
   @Get(':uuid')
-  @ApiOperation({ summary: 'Get category detail by UUID' })
-  async findOne(
-    @Param('uuid') uuid: string,
-    @GetStore() storeUuid: string,
-  ) {
-    return this.categoryService.findOne(uuid, storeUuid);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get One Category Detail' })
+  async findOne(@Param('uuid') uuid: string) {
+    return await this.categoryService.findOne(uuid);
   }
 
-  // ================================
-  // UPDATE
-  // ================================
+  @Post('create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create New Category' })
+  async create(@Body() createDto: CreateCategoryDto) {
+    return await this.categoryService.create(createDto);
+  }
+
   @Put('update/:uuid')
-  @ApiOperation({ summary: 'Update category data (support parentUuid)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update Category' })
   async update(
     @Param('uuid') uuid: string,
-    @Body() body: UpdateCategoryDto,
-    @GetUser('sub') userId: string,
-    @GetStore() storeUuid: string,
+    @Body() updateDto: UpdateCategoryDto
   ) {
-    return this.categoryService.update(uuid, body, userId, storeUuid);
+    return await this.categoryService.update(uuid, updateDto);
   }
 
-  // ================================
-  // DELETE (SOFT DELETE)
-  // ================================
   @Delete('delete/:uuid')
-  @ApiOperation({ summary: 'Soft delete category' })
-  async remove(
-    @Param('uuid') uuid: string,
-    @GetUser('sub') userId: string,
-    @GetStore() storeUuid: string,
-  ) {
-    return this.categoryService.remove(uuid, userId, storeUuid); // <-- [UPDATED] Teruskan storeUuid
-  }
-
-  // ================================
-  // RESTORE
-  // ================================
-  @Post('restore/:uuid')
-  @ApiOperation({ summary: 'Restore a soft-deleted category' })
-  async restore(@Param('uuid') uuid: string) {
-    return this.categoryService.restore(uuid);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete Category (Soft)' })
+  async delete(@Param('uuid') uuid: string) {
+    return await this.categoryService.delete(uuid);
   }
 }

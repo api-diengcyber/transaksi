@@ -8,11 +8,10 @@ import { UserEntity } from 'src/common/entities/user/user.entity';
 import { AuthService } from 'src/module/auth/auth.service';
 import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
-import { CategoryService } from '../category/category.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
-import { ProductShelveEntity, ShelveType } from 'src/common/entities/product_shelve/product_shelve.entity';
-import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateShelveUuid } from 'src/common/utils/generate_uuid_util';
+import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid } from 'src/common/utils/generate_uuid_util';
+import { CategoryService } from '../category/category.service';
 
 @Injectable()
 export class StoreService {
@@ -25,7 +24,7 @@ export class StoreService {
     private userRepository: Repository<UserEntity>,
     @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly authService: AuthService,
-    private readonly categoryService: CategoryService,
+    // private readonly categoryService: CategoryService,
   ) { }
 
   async installStore(dto: InstallStoreDto, logoPath: string | null = null, originalName: string | null = null) {
@@ -88,7 +87,7 @@ export class StoreService {
       await manager.save(savedUser);
 
       // 4. INITIALIZE RESTAURANT CATEGORIES
-      await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedStore.uuid, manager);
+      // await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedStore.uuid, manager);
 
       // 5. SETTINGS
       if (dto.settings && dto.settings.length > 0) {
@@ -135,19 +134,6 @@ export class StoreService {
       const rtHash = await bcrypt.hash(tokens.refreshToken, 10);
       savedUser.refreshToken = rtHash;
       await manager.save(savedUser);
-
-      // 7. CREATE DEFAULT WAREHOUSE (Gudang Utama)
-      const defaultShelve = manager.create(ProductShelveEntity, {
-        uuid: generateShelveUuid(savedStore.uuid),
-        storeUuid: savedStore.uuid,
-        name: 'Gudang Utama',
-        type: ShelveType.WAREHOUSE, 
-        isDefault: true, 
-        description: 'Penyimpanan Utama Toko',
-        capacity: 999999,
-        createdBy: savedUser.uuid,
-      });
-      await manager.save(defaultShelve);
 
       return {
         store: { ...savedStore, isActive: true },
@@ -391,7 +377,7 @@ export class StoreService {
       await manager.save(savedUser);
 
       // 7. Init Categories
-      await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedBranch.uuid, manager);
+      // await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedBranch.uuid, manager);
 
       // 8. Copy Theme
       const parentTheme = await manager.findOne(StoreSettingEntity, {

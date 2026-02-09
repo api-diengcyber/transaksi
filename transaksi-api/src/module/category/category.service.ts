@@ -1,182 +1,148 @@
-import { Injectable, Inject, NotFoundException, BadRequestException } from "@nestjs/common";
-import { ProductCategoryEntity } from "src/common/entities/product_category/product_category.entity";
-import { Repository, DataSource, Like, EntityManager } from "typeorm";
-import { CreateCategoryDto, UpdateCategoryDto } from "./dto/create-category.dto";
-import { generateCategoryUuid } from "src/common/utils/generate_uuid_util";
+import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common';
+import { Repository, DataSource, Like, Not } from 'typeorm';
+import { CategoryEntity } from 'src/common/entities/category/category.entity';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CategoryQueryDto } from './dto/category-query.dto';
+import { generateCategoryUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class CategoryService {
   constructor(
-    @Inject('PRODUCT_CATEGORY_REPOSITORY')
-    private readonly categoryRepo: Repository<ProductCategoryEntity>,
+    @Inject('CATEGORY_REPOSITORY')
+    private readonly categoryRepo: Repository<CategoryEntity>,
     @Inject('DATA_SOURCE')
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
-  // ============================
-  // [BARU] INITIALIZE RESTAURANT CATEGORIES
-  // ============================
-  async initializeRestaurantCategories(userId: string, storeUuid: string, manager: EntityManager) {
-    const defaultCategories = [
-        { name: 'Makanan', isRestaurant: true },
-        { name: 'Minuman', isRestaurant: true },
-        { name: 'Bahan', isRestaurant: true },
-    ];
-    
-    const categoryEntities = defaultCategories.map(cat => {
-        const customCategoryUuid = generateCategoryUuid(storeUuid);
-        return manager.create(ProductCategoryEntity, {
-            uuid: customCategoryUuid,
-            name: cat.name,
-            isRestaurant: cat.isRestaurant, // Set true
-            createdBy: userId,
-        });
-    });
-    
-    await manager.save(categoryEntities);
-    return categoryEntities;
-  }
+  // --- FIND ALL (Pagination & Search) ---
+  async findAll(query: CategoryQueryDto) {
+    const { page = 1, limit = 10, search = '' } = query;
+    const skip = (page - 1) * limit;
 
-  // ============================
-  // CREATE CATEGORY
-  // ============================
-  // [UPDATED] Terima storeUuid
-  async create(payload: CreateCategoryDto, userId: string, storeUuid: string) { 
-    if (!storeUuid) {
-      throw new BadRequestException('Store ID is required for category creation.');
+    const whereCondition: any = {};
+    if (search) {
+      whereCondition.name = Like(`%${search}%`);
     }
 
-    const customCategoryUuid = generateCategoryUuid(storeUuid); // <-- PANGGIL HELPER BARU
-
-    let parentCategory: any = null;
-
-    if (payload.parentUuid) {
-      // [UPDATED] Gunakan findOne dengan filter storeUuid
-      parentCategory = await this.findOne(payload.parentUuid, storeUuid); 
-
-      if (!parentCategory) {
-        throw new NotFoundException(`Parent category with UUID ${payload.parentUuid} not found in this store`); // <-- Pesan disesuaikan
-      }
-    }
-
-    const newCategory = this.categoryRepo.create({
-      uuid: customCategoryUuid,
-      name: payload.name,
-      parent: parentCategory ?? null,
-      createdBy: userId,
-    });
-
-    return await this.categoryRepo.save(newCategory);
-  }
-
-  // ============================
-  // GET ALL
-  // ============================
-  // [UPDATED] Terima storeUuid
-  async findAll(storeUuid: string) {
-    const whereCondition: { uuid?: any } = {};
-
-    // [BARU] Filtering berdasarkan UUID dengan prefix storeUuid
-    if (storeUuid) {
-      whereCondition.uuid = Like(`${storeUuid}-CAT-%`);
-    }
-
-    const categorys = await this.categoryRepo.createQueryBuilder('category')
-      .where(whereCondition) // <-- TAMBAH FILTER
-      .leftJoinAndSelect('category.parent', 'parent')
-      .loadRelationCountAndMap('category.totalItems', 'category.productCategorys')
-      .orderBy('category.createdAt', 'DESC')
-      .addSelect('category.isRestaurant')
-      .getMany();
-
-    return categorys;
-  }
-
-  // ============================
-  // FIND ONE
-  // ============================
-  // [UPDATED] Terima storeUuid untuk validasi kepemilikan
-  async findOne(uuid: string, storeUuid?: string) {
-    const whereCondition: { uuid: any } = { uuid };
-
-    // Filtering jika storeUuid ada. Gunakan LIKE untuk filter berdasarkan prefix store.
-    if (storeUuid) {
-      // Jika storeUuid ada, kita pastikan UUID yang dicari match dengan prefix.
-      whereCondition.uuid = Like(`${storeUuid}-CAT-%`);
-    }
-
-    const category = await this.categoryRepo.findOne({
+    const [data, total] = await this.categoryRepo.findAndCount({
       where: whereCondition,
-      relations: [
-        'parent',
-        'children',
-        'productCategorys',
-        'productCategorys.product'
-      ]
+      relations: ['parent', 'children'], // Load Parent & Child untuk info lengkap
+      take: limit,
+      skip: skip,
+      order: { createdAt: 'DESC' },
     });
 
-    // Validasi tambahan: jika tidak ditemukan ATAU ditemukan tapi tidak match prefix (jika storeUuid ada)
-    if (!category || (storeUuid && !category.uuid.startsWith(`${storeUuid}-CAT-`))) { 
-      return null;
-    }
+    // Mapping agar response lebih rapi (opsional)
+    const mappedData = data.map(cat => ({
+      uuid: cat.uuid,
+      name: cat.name,
+      parentName: cat.parent ? cat.parent.name : null, // Info nama parent
+      parentUuid: cat.parent ? cat.parent.uuid : null,
+      childrenCount: cat.children ? cat.children.length : 0,
+      createdAt: cat.createdAt
+    }));
 
+    return {
+      data: mappedData,
+      meta: {
+        total,
+        page,
+        limit,
+        total_page: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // --- FIND ONE ---
+  async findOne(uuid: string) {
+    const category = await this.categoryRepo.findOne({
+      where: { uuid },
+      relations: ['parent', 'children', 'products'], // Load product juga jika perlu
+    });
+
+    if (!category) throw new NotFoundException(`Kategori dengan UUID ${uuid} tidak ditemukan`);
     return category;
   }
 
-  // ============================
-  // UPDATE CATEGORY
-  // ============================
-  // [UPDATED] Tambah storeUuid dan gunakan di findOne
-  async update(uuid: string, payload: UpdateCategoryDto, userId: string, storeUuid: string) {
-    const category = await this.findOne(uuid, storeUuid); // <-- Gunakan findOne dengan filter storeUuid
+  // --- CREATE ---
+  async create(payload: CreateCategoryDto) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (!category) {
-        throw new NotFoundException(`Category with UUID ${uuid} not found in this store`);
-    }
+    try {
+      const newCategory = new CategoryEntity();
+      newCategory.uuid = generateCategoryUuid();
+      newCategory.name = payload.name;
 
-    // ... (Logika update name dan parent tetap sama, namun memanggil this.findOne untuk parent juga)
-
-    // Update parent
-    if (payload.parentUuid !== undefined) {
-      if (payload.parentUuid === uuid) {
-        throw new BadRequestException("Category cannot be a parent of itself");
+      // Logic Parent
+      if (payload.parentUuid) {
+        const parent = await this.categoryRepo.findOneBy({ uuid: payload.parentUuid });
+        if (!parent) throw new BadRequestException('Parent kategori tidak ditemukan');
+        newCategory.parent = parent;
       }
 
-      if (payload.parentUuid === null) {
-        category.parent = null; // remove parent
-      } else {
-        // [UPDATED] Gunakan findOne dengan filter storeUuid untuk validasi parent
-        const parent = await this.findOne(payload.parentUuid, storeUuid); 
-        if (!parent) {
-          throw new NotFoundException(`Parent with UUID ${payload.parentUuid} not found in this store`);
+      const saved = await queryRunner.manager.save(CategoryEntity, newCategory);
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // --- UPDATE ---
+  async update(uuid: string, payload: UpdateCategoryDto) {
+    const category = await this.findOne(uuid); // Cek exist
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      if (payload.name) category.name = payload.name;
+
+      // Logic Update Parent
+      if (payload.parentUuid !== undefined) {
+        if (payload.parentUuid === null) {
+          // Jika dikirim null, berarti jadikan Root (Hapus Parent)
+        //   category.parent = null; --- IGNORE ---
+        } else {
+          // Validasi Circular: Tidak boleh menjadikan diri sendiri sebagai parent
+          if (payload.parentUuid === uuid) {
+            throw new BadRequestException('Kategori tidak bisa menjadi parent bagi dirinya sendiri');
+          }
+
+          const parent = await this.categoryRepo.findOneBy({ uuid: payload.parentUuid });
+          if (!parent) throw new BadRequestException('Parent kategori tidak ditemukan');
+          
+          category.parent = parent;
         }
-        category.parent = parent;
       }
+
+      const updated = await queryRunner.manager.save(CategoryEntity, category);
+      await queryRunner.commitTransaction();
+      return updated;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
     }
-
-    category.updatedBy = userId;
-
-    return await this.categoryRepo.save(category);
   }
 
-  // ============================
-  // DELETE
-  // ============================
-  // [UPDATED] Tambah storeUuid dan gunakan di findOne
-  async remove(uuid: string, userId: string, storeUuid: string) {
-    const category = await this.findOne(uuid, storeUuid); // <-- Gunakan findOne dengan filter storeUuid
+  // --- DELETE (Soft Delete) ---
+  async delete(uuid: string) {
+    const category = await this.findOne(uuid);
     
-    if (!category) {
-        throw new NotFoundException(`Category with UUID ${uuid} not found in this store`);
+    // Validasi Opsional: Jangan hapus jika masih punya anak
+    if (category.children && category.children.length > 0) {
+       throw new BadRequestException('Tidak bisa menghapus kategori yang masih memiliki sub-kategori. Hapus/pindahkan sub-kategori terlebih dahulu.');
     }
 
-    category.deletedBy = userId;
-    await this.categoryRepo.save(category);
-
-    return await this.categoryRepo.softDelete(uuid);
-  }
-
-  async restore(uuid: string) {
-    return await this.categoryRepo.restore(uuid);
+    return await this.categoryRepo.softRemove(category);
   }
 }

@@ -5,40 +5,15 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  JoinTable,
-  ManyToMany,
 } from 'typeorm';
-import { CategoryEntity } from '../category/category.entity';
 
-@Entity('product')
-export class ProductEntity {
+@Entity('unit')
+export class UnitEntity {
   @PrimaryColumn('varchar', { length: 60 })
   uuid: string;
 
   @Column({ length: 500 })
   name: string;
-
-  @Column({ length: 100, nullable: true })
-  barcode: string;
-
-  @Column({ name: 'category_uuid', nullable: true })
-  categoryUuid: string;
-
-  @ManyToMany(() => CategoryEntity, (category) => category.products, {
-    cascade: true,
-  })
-  @JoinTable({
-    name: 'product_category_relation',
-    joinColumn: {
-      name: 'product_uuid',
-      referencedColumnName: 'uuid',
-    },
-    inverseJoinColumn: {
-      name: 'category_uuid',
-      referencedColumnName: 'uuid',
-    },
-  })
-  categories: CategoryEntity[];
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
