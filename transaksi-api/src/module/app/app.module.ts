@@ -12,6 +12,8 @@ import { BankModule } from '../bank/bank.module';
 import { AccountModule } from '../account/account.module';
 import { JournalConfigModule } from '../journal_config/journal_config.module';
 import { CategoryModule } from '../category/category.module';
+import { UnitModule } from '../unit/unit.module';
+import { ShelveModule } from '../shelve/shelve.module';
 
 @Module({
   imports: [
@@ -28,6 +30,9 @@ import { CategoryModule } from '../category/category.module';
     CourierModule,
     BankModule,
     AccountModule,
+    UnitModule,
+    ShelveModule,
+    CategoryModule
   ],
   controllers: [],
   providers: [],

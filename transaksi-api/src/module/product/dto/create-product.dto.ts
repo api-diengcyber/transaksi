@@ -1,22 +1,103 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
-export class CreateProductDto {
-  @ApiProperty({ example: 'Kopi Kapal Api', description: 'Nama Produk' })
+// 1. DTO Khusus untuk Harga (Bisa dipakai di Produk atau Varian)
+export class ProductPriceDto {
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Nama produk tidak boleh kosong' })
-  @MaxLength(500, { message: 'Nama produk maksimal 500 karakter' })
+  uuid?: string; // Untuk update harga lama
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  name: string; // Contoh: "Harga Grosir"
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  price?: number; // Nominal harga
+}
+
+// 2. DTO Khusus untuk Varian
+export class ProductVariantDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  uuid?: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
   name: string;
 
-  @ApiProperty({ example: '1234567890123', description: 'Barcode Produk', required: false })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(100, { message: 'Barcode produk maksimal 100 karakter' })
   barcode?: string;
-  
-  @ApiPropertyOptional({ example: ['uuid-cat-1', 'uuid-cat-2'], description: 'List UUID Kategori' })
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  stock?: number;
+
+  // Relasi Harga di dalam Varian
+  @ApiPropertyOptional({ type: [ProductPriceDto] })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true }) // Validasi tiap item harus string
-  categoryUuids?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => ProductPriceDto)
+  prices?: ProductPriceDto[];
+}
+
+// 3. DTO Utama Produk
+export class CreateProductDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  barcode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  stock?: number;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  unitUuid: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  conversionQty?: number;
+
+  @ApiProperty()
+  @IsArray()
+  @IsString({ each: true })
+  shelveUuids: string[];
+
+  // Relasi Harga untuk Produk Utama (Jika tidak pakai varian)
+  @ApiPropertyOptional({ type: [ProductPriceDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductPriceDto)
+  prices?: ProductPriceDto[];
+
+  // Relasi Varian
+  @ApiPropertyOptional({ type: [ProductVariantDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductVariantDto)
+  variants?: ProductVariantDto[];
+
+  // (Tetap biarkan relasi Parent/Child jika sebelumnya Anda sudah definisikan di sini)
 }

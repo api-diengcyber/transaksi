@@ -20,6 +20,8 @@ import { AtGuard } from 'src/common/guards/at.guard';
 // Import DTOs
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { GetUser } from 'src/common/decorators/get-user.decorator';
 
 @ApiTags('Product')
 @ApiBearerAuth()
@@ -31,19 +33,25 @@ export class ProductController {
   @Get('find-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get All Products with Pagination' })
-  @UsePipes(new ValidationPipe({ transform: true })) // Transform query params string -> number
+  @UsePipes(new ValidationPipe({ transform: true }))
   async findAll(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
-    @Query('search') search: string = ''
+    @Query('search') search: string = '',
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
   ) {
-    return await this.productService.findAll(Number(page), Number(limit), search);
+    return await this.productService.findAll(Number(page), Number(limit), search, storeUuid);
   }
 
   @Get(':uuid')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get One Product' })
-  async findOne(@Param('uuid') uuid: string) {
+  async findOne(
+    @Param('uuid') uuid: string,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
     return await this.productService.findOne(uuid);
   }
 
@@ -51,8 +59,12 @@ export class ProductController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create Product' })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
-  async create(@Body() createProductDto: CreateProductDto) {
-    return await this.productService.create(createProductDto);
+  async create(
+    @Body() createProductDto: CreateProductDto,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return await this.productService.create(createProductDto, storeUuid);
   }
 
   @Put('update/:uuid')
@@ -60,15 +72,21 @@ export class ProductController {
   @ApiOperation({ summary: 'Update Product' })
   async update(
     @Param('uuid') uuid: string,
-    @Body() updateProductDto: UpdateProductDto
+    @Body() updateProductDto: UpdateProductDto,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
   ) {
-    return await this.productService.update(uuid, updateProductDto);
+    return await this.productService.update(uuid, updateProductDto, storeUuid);
   }
 
   @Delete('delete/:uuid')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete Product (Soft)' })
-  async delete(@Param('uuid') uuid: string) {
-    return await this.productService.delete(uuid);
+  async delete(
+    @Param('uuid') uuid: string,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return await this.productService.remove(uuid);
   }
 }

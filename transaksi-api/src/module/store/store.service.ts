@@ -10,8 +10,12 @@ import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
-import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid } from 'src/common/utils/generate_uuid_util';
+import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateUnitUuid, generateCategoryUuid, generateWarehouseUuid, generateShelveUuid } from 'src/common/utils/generate_uuid_util'; // <-- Tambahkan generateUuid
 import { CategoryService } from '../category/category.service';
+import { UnitEntity } from 'src/common/entities/unit/unit.entity'; // <-- Tambahkan import UnitEntity
+import { CategoryEntity } from 'src/common/entities/category/category.entity';
+import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
+import { WarehouseEntity } from 'src/common/entities/warehouse/warehouse.entity';
 
 @Injectable()
 export class StoreService {
@@ -24,7 +28,7 @@ export class StoreService {
     private userRepository: Repository<UserEntity>,
     @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly authService: AuthService,
-    // private readonly categoryService: CategoryService,
+    private readonly categoryService: CategoryService,
   ) { }
 
   async installStore(dto: InstallStoreDto, logoPath: string | null = null, originalName: string | null = null) {
@@ -86,8 +90,71 @@ export class StoreService {
       savedUser.stores = [savedStore];
       await manager.save(savedUser);
 
-      // 4. INITIALIZE RESTAURANT CATEGORIES
-      // await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedStore.uuid, manager);
+      // =======================================================
+      // 4. GENERATE DEFAULT WAREHOUSE & SHELVE (OTOMATIS)
+      // =======================================================
+      
+      // Buat Gudang Utama
+      const warehouseUuid = generateWarehouseUuid(customStoreUuid);
+      const defaultWarehouse = manager.create(WarehouseEntity, {
+        uuid: warehouseUuid,
+        name: 'Gudang Utama',
+        address: dto.address, // Menggunakan alamat toko sebagai default
+        createdBy: savedUser.uuid,
+      });
+      await manager.save(defaultWarehouse);
+
+      // Buat Rak Utama di dalam Gudang Utama tersebut
+      const defaultShelve = manager.create(ShelveEntity, {
+        uuid: generateShelveUuid(customStoreUuid),
+        name: 'Rak Utama (A1)',
+        warehouseUuid: warehouseUuid,
+        createdBy: savedUser.uuid,
+      });
+      await manager.save(defaultShelve);
+
+      // =======================================================
+      // 4. GENERATE DEFAULT CATEGORIES (KATEGORI OTOMATIS)
+      // =======================================================
+      const defaultCategories = ['Makanan', 'Minuman', 'Snack', 'Bahan Baku', 'Lain-lain'];
+      
+      for (const catName of defaultCategories) {
+        // Cek agar tidak duplikat jika kategori bersifat global
+        const existingCat = await manager.findOne(CategoryEntity, {
+          where: { name: catName },
+        });
+
+        if (!existingCat) {
+          const newCategory = manager.create(CategoryEntity, {
+            uuid: generateCategoryUuid(customStoreUuid),
+            name: catName,
+            createdBy: savedUser.uuid,
+          });
+          await manager.save(newCategory);
+        }
+      }
+
+      // =======================================================
+      // 4.5. GENERATE DEFAULT UNITS (SATUAN OTOMATIS)
+      // =======================================================
+      const defaultUnits = ['Pcs', 'Dus', 'Pack', 'Karton', 'Botol', 'Kg', 'Gram', 'Liter'];
+      
+      for (const unitName of defaultUnits) {
+        // Cek apakah satuan sudah ada untuk menghindari duplikat 
+        // (Berjaga-jaga jika UnitEntity bersifat global dan pernah di-generate sebelumnya)
+        const existingUnit = await manager.findOne(UnitEntity, {
+          where: { name: unitName },
+        });
+
+        if (!existingUnit) {
+          const newUnit = manager.create(UnitEntity, {
+            uuid: generateUnitUuid(customStoreUuid),
+            name: unitName,
+            createdBy: savedUser.uuid,
+          });
+          await manager.save(newUnit);
+        }
+      }
 
       // 5. SETTINGS
       if (dto.settings && dto.settings.length > 0) {
@@ -376,8 +443,26 @@ export class StoreService {
       savedUser.stores = [savedBranch];
       await manager.save(savedUser);
 
-      // 7. Init Categories
-      // await this.categoryService.initializeRestaurantCategories(savedUser.uuid, savedBranch.uuid, manager);
+      // =======================================================
+      // 7. GENERATE DEFAULT CATEGORIES (KATEGORI OTOMATIS)
+      // =======================================================
+      const defaultCategories = ['Makanan', 'Minuman', 'Snack', 'Bahan Baku', 'Lain-lain'];
+      
+      for (const catName of defaultCategories) {
+        // Cek agar tidak duplikat jika kategori bersifat global
+        const existingCat = await manager.findOne(CategoryEntity, {
+          where: { name: catName },
+        });
+
+        if (!existingCat) {
+          const newCategory = manager.create(CategoryEntity, {
+            uuid: generateCategoryUuid(branchStoreUuid),
+            name: catName,
+            createdBy: savedUser.uuid,
+          });
+          await manager.save(newCategory);
+        }
+      }
 
       // 8. Copy Theme
       const parentTheme = await manager.findOne(StoreSettingEntity, {

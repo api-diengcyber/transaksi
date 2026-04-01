@@ -1,119 +1,153 @@
 <script setup>
-import { computed, reactive, watch } from 'vue';
+import { ref, reactive, watch, computed } from 'vue';
+import { useToast } from 'primevue/usetoast';
 
-// Menerima props dari Parent (index.vue)
 const props = defineProps({
-    isOpen: {
-        type: Boolean,
-        default: false
-    },
-    data: {
-        type: Object,
-        default: null
-    },
-    loading: {
-        type: Boolean,
-        default: false
-    }
+    visible: Boolean,
+    shelfData: { type: Object, default: null }
 });
 
-const emit = defineEmits(['close', 'submit']);
+const emit = defineEmits(['update:visible', 'saved']);
 
-// --- VISIBILITY BRIDGE ---
-// Menghubungkan prop 'isOpen' dengan v-model Dialog PrimeVue
-const visible = computed({
-    get: () => props.isOpen,
-    set: (val) => {
-        if (!val) emit('close');
-    }
-});
+const shelveService = useShelveService();
+// Memanggil useWarehouseService yang baru saja dibuat
+const warehouseService = useWarehouseService(); 
+const toast = useToast();
 
-// --- FORM STATE ---
+const loading = ref(false);
+const submitted = ref(false);
+const isEditMode = computed(() => !!props.shelfData?.uuid);
+
+const warehouses = ref([]); // State untuk opsi dropdown gudang
+
 const form = reactive({
     name: '',
-    type: 'SHELF', // Default: Rak
-    capacity: 100,
-    description: '',
-    isDefault: false,
+    warehouseUuid: null
 });
 
-// --- WATCHER ---
-// Mengisi form saat tombol Edit diklik (props.data berubah)
-watch(() => props.data, (newVal) => {
-    if (newVal) {
-        // Mode Edit
-        form.name = newVal.name;
-        form.type = newVal.type || 'SHELF';
-        form.capacity = newVal.capacity || 0;
-        form.description = newVal.description || '';
-        form.isDefault = newVal.isDefault || false;
-    } else {
-        // Mode Create (Reset)
-        form.name = '';
-        form.type = 'SHELF';
-        form.capacity = 100;
-        form.description = '';
-        form.isDefault = false;
+// Load data gudang untuk dropdown
+const loadWarehouses = async () => {
+    try {
+        const res = await warehouseService.getAllWarehouses();
+        warehouses.value = res.data || res || [];
+    } catch (error) {
+        console.error("Gagal memuat gudang", error);
     }
-}, { immediate: true });
+};
 
-// --- SUBMIT ---
-const handleSubmit = () => {
-    emit('submit', { ...form });
+watch(() => props.visible, async (val) => {
+    if (val) {
+        submitted.value = false;
+        await loadWarehouses(); // Load gudang saat modal terbuka
+
+        if (props.shelfData) {
+            form.name = props.shelfData.name;
+            form.warehouseUuid = props.shelfData.warehouseUuid || props.shelfData.warehouse?.uuid || null;
+        } else {
+            form.name = '';
+            form.warehouseUuid = null;
+        }
+    }
+});
+
+const saveShelve = async () => {
+    submitted.value = true;
+    
+    // Validasi
+    if (!form.name.trim()) return;
+
+    loading.value = true;
+    try {
+        const payload = {
+            name: form.name,
+            warehouseUuid: form.warehouseUuid
+        };
+
+        if (isEditMode.value) {
+            await shelveService.updateShelve(props.shelfData.uuid, payload);
+            toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Rak diperbarui' });
+        } else {
+            await shelveService.createShelve(payload);
+            toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Rak baru ditambahkan' });
+        }
+        emit('saved');
+    } catch (e) {
+        console.error(e);
+        toast.add({ 
+            severity: 'error', 
+            summary: 'Gagal', 
+            detail: e.response?._data?.message || 'Terjadi kesalahan sistem' 
+        });
+    } finally {
+        loading.value = false;
+    }
 };
 </script>
 
 <template>
     <Dialog 
-        v-model:visible="visible" 
-        modal 
-        :header="data ? 'Edit Lokasi' : 'Tambah Lokasi Baru'" 
-        :style="{ width: '500px' }" 
-        :breakpoints="{ '960px': '75vw', '641px': '100vw' }"
-        class="p-fluid bg-surface-0"
+        :visible="visible" 
+        @update:visible="val => emit('update:visible', val)" 
+        :header="isEditMode ? 'Edit Rak' : 'Tambah Rak Baru'" 
+        :modal="true" 
+        :style="{ width: '450px' }"
+        class="p-fluid bg-surface-0 rounded-xl overflow-hidden"
     >
-        <div class="flex flex-col gap-4 mt-2">
-            
-            <div class="flex flex-col gap-2">
-                <label for="name" class="font-semibold">Nama Lokasi</label>
-                <InputText id="name" v-model="form.name" placeholder="Contoh: Rak Depan / Gudang A" autofocus />
+        <div class="py-4 flex flex-col gap-4">
+            <div class="field">
+                <label for="name" class="font-semibold text-sm mb-1.5 block text-surface-700">
+                    Nama Rak <span class="text-red-500">*</span>
+                </label>
+                <InputText 
+                    id="name" 
+                    v-model="form.name" 
+                    placeholder="Contoh: Rak A1, Etalase Depan" 
+                    :class="{'p-invalid': submitted && !form.name}" 
+                    autofocus 
+                />
+                <small class="text-red-500 mt-1 block" v-if="submitted && !form.name">
+                    Nama rak wajib diisi.
+                </small>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div class="flex flex-col gap-2">
-                    <label class="font-semibold">Tipe</label>
-                    <Dropdown 
-                        v-model="form.type" 
-                        :options="[{label: 'Rak Pajangan', value: 'SHELF'}, {label: 'Gudang Stok', value: 'WAREHOUSE'}]" 
-                        optionLabel="label" 
-                        optionValue="value"
-                        placeholder="Pilih Tipe"
-                        :disabled="data && data.isDefault" 
-                    />
-                    <small v-if="form.type === 'WAREHOUSE'" class="text-blue-600">Untuk stok penyimpanan.</small>
-                    <small v-else class="text-emerald-600">Untuk display toko.</small>
-                </div>
-
-                <div class="flex flex-col gap-2">
-                    <label for="capacity" class="font-semibold">Kapasitas</label>
-                    <InputNumber id="capacity" v-model="form.capacity" showButtons :min="0" suffix=" item" />
-                </div>
+            <div class="field">
+                <label for="warehouse" class="font-semibold text-sm mb-1.5 block text-surface-700">
+                    Lokasi Gudang
+                </label>
+                <Dropdown 
+                    id="warehouse"
+                    v-model="form.warehouseUuid" 
+                    :options="warehouses" 
+                    optionLabel="name" 
+                    optionValue="uuid" 
+                    placeholder="Pilih Gudang (Opsional)" 
+                    class="w-full"
+                    showClear
+                />
+                <small class="text-surface-500 mt-1 block">
+                    Pilih di gudang mana rak ini berada. Kosongkan jika tidak spesifik.
+                </small>
             </div>
-
-            <div class="flex flex-col gap-2">
-                <label for="desc" class="font-semibold">Deskripsi</label>
-                <Textarea id="desc" v-model="form.description" rows="3" placeholder="Keterangan tambahan..." autoResize />
-            </div>
-
-            <Message v-if="form.isDefault" severity="warn" :closable="false">
-                Ini adalah lokasi utama sistem. Beberapa pengaturan mungkin dikunci.
-            </Message>
-
         </div>
 
         <template #footer>
-            <Button label="Batal" icon="pi pi-times" text @click="visible = false" />
-            <Button label="Simpan" icon="pi pi-check" @click="handleSubmit" :loading="loading" />
+            <div class="flex justify-end gap-2 mt-2">
+                <Button 
+                    label="Batal" 
+                    icon="pi pi-times" 
+                    text 
+                    severity="secondary" 
+                    size="small"
+                    @click="emit('update:visible', false)" 
+                />
+                <Button 
+                    :label="isEditMode ? 'Simpan Perubahan' : 'Tambah Rak'" 
+                    icon="pi pi-check" 
+                    size="small"
+                    :loading="loading" 
+                    @click="saveShelve" 
+                />
+            </div>
         </template>
     </Dialog>
 </template>

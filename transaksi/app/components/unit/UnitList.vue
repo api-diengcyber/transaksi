@@ -2,24 +2,26 @@
 import { ref, onMounted } from 'vue';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
+// Pastikan useUnitService sudah dibuat di app/composables/useUnitService.ts
+const unitService = useUnitService(); 
 
-const shelveService = useShelveService(); 
 const emit = defineEmits(['create', 'edit']);
 
 const confirm = useConfirm();
 const toast = useToast();
 
-const shelves = ref([]);
+const units = ref([]);
 const loading = ref(false);
 
-const loadShelves = async () => {
+const loadUnits = async () => {
     loading.value = true;
     try {
-        const res = await shelveService.getAllShelves();
-        shelves.value = res.data || res || []; 
+        const res = await unitService.getAllUnits();
+        // Sesuaikan dengan struktur response API Anda
+        units.value = res.data || res || []; 
     } catch (error) {
-        console.error("Gagal memuat data rak:", error);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Tidak dapat memuat data rak' });
+        console.error("Gagal memuat data satuan:", error);
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Tidak dapat memuat data satuan' });
     } finally {
         loading.value = false;
     }
@@ -28,7 +30,7 @@ const loadShelves = async () => {
 const confirmDelete = (event, uuid) => {
     confirm.require({
         target: event.currentTarget,
-        message: 'Apakah Anda yakin ingin menghapus rak ini?',
+        message: 'Apakah Anda yakin ingin menghapus satuan ini?',
         icon: 'pi pi-exclamation-triangle',
         acceptLabel: 'Ya, Hapus',
         rejectLabel: 'Batal',
@@ -36,36 +38,37 @@ const confirmDelete = (event, uuid) => {
         rejectClass: 'p-button-secondary p-button-sm p-button-text',
         accept: async () => {
             try {
-                await shelveService.deleteShelve(uuid);
-                toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Rak berhasil dihapus' });
-                loadShelves();
+                await unitService.deleteUnit(uuid);
+                toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Satuan berhasil dihapus' });
+                loadUnits();
             } catch (error) {
-                toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus rak' });
+                toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal menghapus satuan' });
             }
         }
     });
 };
 
 onMounted(() => {
-    loadShelves();
+    loadUnits();
 });
 
-defineExpose({ refresh: loadShelves });
+// Expose refresh method agar bisa dipanggil dari parent (index.vue)
+defineExpose({ refresh: loadUnits });
 </script>
 
 <template>
     <div class="h-full flex flex-col animate-fade-in">
         <div class="flex justify-between items-center mb-4">
             <div>
-                <h2 class="text-lg font-semibold text-surface-800">Daftar Rak & Lokasi</h2>
-                <p class="text-sm text-surface-500">Kelola lokasi rak penyimpanan produk</p>
+                <h2 class="text-lg font-semibold text-surface-800">Daftar Satuan</h2>
+                <p class="text-sm text-surface-500">Kelola satuan produk (Pcs, Dus, Pack, dll)</p>
             </div>
-            <Button label="Tambah Rak" icon="pi pi-plus" size="small" @click="emit('create')" />
+            <Button label="Tambah Satuan" icon="pi pi-plus" size="small" @click="emit('create')" />
         </div>
 
         <div class="flex-1 overflow-hidden bg-surface-0 border border-surface-200 rounded-xl">
             <DataTable 
-                :value="shelves" 
+                :value="units" 
                 :loading="loading" 
                 scrollable 
                 scrollHeight="flex" 
@@ -73,19 +76,10 @@ defineExpose({ refresh: loadShelves });
                 stripedRows
             >
                 <template #empty>
-                    <div class="text-center py-8 text-surface-500">Tidak ada data rak.</div>
+                    <div class="text-center py-8 text-surface-500">Tidak ada data satuan.</div>
                 </template>
                 
-                <Column field="name" header="Nama Rak" sortable></Column>
-                
-                <Column field="warehouse.name" header="Gudang (Warehouse)" sortable>
-                    <template #body="{ data }">
-                        <span v-if="data.warehouse" class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-md">
-                            <i class="pi pi-building mr-1 text-[10px]"></i> {{ data.warehouse.name }}
-                        </span>
-                        <span v-else class="text-surface-400 italic">-</span>
-                    </template>
-                </Column>
+                <Column field="name" header="Nama Satuan" sortable></Column>
                 
                 <Column header="Aksi" :style="{ width: '120px' }" bodyStyle="text-align:center">
                     <template #body="{ data }">

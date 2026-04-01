@@ -7,18 +7,21 @@ import { useConfirm } from 'primevue/useconfirm';
 import ProductList from '~/components/product/ProductList.vue';
 import CategoryList from '~/components/category/CategoryList.vue';
 import ShelveList from '~/components/shelve/ShelveList.vue';
+import UnitList from '~/components/unit/UnitList.vue';
 
 // Import Modal Form
 import ProductCreateModal from '~/components/product/ProductCreateModal.vue';
 import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue';
+import UnitCreateModal from '~/components/unit/UnitCreateModal.vue'; // <-- Import Unit Modal
 
 // --- STATE ---
-const activeMainTab = ref('products'); // 'products' | 'categories' | 'shelves'
+const activeMainTab = ref('products'); // 'products' | 'categories' | 'shelves' | 'units'
 
 // Refs ke Child Components (agar bisa panggil method refresh() mereka)
 const productListRef = ref(null);
 const categoryListRef = ref(null);
 const shelfListRef = ref(null);
+const unitListRef = ref(null); // <-- Ref untuk UnitList
 
 // State Modal Produk
 const showModal = ref(false);
@@ -27,6 +30,10 @@ const selectedProductUuid = ref(null);
 // State Modal Rak
 const showShelveModal = ref(false);
 const selectedShelveData = ref(null);
+
+// State Modal Satuan (Unit)
+const showUnitModal = ref(false);
+const selectedUnitData = ref(null);
 
 // --- HANDLERS: PRODUK ---
 const openCreateProduct = () => {
@@ -66,6 +73,24 @@ const onShelveSaved = () => {
     showShelveModal.value = false;
 };
 
+// --- HANDLERS: SATUAN ---
+const openCreateUnit = () => {
+    selectedUnitData.value = null;
+    showUnitModal.value = true;
+};
+
+const openEditUnit = (unit) => {
+    selectedUnitData.value = { ...unit };
+    showUnitModal.value = true;
+};
+
+const onUnitSaved = () => {
+    if (unitListRef.value) {
+        unitListRef.value.refresh();
+    }
+    showUnitModal.value = false;
+};
+
 // --- UTILS ---
 const getTabClass = (tabName) => {
     return activeMainTab.value === tabName
@@ -96,6 +121,13 @@ definePageMeta({ layout: 'default' });
             >
                 <i class="pi pi-tags"></i> Kategori
             </button>
+            
+            <button 
+                @click="activeMainTab = 'units'"
+                :class="getTabClass('units')"
+            >
+                <i class="pi pi-hashtag"></i> Satuan
+            </button>
 
             <button 
                 @click="activeMainTab = 'shelves'"
@@ -122,6 +154,13 @@ definePageMeta({ layout: 'default' });
                     ref="categoryListRef"
                 />
 
+                <UnitList 
+                    v-else-if="activeMainTab === 'units'"
+                    ref="unitListRef"
+                    @create="openCreateUnit" 
+                    @edit="openEditUnit"
+                />
+
                 <ShelveList 
                     v-else-if="activeMainTab === 'shelves'"
                     fixedFilter="SHELF"
@@ -139,6 +178,12 @@ definePageMeta({ layout: 'default' });
             :productUuid="selectedProductUuid" 
             @product-created="onProductSaved" 
             @product-updated="onProductSaved" 
+        />
+
+        <UnitCreateModal 
+            v-model:visible="showUnitModal" 
+            :unitData="selectedUnitData" 
+            @saved="onUnitSaved" 
         />
 
         <ShelveCreateModal 

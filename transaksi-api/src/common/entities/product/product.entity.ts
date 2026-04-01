@@ -7,8 +7,14 @@ import {
   DeleteDateColumn,
   JoinTable,
   ManyToMany,
+  OneToMany,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
 import { CategoryEntity } from '../category/category.entity';
+import { ProductVariantEntity } from '../product_variant/product_variant.entity';
+import { UnitEntity } from '../unit/unit.entity';
+import { ProductPriceEntity } from '../product_price/product_price.entity';
 
 @Entity('product')
 export class ProductEntity {
@@ -20,6 +26,27 @@ export class ProductEntity {
 
   @Column({ length: 100, nullable: true })
   barcode: string;
+
+  @Column({ name: 'conversion_qty', type: 'int', default: 1 })
+  conversionQty: number;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
+  deletedAt?: Date;
+
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
+  createdBy?: string;
+
+  @Column({ name: 'updated_by', type: 'uuid', nullable: true })
+  updatedBy?: string;
+
+  @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
+  deletedBy?: string;
 
   @Column({ name: 'category_uuid', nullable: true })
   categoryUuid: string;
@@ -40,21 +67,22 @@ export class ProductEntity {
   })
   categories: CategoryEntity[];
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
-  createdAt: Date;
+  @Column({ name: 'unit_uuid', nullable: true })
+  unitUuid: string;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
-  updatedAt: Date;
+  @ManyToOne(() => UnitEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'unit_uuid' })
+  unit: UnitEntity;
 
-  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
-  deletedAt?: Date;
+  @OneToMany(() => ProductVariantEntity, (variant) => variant.product, { 
+    cascade: true, 
+    orphanedRowAction: 'soft-delete'
+  })
+  variants: ProductVariantEntity[];
 
-  @Column({ name: 'created_by', type: 'uuid', nullable: true })
-  createdBy?: string;
-
-  @Column({ name: 'updated_by', type: 'uuid', nullable: true })
-  updatedBy?: string;
-
-  @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
-  deletedBy?: string;
+  @OneToMany(() => ProductPriceEntity, (price) => price.product, { 
+    cascade: true, 
+    orphanedRowAction: 'soft-delete' 
+  })
+  prices: ProductPriceEntity[];
 }

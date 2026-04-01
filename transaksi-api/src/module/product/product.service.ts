@@ -1,122 +1,177 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource, Repository, Like, In } from 'typeorm';
-import { ProductEntity } from 'src/common/entities/product/product.entity';
-import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
-
-// Import DTOs
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { ILike, Repository } from 'typeorm';
+import { ProductEntity } from '../../common/entities/product/product.entity';
+import { ProductVariantEntity } from '../../common/entities/product_variant/product_variant.entity';
+// 1. TAMBAHKAN IMPORT ENTITY HARGA
+import { ProductPriceEntity } from '../../common/entities/product_price/product_price.entity'; 
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { CategoryEntity } from 'src/common/entities/category/category.entity';
+// 2. PASTIKAN IMPORT UUID GENERATOR UNTUK HARGA (Bisa disesuaikan dengan fungsi yang Anda miliki)
+import { generateProductUuid, generateVariantUuid, generatePriceUuid } from '../../common/utils/generate_uuid_util'; 
 
 @Injectable()
 export class ProductService {
   constructor(
     @Inject('PRODUCT_REPOSITORY')
     private readonly productRepo: Repository<ProductEntity>,
-    @Inject('CATEGORY_REPOSITORY')
-    private readonly categoryRepo: Repository<CategoryEntity>,
-    @Inject('DATA_SOURCE')
-    private readonly dataSource: DataSource,
-  ) { }
-  
-  async findAll(page: number, limit: number, search: string) {
+  ) {}
+
+  async create(dto: CreateProductDto, storeUuid: string, userId?: string) {
+    const productUuid = generateProductUuid(storeUuid);
+
+    // MAPPING TAMBAHAN: Harga Produk Utama (Jika tidak pakai varian)
+    const mappedPrices = dto.prices?.map((p) => ({
+      uuid: generatePriceUuid(storeUuid), // Gunakan helper uuid Anda, misal: generatePriceUuid() jika ada
+      name: p.name,
+      price: p.price || 0,
+      createdBy: userId,
+    })) || [];
+
+    // 1. Mapping Varian
+    const mappedVariants = dto.variants?.map((v) => ({
+      uuid: generateVariantUuid(storeUuid),
+      name: v.name,
+      barcode: v.barcode,
+      stock: v.stock || 0,
+      createdBy: userId,
+      // MAPPING TAMBAHAN: Harga di dalam masing-masing varian
+      prices: v.prices?.map((vp) => ({
+        uuid: generatePriceUuid(storeUuid),
+        name: vp.name,
+        price: vp.price || 0,
+        createdBy: userId,
+      })) || [],
+    })) || []; 
+
+    // 2. Buat instance Produk
+    const newProduct = this.productRepo.create({
+      uuid: productUuid,
+      name: dto.name,
+      barcode: dto.barcode,
+      // stock: dto.stock || 0,
+      unitUuid: dto.unitUuid,
+      conversionQty: dto.conversionQty || 1,
+      // Hubungkan relasi varian dan harga
+      variants: mappedVariants,
+      prices: mappedPrices, // <-- TAMBAHAN RELASI HARGA UTAMA
+      createdBy: userId,
+      // (Tambahkan mapping shelves, parent, dan child sesuai logika Anda)
+    });
+
+    // 3. Simpan
+    return await this.productRepo.save(newProduct);
+  }
+
+  async findAll(page: number, limit: number, search: string, storeUuid: string) {
     const skip = (page - 1) * limit;
-    const whereCondition: any = {};
-    if (search) whereCondition.name = Like(`%${search}%`);
+    
+    let whereCondition: any;
+
+    if (search) {
+      whereCondition = [
+        { name: ILike(`%${search}%`), storeUuid: storeUuid },
+        { barcode: ILike(`%${search}%`), storeUuid: storeUuid },
+      ];
+    } else {
+      // PERBAIKAN: Jika search kosong, pastikan tetap difilter berdasarkan storeUuid
+      whereCondition = { storeUuid: storeUuid };
+    }
 
     const [data, total] = await this.productRepo.findAndCount({
       where: whereCondition,
-      relations: ['categories'],
-      take: limit,
+      // TAMBAHAN: Load relasi prices dan prices di dalam varian
+      relations: ['variants', 'unit', 'prices', 'variants.prices'], 
+      order: { 
+        name: 'ASC' 
+      },
       skip: skip,
-      order: { createdAt: 'DESC' }
+      take: limit,
     });
 
-    return { data, meta: { total, page, limit } };
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemCount: data.length,
+        itemsPerPage: limit,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      }
+    };
   }
 
   async findOne(uuid: string) {
-    const product = await this.productRepo.findOne({ 
-        where: { uuid },
-        relations: ['categories'] // Penting: Load relasi categories
+    const product = await this.productRepo.findOne({
+      where: { uuid },
+      // TAMBAHAN: Load relasi harga agar muncul saat modal Edit dibuka
+      relations: ['variants', 'unit', 'prices', 'variants.prices'], 
     });
-    if (!product) throw new NotFoundException('Product not found');
+
+    if (!product) throw new NotFoundException('Produk tidak ditemukan');
     return product;
   }
 
-  async create(payload: CreateProductDto) {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const newProduct = new ProductEntity();
-      newProduct.uuid = generateLocalUuid();
-      newProduct.name = payload.name;
-      newProduct.barcode = payload.barcode ?? "";
-
-      // --- LOGIC ASSIGN MANY CATEGORIES ---
-      if (payload.categoryUuids && payload.categoryUuids.length > 0) {
-        // Cari entity category berdasarkan array UUID
-        const categories = await this.categoryRepo.findBy({
-            uuid: In(payload.categoryUuids)
-        });
-        newProduct.categories = categories;
-      }
-      // ------------------------------------
-
-      const saved = await queryRunner.manager.save(ProductEntity, newProduct);
-      await queryRunner.commitTransaction();
-      return saved;
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw new BadRequestException(err.message || 'Gagal membuat produk');
-    } finally {
-      await queryRunner.release();
-    }
-  }
-
-  async update(uuid: string, payload: UpdateProductDto) {
-    // Load produk existing beserta kategorinya
-    const product = await this.productRepo.findOne({ 
-        where: { uuid }, 
-        relations: ['categories'] 
+  async update(uuid: string, dto: UpdateProductDto, storeUuid: string, userId?: string) {
+    // 1. Cari produk lama beserta varian dan harganya
+    const product = await this.productRepo.findOne({
+      where: { uuid },
+      relations: ['variants', 'prices', 'variants.prices'], // <-- TAMBAHAN
     });
-    
+
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    // 2. Update field produk utama
+    product.name = dto.name ?? product.name;
+    product.barcode = dto.barcode ?? product.barcode;
+    product.unitUuid = dto.unitUuid ?? product.unitUuid;
+    product.conversionQty = dto.conversionQty ?? product.conversionQty;
+    product.updatedBy = userId;
 
-    try {
-      if (payload.name) product.name = payload.name;
-      if (payload.barcode !== undefined) product.barcode = payload.barcode;
-
-      // --- LOGIC UPDATE MANY CATEGORIES ---
-      if (payload.categoryUuids) {
-        // Cari entity category baru
-        const categories = await this.categoryRepo.findBy({
-            uuid: In(payload.categoryUuids)
-        });
-        // Replace kategori lama dengan yang baru
-        product.categories = categories;
-      }
-      // ------------------------------------
-
-      const updated = await queryRunner.manager.save(ProductEntity, product);
-      await queryRunner.commitTransaction();
-      return updated;
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw new BadRequestException(err.message || 'Gagal update produk');
-    } finally {
-      await queryRunner.release();
+    // TAMBAHAN: Update / Sync Harga Utama
+    if (dto.prices) {
+      product.prices = dto.prices.map((p) => ({
+        uuid: p.uuid || generatePriceUuid(storeUuid),
+        name: p.name,
+        price: p.price || 0,
+        updatedBy: p.uuid ? userId : null,
+        createdBy: p.uuid ? undefined : userId,
+      } as ProductPriceEntity));
+    } else if (dto.prices === null) {
+       product.prices = [];
     }
+
+    // 3. Update / Sync Varian & Harga di dalamnya
+    if (dto.variants) {
+      product.variants = dto.variants.map((v) => {
+        return {
+          uuid: v.uuid || generateVariantUuid(storeUuid),
+          name: v.name,
+          barcode: v.barcode,
+          stock: v.stock || 0,
+          updatedBy: v.uuid ? userId : null,
+          createdBy: v.uuid ? undefined : userId,
+          // Sync harga di dalam varian ini
+          prices: v.prices?.map((vp) => ({
+            uuid: vp.uuid || generatePriceUuid(storeUuid),
+            name: vp.name,
+            price: vp.price || 0,
+            updatedBy: vp.uuid ? userId : null,
+            createdBy: vp.uuid ? undefined : userId,
+          } as ProductPriceEntity)) || [],
+        } as ProductVariantEntity;
+      });
+    } else {
+      product.variants = []; 
+    }
+
+    // 4. Simpan perubahan.
+    return await this.productRepo.save(product);
   }
 
-  async delete(uuid: string) {
+  async remove(uuid: string, userId?: string) {
     const product = await this.findOne(uuid);
-    return await this.productRepo.softRemove(product);
+    product.deletedBy = userId;
+    await this.productRepo.save(product);
+    return await this.productRepo.softDelete(uuid);
   }
 }

@@ -9,11 +9,13 @@ import { AuthModule } from '../auth/auth.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { userProvider } from 'src/common/entities/user/user.provider';
 import { categoryProvider } from 'src/common/entities/category/category.provider';
+import { CategoryModule } from '../category/category.module';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
+    CategoryModule,
     MulterModule.register({
       dest: './uploads', 
     }),
