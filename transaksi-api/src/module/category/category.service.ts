@@ -66,14 +66,14 @@ export class CategoryService {
   }
 
   // --- CREATE ---
-  async create(payload: CreateCategoryDto) {
+  async create(payload: CreateCategoryDto, storeUuid: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       const newCategory = new CategoryEntity();
-      newCategory.uuid = generateCategoryUuid();
+      newCategory.uuid = generateCategoryUuid(storeUuid);
       newCategory.name = payload.name;
 
       // Logic Parent

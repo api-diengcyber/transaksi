@@ -21,6 +21,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryQueryDto } from './dto/category-query.dto';
+import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { GetUser } from 'src/common/decorators/get-user.decorator';
 
 @ApiTags('Category')
 @ApiBearerAuth()
@@ -47,8 +49,12 @@ export class CategoryController {
   @Post('create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create New Category' })
-  async create(@Body() createDto: CreateCategoryDto) {
-    return await this.categoryService.create(createDto);
+  async create(
+    @Body() createDto: CreateCategoryDto,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string
+    ) {
+    return await this.categoryService.create(createDto, storeUuid);
   }
 
   @Put('update/:uuid')
