@@ -11,8 +11,13 @@ export const useWarehouseService = () => {
         });
     };
 
+    const getWarehouseStock = async (uuid: string) => {
+        return await useApi(`/warehouse/${uuid}/stock`, { method: 'GET' });
+    };
+
     return {
         getAllWarehouses,
-        createWarehouse
+        createWarehouse,
+        getWarehouseStock
     };
 };

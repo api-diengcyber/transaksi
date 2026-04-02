@@ -52,7 +52,7 @@ export class ProductController {
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-    return await this.productService.findOne(uuid);
+    return await this.productService.findOne(uuid, storeUuid);
   }
 
   @Post('create')
@@ -87,6 +87,6 @@ export class ProductController {
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-    return await this.productService.remove(uuid);
+    return await this.productService.remove(uuid, userId);
   }
 }

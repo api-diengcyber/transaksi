@@ -37,7 +37,7 @@ export class ProductPriceEntity {
   price: number;
 
   // TAMBAHAN: Kolom Minimum Qty (Untuk aturan grosir)
-  @Column({ name: 'min_qty', type: 'int', default: 1 })
+  @Column({ name: 'min_qty', type: 'int', default: 0 })
   minQty: number;
   
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
@@ -51,4 +51,5 @@ export class ProductPriceEntity {
 
   @Column({ name: 'created_by', type: 'uuid', nullable: true }) createdBy?: string;
   @Column({ name: 'updated_by', type: 'uuid', nullable: true }) updatedBy?: string;
+  @Column({ name: 'deleted_by', type: 'uuid', nullable: true }) deletedBy?: string;
 }

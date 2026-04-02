@@ -1,9 +1,9 @@
-// transaksi-api/src/module/product/product.service.ts
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { ILike, Repository, DataSource } from 'typeorm';
 import { ProductEntity } from '../../common/entities/product/product.entity';
 import { ProductVariantEntity } from '../../common/entities/product_variant/product_variant.entity';
 import { ProductPriceEntity } from '../../common/entities/product_price/product_price.entity'; 
+import { JournalDetailEntity } from '../../common/entities/journal_detail/journal_detail.entity'; // <-- TAMBAHAN IMPORT
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { generateProductUuid, generateVariantUuid, generatePriceUuid } from '../../common/utils/generate_uuid_util'; 
@@ -20,63 +20,109 @@ export class ProductService {
     private readonly journalStokService: JournalStokService, 
   ) {}
 
+  // --- HELPER UNTUK MENGHITUNG STOK DARI JURNAL ---
+  private async calculateStockFromJournal(productUuids: string[], storeUuid: string) {
+    if (productUuids.length === 0) return new Map<string, number>();
+
+    // 1. Cari kode jurnal yang melibatkan produk-produk ini
+    const productDetails = await this.dataSource.getRepository(JournalDetailEntity)
+        .createQueryBuilder('jd')
+        .where("jd.key LIKE 'stok_product_uuid%'")
+        .andWhere("jd.value IN (:...uuids)", { uuids: productUuids })
+        .andWhere("jd.journalCode LIKE :store", { store: `%-${storeUuid}-%` })
+        .getMany();
+
+    if (productDetails.length === 0) return new Map<string, number>();
+
+    // 2. Ekstrak kode jurnal dan index (suffix #0, #1, dst)
+    const targets = productDetails.map(pd => ({
+        code: pd.journalCode,
+        index: pd.key.split('#')[1],
+        productUuid: pd.value
+    }));
+
+    const journalCodes = [...new Set(targets.map(t => t.code))];
+
+    // 3. Ambil semua detail stok (qty plus, qty min, variant) dari kode-kode jurnal tersebut
+    const relatedDetails = await this.dataSource.getRepository(JournalDetailEntity)
+        .createQueryBuilder('jd')
+        .where("jd.journalCode IN (:...codes)", { codes: journalCodes })
+        .andWhere("jd.key LIKE 'stok_%'")
+        .getMany();
+
+    // 4. Kalkulasi di memory (Cepat & Database Agnostic)
+    const stockMap = new Map<string, number>(); 
+
+    for (const target of targets) {
+        const variantDetail = relatedDetails.find(d => d.journalCode === target.code && d.key === `stok_variant_uuid#${target.index}`);
+        const plusDetail = relatedDetails.find(d => d.journalCode === target.code && d.key === `stok_qty_plus#${target.index}`);
+        const minDetail = relatedDetails.find(d => d.journalCode === target.code && d.key === `stok_qty_min#${target.index}`);
+
+        const variantUuid = variantDetail?.value && variantDetail.value !== 'null' ? variantDetail.value : 'null';
+        const qtyPlus = plusDetail ? Number(plusDetail.value) : 0;
+        const qtyMin = minDetail ? Number(minDetail.value) : 0;
+        const netQty = qtyPlus - qtyMin;
+
+        // Key map format: "productUuid_variantUuid"
+        const mapKey = `${target.productUuid}_${variantUuid}`;
+        const currentStock = stockMap.get(mapKey) || 0;
+        stockMap.set(mapKey, currentStock + netQty);
+    }
+
+    return stockMap;
+  }
+
+  // --- FUNGSI CREATE, UPDATE, DELETE (Sama seperti sebelumnya) ---
   async create(dto: CreateProductDto, storeUuid: string, userId: string) {
     return await this.dataSource.transaction(async (manager) => {
       const productUuid = generateProductUuid(storeUuid);
-
-      // MAPPING HARGA UTAMA
       const mappedPrices = dto.prices?.map((p) => ({
-        uuid: generatePriceUuid(storeUuid),
-        priceGroupUuid: p.priceGroupUuid, 
-        name: p.name,
-        price: p.price || 0,
-        minQty: p.minQty || 1, 
-        createdBy: userId,
+        uuid: generatePriceUuid(storeUuid), priceGroupUuid: p.priceGroupUuid, name: p.name, price: p.price || 0, minQty: p.minQty ?? 1, createdBy: userId,
       })) || [];
-
-      // MAPPING VARIAN
       const mappedVariants = dto.variants?.map((v) => ({
-        uuid: generateVariantUuid(storeUuid),
-        name: v.name,
-        barcode: v.barcode,
-        createdBy: userId, // Varian entity juga TIDAK punya kolom stock
+        uuid: generateVariantUuid(storeUuid), name: v.name, barcode: v.barcode, createdBy: userId,
         prices: v.prices?.map((vp) => ({
-          uuid: generatePriceUuid(storeUuid),
-          priceGroupUuid: vp.priceGroupUuid, 
-          name: vp.name,
-          price: vp.price || 0,
-          minQty: vp.minQty || 1, 
-          createdBy: userId,
+          uuid: generatePriceUuid(storeUuid), priceGroupUuid: vp.priceGroupUuid, name: vp.name, price: vp.price || 0, minQty: vp.minQty ?? 1, createdBy: userId,
         })) || [],
       })) || [];
-
       const mappedShelves = dto.shelveUuids?.map(uuid => ({ uuid } as ShelveEntity)) || [];
 
-      // 1. Buat instance Produk (TANPA MENGISI STOCK KE DATABASE)
       const newProduct = manager.create(ProductEntity, {
-        uuid: productUuid,
-        name: dto.name,
-        barcode: dto.barcode,
-        unitUuid: dto.unitUuid,
-        categoryUuid: dto.categoryUuid,
-        conversionQty: dto.conversionQty || 1,
-        variants: mappedVariants,
-        prices: mappedPrices, 
-        shelves: mappedShelves,
-        createdBy: userId,
+        uuid: productUuid, name: dto.name, barcode: dto.barcode, unitUuid: dto.unitUuid, categoryUuid: dto.categoryUuid,
+        conversionQty: dto.conversionQty || 1, variants: mappedVariants, prices: mappedPrices, shelves: mappedShelves, createdBy: userId,
       });
 
       const savedProduct = await manager.save(newProduct);
-
-      // 2. PROSES STOK AWAL SEBAGAI 'STOCK IN'
+      
       const inItems: any[] = [];
       const initialStock = dto.stock || 0;
       
+      // 1. Ambil rak pertama sebagai tempat stok awal mendarat
+      const defaultShelveUuid = dto.shelveUuids && dto.shelveUuids.length > 0 ? dto.shelveUuids[0] : null;
+      let defaultWarehouseUuid: any = null;
+
+      // 2. Cari tau rak ini ada di gudang mana
+      if (defaultShelveUuid) {
+          const shelve = await manager.findOne(ShelveEntity, {
+              where: { uuid: defaultShelveUuid },
+              relations: ['warehouse'] // Pastikan nama relasi ke gudang di entity Anda benar (biasanya 'warehouse')
+          });
+          
+          if (shelve && shelve.warehouse) {
+              defaultWarehouseUuid = shelve.warehouse.uuid;
+          } else if (shelve && (shelve as any).warehouseUuid) {
+              defaultWarehouseUuid = (shelve as any).warehouseUuid; // Fallback jika menyimpannya sebagai kolom langsung
+          }
+      }
+      
+      // 3. Masukkan datanya
       if (initialStock > 0) {
-        inItems.push({
-          productUuid: productUuid,
-          unitUuid: dto.unitUuid,
-          qty: initialStock
+        inItems.push({ 
+            productUuid: productUuid, 
+            unitUuid: dto.unitUuid, 
+            qty: initialStock,
+            shelveUuid: defaultShelveUuid,
+            warehouseUuid: defaultWarehouseUuid // <--- DITAMBAHKAN
         });
       }
 
@@ -84,17 +130,18 @@ export class ProductService {
         dto.variants.forEach((v, index) => {
           const vStock = v.stock || 0; 
           if (vStock > 0) {
-            inItems.push({
-              productUuid: productUuid,
-              variantUuid: mappedVariants[index].uuid,
-              unitUuid: dto.unitUuid,
-              qty: vStock
+            inItems.push({ 
+                productUuid: productUuid, 
+                variantUuid: mappedVariants[index].uuid, 
+                unitUuid: dto.unitUuid, 
+                qty: vStock,
+                shelveUuid: defaultShelveUuid,
+                warehouseUuid: defaultWarehouseUuid // <--- DITAMBAHKAN
             });
           }
         });
       }
 
-      // Jika ada stok awal yang diinput kasir saat buat produk, catat di Jurnal
       if (inItems.length > 0) {
         await this.journalStokService.stockIn(inItems, userId, manager, storeUuid);
       }
@@ -105,14 +152,9 @@ export class ProductService {
 
   async update(uuid: string, dto: UpdateProductDto, storeUuid: string, userId: string) {
     return await this.dataSource.transaction(async (manager) => {
-      const product = await manager.findOne(ProductEntity, {
-        where: { uuid },
-        relations: ['variants', 'prices', 'variants.prices', 'shelves'],
-      });
-
+      const product = await manager.findOne(ProductEntity, { where: { uuid }, relations: ['variants', 'prices', 'variants.prices', 'shelves'] });
       if (!product) throw new NotFoundException('Produk tidak ditemukan');
 
-      // Update field produk utama
       product.name = dto.name ?? product.name;
       product.barcode = dto.barcode ?? product.barcode;
       product.unitUuid = dto.unitUuid ?? product.unitUuid;
@@ -120,81 +162,106 @@ export class ProductService {
       product.conversionQty = dto.conversionQty ?? product.conversionQty;
       product.updatedBy = userId;
 
-      // UPDATE HARGA UTAMA
       if (dto.prices) {
         product.prices = dto.prices.map((p) => ({
-          uuid: p.uuid || generatePriceUuid(storeUuid),
-          priceGroupUuid: p.priceGroupUuid,
-          name: p.name,
-          price: p.price || 0,
-          minQty: p.minQty || 1, 
-          updatedBy: p.uuid ? userId : null,
-          createdBy: p.uuid ? undefined : userId,
+          uuid: p.uuid || generatePriceUuid(storeUuid), priceGroupUuid: p.priceGroupUuid, name: p.name, price: p.price || 0,
+          minQty: p.minQty ?? 1, updatedBy: p.uuid ? userId : null, createdBy: p.uuid ? undefined : userId,
         } as ProductPriceEntity));
-      } else if (dto.prices === null) {
-        product.prices = [];
-      }
+      } else if (dto.prices === null) product.prices = [];
 
       const inItems: any[] = []; 
+      
+      // 1. Ambil rak dari DTO (jika diubah) atau dari data produk lama
+      const currentShelveUuids = dto.shelveUuids || product.shelves.map(s => s.uuid);
+      const defaultShelveUuid = currentShelveUuids.length > 0 ? currentShelveUuids[0] : null;
+      let defaultWarehouseUuid: any = null;
 
-      // UPDATE VARIAN
+      // 2. Cari tau rak ini ada di gudang mana
+      if (defaultShelveUuid) {
+          const shelve = await manager.findOne(ShelveEntity, {
+              where: { uuid: defaultShelveUuid },
+              relations: ['warehouse'] 
+          });
+          if (shelve && shelve.warehouse) {
+              defaultWarehouseUuid = shelve.warehouse.uuid;
+          } else if (shelve && (shelve as any).warehouseUuid) {
+              defaultWarehouseUuid = (shelve as any).warehouseUuid;
+          }
+      }
+
       if (dto.variants) {
         product.variants = dto.variants.map((v) => {
           const isNewVariant = !v.uuid;
           const variantUuid = v.uuid || generateVariantUuid(storeUuid);
           
-          // JIKA ADA VARIAN BARU yang dibuat saat menu Edit, dan langsung diisi stok awalnya
+          // 3. Masukkan datanya jika ada varian baru
           if (isNewVariant && (v.stock || 0) > 0) {
-             inItems.push({
-                productUuid: uuid,
-                variantUuid: variantUuid,
-                unitUuid: dto.unitUuid || product.unitUuid,
-                qty: v.stock
+             inItems.push({ 
+                 productUuid: uuid, 
+                 variantUuid: variantUuid, 
+                 unitUuid: dto.unitUuid || product.unitUuid, 
+                 qty: v.stock,
+                 shelveUuid: defaultShelveUuid,
+                 warehouseUuid: defaultWarehouseUuid // <--- DITAMBAHKAN
              });
           }
 
           return {
-            uuid: variantUuid,
-            name: v.name,
-            barcode: v.barcode,
-            updatedBy: v.uuid ? userId : null,
-            createdBy: v.uuid ? undefined : userId,
+            uuid: variantUuid, name: v.name, barcode: v.barcode, updatedBy: v.uuid ? userId : null, createdBy: v.uuid ? undefined : userId,
             prices: v.prices?.map((vp) => ({
-              uuid: vp.uuid || generatePriceUuid(storeUuid),
-              priceGroupUuid: vp.priceGroupUuid, 
-              name: vp.name,
-              price: vp.price || 0,
-              minQty: vp.minQty || 1, 
-              updatedBy: vp.uuid ? userId : null,
-              createdBy: vp.uuid ? undefined : userId,
+              uuid: vp.uuid || generatePriceUuid(storeUuid), priceGroupUuid: vp.priceGroupUuid, name: vp.name, price: vp.price || 0,
+              minQty: vp.minQty ?? 1, updatedBy: vp.uuid ? userId : null, createdBy: vp.uuid ? undefined : userId,
             } as ProductPriceEntity)) || [],
           } as ProductVariantEntity;
         });
-      } else if (dto.variants === null) {
-        product.variants = []; 
-      }
+      } else if (dto.variants === null) product.variants = []; 
 
-      // UPDATE RAK
       if (dto.shelveUuids) {
         product.shelves = dto.shelveUuids.map(id => ({ uuid: id } as ShelveEntity));
-      } else if (dto.shelveUuids === null) {
-        product.shelves = [];
-      }
+      } else if (dto.shelveUuids === null) product.shelves = [];
 
       const savedProduct = await manager.save(ProductEntity, product);
 
-      // Eksekusi Stok Masuk untuk varian yang baru saja dibuat
       if (inItems.length > 0) {
         await this.journalStokService.stockIn(inItems, userId, manager, storeUuid);
       }
-
       return savedProduct;
     });
   }
 
+  async remove(uuid: string, userId?: string) {
+    return await this.dataSource.transaction(async (manager) => {
+      const product = await manager.findOne(ProductEntity, { where: { uuid }, relations: ['variants', 'prices', 'variants.prices'] });
+      if (!product) throw new NotFoundException('Produk tidak ditemukan');
+
+      const priceUuids: string[] = [];
+      const variantUuids: string[] = [];
+
+      if (product.prices && product.prices.length > 0) priceUuids.push(...product.prices.map(p => p.uuid));
+      if (product.variants && product.variants.length > 0) {
+        variantUuids.push(...product.variants.map(v => v.uuid));
+        product.variants.forEach(v => { if (v.prices && v.prices.length > 0) priceUuids.push(...v.prices.map(vp => vp.uuid)); });
+      }
+
+      if (priceUuids.length > 0) {
+        await manager.update(ProductPriceEntity, priceUuids, { deletedBy: userId });
+        await manager.softDelete(ProductPriceEntity, priceUuids);
+      }
+
+      if (variantUuids.length > 0) {
+        await manager.update(ProductVariantEntity, variantUuids, { deletedBy: userId });
+        await manager.softDelete(ProductVariantEntity, variantUuids);
+      }
+
+      await manager.update(ProductEntity, uuid, { deletedBy: userId });
+      await manager.softDelete(ProductEntity, uuid);
+      return { message: 'Produk berhasil dihapus', deletedProductUuid: uuid };
+    });
+  }
+
+  // --- PERUBAHAN UTAMA DI FIND-ALL & FIND-ONE ---
   async findAll(page: number, limit: number, search: string, storeUuid: string) {
     const skip = (page - 1) * limit;
-    
     let whereCondition: any;
 
     if (search) {
@@ -212,32 +279,56 @@ export class ProductService {
       take: limit,
     });
 
+    // 1. Ambil Data Stok dari Jurnal
+    const productUuids = data.map(p => p.uuid);
+    const stockMap = await this.calculateStockFromJournal(productUuids, storeUuid);
+
+    // 2. Gabungkan stok ke dalam response data (Dynamic Property)
+    data.forEach(product => {
+        if (product.variants && product.variants.length > 0) {
+            let totalVariantStock = 0;
+            product.variants.forEach(variant => {
+                const mapKey = `${product.uuid}_${variant.uuid}`;
+                const vStock = stockMap.get(mapKey) || 0;
+                (variant as any).stock = vStock; // Inject ke variant
+                totalVariantStock += vStock;
+            });
+            (product as any).stock = totalVariantStock; // Inject ke parent product
+        } else {
+            const mapKey = `${product.uuid}_null`;
+            (product as any).stock = stockMap.get(mapKey) || 0; // Inject ke parent product
+        }
+    });
+
     return {
       data,
-      meta: {
-        totalItems: total,
-        itemCount: data.length,
-        itemsPerPage: limit,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page,
-      }
+      meta: { totalItems: total, itemCount: data.length, itemsPerPage: limit, totalPages: Math.ceil(total / limit), currentPage: page }
     };
   }
 
-  async findOne(uuid: string) {
+  async findOne(uuid: string, storeUuid: string) {
     const product = await this.productRepo.findOne({
       where: { uuid },
       relations: ['variants', 'unit', 'prices', 'variants.prices', 'shelves'],
     });
 
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
-    return product;
-  }
 
-  async remove(uuid: string, userId?: string) {
-    const product = await this.findOne(uuid);
-    product.deletedBy = userId;
-    await this.productRepo.save(product);
-    return await this.productRepo.softDelete(uuid);
+    // Kalkulasi Stok untuk 1 produk ini
+    const stockMap = await this.calculateStockFromJournal([uuid], storeUuid);
+
+    if (product.variants && product.variants.length > 0) {
+        let totalVariantStock = 0;
+        product.variants.forEach(variant => {
+            const vStock = stockMap.get(`${uuid}_${variant.uuid}`) || 0;
+            (variant as any).stock = vStock;
+            totalVariantStock += vStock;
+        });
+        (product as any).stock = totalVariantStock;
+    } else {
+        (product as any).stock = stockMap.get(`${uuid}_null`) || 0;
+    }
+
+    return product;
   }
 }

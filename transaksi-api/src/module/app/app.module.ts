@@ -15,6 +15,7 @@ import { CategoryModule } from '../category/category.module';
 import { UnitModule } from '../unit/unit.module';
 import { ShelveModule } from '../shelve/shelve.module';
 import { PriceGroupModule } from '../price_group/price_group.module';
+import { WarehouseModule } from '../warehouse/warehouse.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { PriceGroupModule } from '../price_group/price_group.module';
     UnitModule,
     ShelveModule,
     PriceGroupModule,
+    WarehouseModule,
   ],
   controllers: [],
   providers: [],

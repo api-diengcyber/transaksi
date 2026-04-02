@@ -29,8 +29,7 @@ const lazyParams = ref({ page: 1, limit: 10 });
 const fetchCategories = async () => {
     try {
         const res = await categoryService.getAllCategories();
-        const raw = res?.value !== undefined ? res.value : res;
-        categories.value = raw?.data?.data || raw?.data || raw || [];
+        categories.value = res?.data?.data || res?.data || res || [];
     } catch (error) {
         console.error("Gagal load kategori:", error);
     }
@@ -39,8 +38,7 @@ const fetchCategories = async () => {
 const fetchShelves = async () => {
     try {
         const res = await shelveService.getAllShelves();
-        const raw = res?.value !== undefined ? res.value : res;
-        shelves.value = raw?.data?.data || raw?.data || raw || [];
+        shelves.value = res?.data?.data || res?.data || res || [];
     } catch (error) {
         console.error("Gagal load rak:", error);
     }
@@ -55,9 +53,8 @@ const fetchProducts = async () => {
             searchQuery.value
         );
         
-        const raw = res?.value !== undefined ? res.value : res;
-        products.value = raw?.data?.data || raw?.data || raw || [];
-        totalRecords.value = raw?.meta?.totalItems || raw?.data?.meta?.totalItems || products.value.length || 0;
+        products.value = res?.data?.data || res?.data || res || [];
+        totalRecords.value = res?.meta?.totalItems || res?.data?.meta?.totalItems || products.value.length || 0;
     } catch (error) {
         console.error(error);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat daftar produk' });
@@ -73,7 +70,6 @@ const getCategoryName = (uuid) => {
     return cat ? cat.name : 'Tanpa Kategori';
 };
 
-// Helper untuk menampilkan nama-nama rak
 const getShelveNames = (product) => {
     if (product.shelves && Array.isArray(product.shelves) && product.shelves.length > 0) {
         return product.shelves.map(s => s.name).join(', ');
@@ -87,12 +83,11 @@ const getShelveNames = (product) => {
     return '-';
 };
 
-// Menghitung Total Stok (termasuk varian jika ada)
-const getTotalStock = (product) => {
-    if (product.variants && product.variants.length > 0) {
-        return product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
-    }
-    return Number(product.stock) || 0;
+// Perbaikan Harga Utama (Mencari Harga Normal/Bukan Grosir)
+const getBasePrice = (pricesArray) => {
+    if (!pricesArray || pricesArray.length === 0) return 0;
+    const nonGrosir = pricesArray.find(p => !p.name?.toLowerCase().includes('grosir'));
+    return nonGrosir ? nonGrosir.price : pricesArray[0].price;
 };
 
 // --- HANDLERS ---
@@ -114,8 +109,9 @@ const editProduct = (product) => {
     emit('edit', product);
 };
 
-const deleteProduct = (product) => {
+const deleteProduct = (event, product) => {
     confirm.require({
+        target: event.currentTarget, 
         message: `Apakah Anda yakin ingin menghapus produk "${product.name}"?`,
         header: 'Konfirmasi Hapus',
         icon: 'pi pi-exclamation-triangle',
@@ -216,10 +212,18 @@ onMounted(async () => {
                 </template>
             </Column>
 
-            <Column header="Stok Total">
+            <Column header="Satuan">
                 <template #body="{ data }">
-                    <div class="font-bold" :class="getTotalStock(data) > 0 ? 'text-primary-600' : 'text-red-500'">
-                        {{ getTotalStock(data) }} <span class="text-xs font-normal text-surface-500">{{ data.unit?.name || 'Unit' }}</span>
+                    <div class="text-sm font-medium text-surface-700 bg-surface-100 px-2 py-1 rounded inline-block">
+                        {{ data.unit?.name || 'Unit' }}
+                    </div>
+                </template>
+            </Column>
+
+            <Column header="Stok">
+                <template #body="{ data }">
+                    <div class="font-bold" :class="(data.stock || 0) > 0 ? 'text-primary-600' : 'text-red-500'">
+                        {{ data.stock || 0 }}
                     </div>
                 </template>
             </Column>
@@ -230,7 +234,7 @@ onMounted(async () => {
                         <Tag value="Multi Harga Varian" severity="info" class="text-[10px]" />
                     </div>
                     <div v-else-if="data.prices && data.prices.length > 0">
-                        <span class="font-bold text-surface-800">{{ formatCurrency(data.prices[0].price) }}</span>
+                        <span class="font-bold text-surface-800">{{ formatCurrency(getBasePrice(data.prices)) }}</span>
                     </div>
                     <div v-else>
                         <span class="text-xs text-surface-400 italic">Belum diatur</span>
@@ -241,8 +245,8 @@ onMounted(async () => {
             <Column header="Aksi" alignFrozen="right" :exportable="false" style="min-width: 8rem">
                 <template #body="{ data }">
                     <div class="flex gap-2">
-                        <Button icon="pi pi-pencil" text rounded severity="info" @click="editProduct(data)" v-tooltip.top="'Edit'" />
-                        <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteProduct(data)" v-tooltip.top="'Hapus'" />
+                        <Button icon="pi pi-pencil" text rounded severity="info" @click.stop="editProduct(data)" v-tooltip.top="'Edit'" />
+                        <Button icon="pi pi-trash" text rounded severity="danger" @click.stop="(e) => deleteProduct(e, data)" v-tooltip.top="'Hapus'" />
                     </div>
                 </template>
             </Column>
@@ -268,6 +272,10 @@ onMounted(async () => {
                                 <div>
                                     <div class="text-[10px] text-surface-500 mb-0.5">Barcode / SKU</div>
                                     <div class="text-sm font-medium text-surface-800">{{ data.barcode || '-' }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-surface-500 mb-0.5">Total Stok Keseluruhan</div>
+                                    <div class="text-sm font-bold" :class="(data.stock || 0) > 0 ? 'text-primary-600' : 'text-red-500'">{{ data.stock || 0 }} {{ data.unit?.name || 'Unit' }}</div>
                                 </div>
                                 <div class="grid grid-cols-2 gap-2">
                                     <div>
@@ -325,7 +333,7 @@ onMounted(async () => {
                                             </div>
                                             <div class="text-right">
                                                 <div class="text-[9px] text-surface-500 uppercase">Stok</div>
-                                                <div class="font-bold text-sm" :class="variant.stock > 0 ? 'text-primary-600' : 'text-red-500'">{{ variant.stock || 0 }}</div>
+                                                <div class="font-bold text-sm" :class="(variant.stock || 0) > 0 ? 'text-primary-600' : 'text-red-500'">{{ variant.stock || 0 }}</div>
                                             </div>
                                         </div>
                                         

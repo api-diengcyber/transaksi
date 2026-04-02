@@ -95,7 +95,7 @@ const initForm = () => {
             priceGroupUuid: pg.uuid,
             name: pg.name,
             price: 0,
-            minQty: isGrosir ? 0 : 1 // Grosir default 0, Harga Utama default 1
+            minQty: isGrosir ? 0 : 0 // Grosir default 0, Harga Utama default 1
         };
     });
     
@@ -122,7 +122,7 @@ const addVariant = () => {
                 priceGroupUuid: pg.uuid,
                 name: pg.name,
                 price: 0,
-                minQty: isGrosir ? 0 : 1
+                minQty: isGrosir ? 0 : 0
             };
         }) 
     });
@@ -199,7 +199,7 @@ const loadProductData = async (uuid) => {
                 priceGroupUuid: pg.uuid,
                 name: pg.name,
                 price: savedPrice ? Number(savedPrice.price) : 0,
-                minQty: savedPrice ? Number(savedPrice.minQty) : (isGrosir ? 0 : 1)
+                minQty: savedPrice ? Number(savedPrice.minQty) : (isGrosir ? 0 : 0)
             };
         });
 
@@ -217,7 +217,7 @@ const loadProductData = async (uuid) => {
                         priceGroupUuid: pg.uuid,
                         name: pg.name,
                         price: savedVariantPrice ? Number(savedVariantPrice.price) : 0,
-                        minQty: savedVariantPrice ? Number(savedVariantPrice.minQty) : (isGrosir ? 0 : 1)
+                        minQty: savedVariantPrice ? Number(savedVariantPrice.minQty) : (isGrosir ? 0 : 0)
                     };
                 })
             }));
