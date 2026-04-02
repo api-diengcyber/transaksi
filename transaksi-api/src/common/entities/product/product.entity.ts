@@ -15,6 +15,7 @@ import { CategoryEntity } from '../category/category.entity';
 import { ProductVariantEntity } from '../product_variant/product_variant.entity';
 import { UnitEntity } from '../unit/unit.entity';
 import { ProductPriceEntity } from '../product_price/product_price.entity';
+import { ShelveEntity } from '../shelve/shelve.entity';
 
 @Entity('product')
 export class ProductEntity {
@@ -66,6 +67,23 @@ export class ProductEntity {
     },
   })
   categories: CategoryEntity[];
+
+  // TAMBAHKAN KODE INI UNTUK RELASI RAK
+  @ManyToMany(() => ShelveEntity, {
+    cascade: true,
+  })
+  @JoinTable({
+    name: 'product_shelve_relation',
+    joinColumn: {
+      name: 'product_uuid',
+      referencedColumnName: 'uuid',
+    },
+    inverseJoinColumn: {
+      name: 'shelve_uuid',
+      referencedColumnName: 'uuid',
+    },
+  })
+  shelves: ShelveEntity[];
 
   @Column({ name: 'unit_uuid', nullable: true })
   unitUuid: string;

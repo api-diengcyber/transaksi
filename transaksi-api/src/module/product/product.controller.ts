@@ -64,7 +64,7 @@ export class ProductController {
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-    return await this.productService.create(createProductDto, storeUuid);
+    return await this.productService.create(createProductDto, storeUuid, userId);
   }
 
   @Put('update/:uuid')
@@ -76,7 +76,7 @@ export class ProductController {
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-    return await this.productService.update(uuid, updateProductDto, storeUuid);
+    return await this.productService.update(uuid, updateProductDto, storeUuid, userId);
   }
 
   @Delete('delete/:uuid')

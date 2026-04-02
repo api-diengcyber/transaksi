@@ -1,216 +1,358 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 const emit = defineEmits(['create', 'edit']);
 
-// Inject Service
+// --- INJECT SERVICES ---
 const productService = useProductService();
+const categoryService = useCategoryService();
+const shelveService = useShelveService(); 
 const toast = useToast();
 const confirm = useConfirm();
 
 // --- STATE ---
 const products = ref([]);
+const categories = ref([]);
+const shelves = ref([]); 
 const loading = ref(true);
+const expandedRows = ref({});
 const totalRecords = ref(0);
-const searchInput = ref('');
 
-// Parameter Pagination
-const lazyParams = ref({
-    page: 1,
-    limit: 10,
-    search: '',
-});
-
-const firstRow = computed(() => (lazyParams.value.page - 1) * lazyParams.value.limit);
+// Filter & Pagination
+const searchQuery = ref('');
+let searchTimeout = null;
+const lazyParams = ref({ page: 1, limit: 10 });
 
 // --- FETCH DATA ---
+const fetchCategories = async () => {
+    try {
+        const res = await categoryService.getAllCategories();
+        const raw = res?.value !== undefined ? res.value : res;
+        categories.value = raw?.data?.data || raw?.data || raw || [];
+    } catch (error) {
+        console.error("Gagal load kategori:", error);
+    }
+};
+
+const fetchShelves = async () => {
+    try {
+        const res = await shelveService.getAllShelves();
+        const raw = res?.value !== undefined ? res.value : res;
+        shelves.value = raw?.data?.data || raw?.data || raw || [];
+    } catch (error) {
+        console.error("Gagal load rak:", error);
+    }
+};
+
 const fetchProducts = async () => {
     loading.value = true;
     try {
-        const { page, limit, search } = lazyParams.value;
-        const response = await productService.getAllProducts(page, limit, search);
-
-        const rawData = Array.isArray(response) ? response : (response.data || []);
-        const meta = response.meta || response.pagination || {};
-
-        // Mapping sederhana: Hanya ambil UUID dan Nama
-        products.value = rawData.map(p => ({
-            uuid: p.uuid,
-            name: p.name || '-',
-            // Opsional: Ambil nama kategori pertama jika ada, untuk konteks
-            categoryName: p.productCategory?.[0]?.category?.name || '' 
-        }));
-
-        if (meta.total || meta.total_data) {
-            totalRecords.value = meta.total || meta.total_data;
-        } else {
-            totalRecords.value = products.value.length;
-        }
-
-    } catch (err) {
-        console.error("Fetch Error:", err);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memuat data produk.' });
-        products.value = [];
+        const res = await productService.getAllProducts(
+            lazyParams.value.page,
+            lazyParams.value.limit,
+            searchQuery.value
+        );
+        
+        const raw = res?.value !== undefined ? res.value : res;
+        products.value = raw?.data?.data || raw?.data || raw || [];
+        totalRecords.value = raw?.meta?.totalItems || raw?.data?.meta?.totalItems || products.value.length || 0;
+    } catch (error) {
+        console.error(error);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat daftar produk' });
     } finally {
         loading.value = false;
     }
 };
 
+// --- HELPERS ---
+const getCategoryName = (uuid) => {
+    if (!uuid) return 'Tanpa Kategori';
+    const cat = categories.value.find(c => c.uuid === uuid);
+    return cat ? cat.name : 'Tanpa Kategori';
+};
+
+// Helper untuk menampilkan nama-nama rak
+const getShelveNames = (product) => {
+    if (product.shelves && Array.isArray(product.shelves) && product.shelves.length > 0) {
+        return product.shelves.map(s => s.name).join(', ');
+    }
+    if (product.shelveUuids && Array.isArray(product.shelveUuids) && product.shelveUuids.length > 0) {
+        return product.shelveUuids.map(uuid => {
+            const shelf = shelves.value.find(s => s.uuid === uuid);
+            return shelf ? shelf.name : 'Unknown';
+        }).join(', ');
+    }
+    return '-';
+};
+
+// Menghitung Total Stok (termasuk varian jika ada)
+const getTotalStock = (product) => {
+    if (product.variants && product.variants.length > 0) {
+        return product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    }
+    return Number(product.stock) || 0;
+};
+
 // --- HANDLERS ---
-const handleEdit = (product) => {
-    emit('edit', { ...product });
-};
-
-const confirmDelete = (prod) => {
-    confirm.require({
-        message: `Hapus produk "${prod.name}"? Data tidak dapat dikembalikan.`,
-        header: 'Konfirmasi Hapus',
-        icon: 'pi pi-exclamation-triangle',
-        acceptClass: 'p-button-danger',
-        accept: async () => {
-            try {
-                await productService.deleteProduct(prod.uuid);
-                toast.add({ severity: 'success', summary: 'Terhapus', detail: 'Produk berhasil dihapus.' });
-                refresh();
-            } catch (err) {
-                toast.add({ severity: 'error', summary: 'Gagal', detail: err.message || 'Gagal menghapus produk.' });
-            }
-        }
-    });
-};
-
 const onPage = (event) => {
-    lazyParams.value.page = event.page + 1;
+    lazyParams.value.page = event.page + 1; 
     lazyParams.value.limit = event.rows;
     fetchProducts();
 };
 
 const onSearch = () => {
-    lazyParams.value.page = 1; 
-    lazyParams.value.search = searchInput.value;
-    fetchProducts();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        lazyParams.value.page = 1; 
+        fetchProducts();
+    }, 500); 
 };
 
-const refresh = () => {
-    fetchProducts();
+const editProduct = (product) => {
+    emit('edit', product);
 };
 
-onMounted(() => {
-    fetchProducts();
+const deleteProduct = (product) => {
+    confirm.require({
+        message: `Apakah Anda yakin ingin menghapus produk "${product.name}"?`,
+        header: 'Konfirmasi Hapus',
+        icon: 'pi pi-exclamation-triangle',
+        acceptLabel: 'Ya, Hapus',
+        rejectLabel: 'Batal',
+        acceptClass: 'p-button-danger',
+        accept: async () => {
+            try {
+                await productService.deleteProduct(product.uuid);
+                toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil dihapus' });
+                fetchProducts();
+            } catch (error) {
+                toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal menghapus produk' });
+            }
+        }
+    });
+};
+
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
+};
+
+defineExpose({ fetchProducts });
+
+onMounted(async () => {
+    await Promise.all([
+        fetchCategories(),
+        fetchShelves()
+    ]);
+    await fetchProducts();
 });
-
-defineExpose({ refresh });
 </script>
 
 <template>
-    <div class="flex flex-col h-full gap-4">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-3 bg-surface-0 p-3 rounded-xl border border-surface-200 shadow-sm">
-             <div class="relative w-full md:w-96 group">
-                <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 group-focus-within:text-primary-500 transition-colors"></i>
-                <InputText 
-                    v-model="searchInput" 
-                    placeholder="Cari Nama Produk..." 
-                    class="w-full pl-10 rounded-full !bg-surface-50 focus:!bg-surface-0 transition-all border-none ring-1 ring-surface-200 focus:ring-primary-500" 
-                    @keydown.enter="onSearch"
-                />
+    <div class="card bg-surface-0 p-5 rounded-xl border border-surface-200">
+        
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-surface-800">Master Produk</h2>
+                <p class="text-sm text-surface-500 mt-1">Kelola data barang, harga, dan lokasi rak.</p>
             </div>
-
-            <div class="flex gap-2 w-full md:w-auto">
-                <Button 
-                    icon="pi pi-refresh" 
-                    severity="secondary" 
-                    text 
-                    rounded 
-                    @click="refresh" 
-                    v-tooltip="'Refresh Data'"
-                />
-                <Button 
-                    label="Produk Baru" 
-                    icon="pi pi-plus" 
-                    severity="primary" 
-                    rounded 
-                    @click="emit('create')" 
-                    class="w-full md:w-auto shadow-lg shadow-primary-500/20"
-                />
+            
+            <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <IconField iconPosition="left" class="w-full sm:w-64">
+                    <InputIcon class="pi pi-search" />
+                    <InputText v-model="searchQuery" @input="onSearch" placeholder="Cari nama atau barcode..." class="w-full" />
+                </IconField>
+                <Button label="Tambah Produk" icon="pi pi-plus" @click="emit('create')" class="whitespace-nowrap" />
             </div>
         </div>
 
-        <div class="flex-1 overflow-hidden border border-surface-200 rounded-xl bg-surface-0 shadow-sm flex flex-col">
-            <DataTable 
-                :value="products" 
-                :loading="loading" 
-                :lazy="true" 
-                paginator 
-                :rows="lazyParams.limit" 
-                :totalRecords="totalRecords" 
-                :first="firstRow"
-                @page="onPage" 
-                dataKey="uuid" 
-                stripedRows 
-                class="flex-1 p-datatable-sm bg-surface-0"
-                scrollable 
-                scrollHeight="flex"
-                :rowsPerPageOptions="[10, 25, 50, 100]"
-                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
-                currentPageReportTemplate="{first} - {last} dari {totalRecords}"
-            >
-                <template #empty>
-                    <div class="flex flex-col items-center justify-center py-16 text-surface-500">
-                        <i class="pi pi-box text-3xl opacity-50 mb-2"></i>
-                        <p class="font-medium">Tidak ada produk ditemukan.</p>
+        <DataTable 
+            v-model:expandedRows="expandedRows" 
+            :value="products" 
+            dataKey="uuid"
+            :loading="loading"
+            lazy
+            :paginator="true"
+            :rows="lazyParams.limit"
+            :totalRecords="totalRecords"
+            @page="onPage"
+            :rowsPerPageOptions="[10, 20, 50]"
+            responsiveLayout="scroll"
+            class="p-datatable-sm"
+        >
+            <template #empty>
+                <div class="text-center py-8 text-surface-500">
+                    <i class="pi pi-box text-4xl mb-3 text-surface-300"></i>
+                    <p>Data produk tidak ditemukan.</p>
+                </div>
+            </template>
+
+            <Column expander style="width: 3rem" />
+
+            <Column field="name" header="Info Produk" style="min-width: 15rem">
+                <template #body="{ data }">
+                    <div>
+                        <div class="font-bold text-surface-800">{{ data.name }}</div>
+                        <div class="text-xs text-surface-500 mt-0.5 flex items-center gap-2">
+                            <span><i class="pi pi-barcode text-[10px]"></i> {{ data.barcode || '-' }}</span>
+                        </div>
                     </div>
                 </template>
+            </Column>
 
-                <template #loading>
-                    <div class="p-4 space-y-3">
-                        <Skeleton height="3rem" v-for="i in 5" :key="i" class="!rounded-lg" />
+            <Column header="Kategori">
+                <template #body="{ data }">
+                    <Tag :value="getCategoryName(data.categoryUuid)" severity="secondary" rounded />
+                </template>
+            </Column>
+
+            <Column header="Lokasi Rak">
+                <template #body="{ data }">
+                    <div class="text-xs text-surface-600">
+                        <i class="pi pi-map-marker text-[10px] mr-1"></i>
+                        {{ getShelveNames(data) }}
                     </div>
                 </template>
+            </Column>
 
-                <Column header="Nama Produk" style="min-width: 300px">
-                    <template #body="{ data }">
-                        <div class="flex gap-3 items-center py-1">
-                            <div class="w-9 h-9 rounded-full bg-surface-100 text-surface-600 flex items-center justify-center font-bold text-sm shrink-0">
-                                {{ data.name.charAt(0).toUpperCase() }}
-                            </div>
-                            <div class="flex flex-col">
-                                <span class="font-bold text-sm text-surface-900">{{ data.name }}</span>
-                                <span v-if="data.categoryName" class="text-xs text-surface-500">{{ data.categoryName }}</span>
+            <Column header="Stok Total">
+                <template #body="{ data }">
+                    <div class="font-bold" :class="getTotalStock(data) > 0 ? 'text-primary-600' : 'text-red-500'">
+                        {{ getTotalStock(data) }} <span class="text-xs font-normal text-surface-500">{{ data.unit?.name || 'Unit' }}</span>
+                    </div>
+                </template>
+            </Column>
+
+            <Column header="Harga Utama">
+                <template #body="{ data }">
+                    <div v-if="data.variants && data.variants.length > 0">
+                        <Tag value="Multi Harga Varian" severity="info" class="text-[10px]" />
+                    </div>
+                    <div v-else-if="data.prices && data.prices.length > 0">
+                        <span class="font-bold text-surface-800">{{ formatCurrency(data.prices[0].price) }}</span>
+                    </div>
+                    <div v-else>
+                        <span class="text-xs text-surface-400 italic">Belum diatur</span>
+                    </div>
+                </template>
+            </Column>
+
+            <Column header="Aksi" alignFrozen="right" :exportable="false" style="min-width: 8rem">
+                <template #body="{ data }">
+                    <div class="flex gap-2">
+                        <Button icon="pi pi-pencil" text rounded severity="info" @click="editProduct(data)" v-tooltip.top="'Edit'" />
+                        <Button icon="pi pi-trash" text rounded severity="danger" @click="deleteProduct(data)" v-tooltip.top="'Hapus'" />
+                    </div>
+                </template>
+            </Column>
+
+            <template #expansion="{ data }">
+                <div class="p-6 bg-surface-50 border border-surface-200 rounded-xl mx-6 my-3 shadow-inner">
+                    <div class="flex justify-between items-center mb-4 border-b border-surface-200 pb-3">
+                        <h4 class="font-bold text-base text-surface-800 flex items-center gap-2">
+                            <i class="pi pi-info-circle text-primary-500"></i> Detail Lengkap Produk
+                        </h4>
+                        <Tag v-if="data.hasParent" value="Produk Turunan / Konversi" severity="warning" rounded />
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        
+                        <div class="col-span-1 lg:col-span-4">
+                            <h5 class="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">Informasi Dasar</h5>
+                            <div class="bg-surface-0 border border-surface-200 rounded-lg p-4 shadow-sm space-y-3">
+                                <div>
+                                    <div class="text-[10px] text-surface-500 mb-0.5">Nama Produk</div>
+                                    <div class="text-sm font-bold text-surface-800">{{ data.name }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-surface-500 mb-0.5">Barcode / SKU</div>
+                                    <div class="text-sm font-medium text-surface-800">{{ data.barcode || '-' }}</div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <div class="text-[10px] text-surface-500 mb-0.5">Kategori</div>
+                                        <div class="text-sm font-medium text-surface-800">{{ getCategoryName(data.categoryUuid) }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] text-surface-500 mb-0.5">Satuan Default</div>
+                                        <div class="text-sm font-medium text-surface-800">{{ data.unit?.name || '-' }}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-surface-500 mb-0.5">Lokasi Rak</div>
+                                    <div class="text-sm font-medium text-surface-800">{{ getShelveNames(data) }}</div>
+                                </div>
                             </div>
                         </div>
-                    </template>
-                </Column>
 
-                <Column header="Aksi" style="width: 100px; text-align: center" alignFrozen="right">
-                    <template #body="{ data }">
-                        <div class="flex justify-center gap-1">
-                            <Button 
-                                icon="pi pi-pencil" 
-                                text
-                                rounded 
-                                severity="info"
-                                size="small"
-                                v-tooltip.top="'Edit'" 
-                                @click="handleEdit(data)" 
-                                class="!w-8 !h-8"
-                            />
-                            <Button 
-                                icon="pi pi-trash" 
-                                text
-                                rounded 
-                                severity="danger" 
-                                size="small"
-                                v-tooltip.top="'Hapus'" 
-                                @click="confirmDelete(data)" 
-                                class="!w-8 !h-8"
-                            />
+                        <div class="col-span-1 lg:col-span-8">
+                            
+                            <div v-if="!data.variants || data.variants.length === 0">
+                                <h5 class="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">Daftar Harga & Grosir</h5>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div v-for="price in data.prices" :key="price.uuid" class="bg-surface-0 p-3 rounded-lg border border-surface-200 shadow-sm flex justify-between items-center relative overflow-hidden">
+                                        <div class="absolute left-0 top-0 bottom-0 w-1" :class="price.name.toLowerCase().includes('grosir') ? 'bg-orange-400' : 'bg-primary-500'"></div>
+                                        <div class="pl-2">
+                                            <div class="text-[10px] font-bold uppercase mb-1" :class="price.name.toLowerCase().includes('grosir') ? 'text-orange-600' : 'text-surface-500'">
+                                                {{ price.name }}
+                                            </div>
+                                            <div class="text-sm font-bold text-surface-800">{{ formatCurrency(price.price) }}</div>
+                                        </div>
+                                        <div v-if="price.minQty > 1 || price.name.toLowerCase().includes('grosir')" class="text-right">
+                                            <div class="text-[9px] text-surface-500">Min. Beli</div>
+                                            <div class="text-xs font-bold text-surface-700">{{ price.minQty }}</div>
+                                        </div>
+                                    </div>
+                                    <div v-if="!data.prices || data.prices.length === 0" class="col-span-full p-4 border border-dashed border-surface-300 rounded-lg text-center text-sm text-surface-500 bg-surface-0">
+                                        Harga belum diatur untuk produk ini.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-else>
+                                <div class="flex justify-between items-center mb-3">
+                                    <h5 class="text-xs font-bold text-surface-500 uppercase tracking-wider">Varian & Harga Spesifik</h5>
+                                    <Tag value="Multi Varian" severity="info" rounded />
+                                </div>
+                                
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div v-for="variant in data.variants" :key="variant.uuid" class="bg-surface-0 rounded-xl border border-surface-200 shadow-sm overflow-hidden">
+                                        <div class="bg-surface-50 p-3 border-b border-surface-100 flex justify-between items-start">
+                                            <div>
+                                                <div class="font-bold text-sm text-surface-800">{{ variant.name }}</div>
+                                                <div class="text-[10px] text-surface-500 mt-0.5"><i class="pi pi-barcode mr-1"></i>{{ variant.barcode || 'Tanpa Barcode' }}</div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-[9px] text-surface-500 uppercase">Stok</div>
+                                                <div class="font-bold text-sm" :class="variant.stock > 0 ? 'text-primary-600' : 'text-red-500'">{{ variant.stock || 0 }}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="p-3">
+                                            <div class="text-[9px] font-bold text-surface-400 uppercase mb-2">Harga Varian:</div>
+                                            <div class="flex flex-col gap-2">
+                                                <div v-for="vp in variant.prices" :key="vp.uuid" class="flex justify-between items-center pb-2 border-b border-surface-100 last:border-0 last:pb-0">
+                                                    <div class="text-[10px] font-semibold" :class="vp.name.toLowerCase().includes('grosir') ? 'text-orange-600' : 'text-surface-600'">
+                                                        {{ vp.name }}
+                                                    </div>
+                                                    <div class="text-right flex items-center gap-3">
+                                                        <div v-if="vp.minQty > 1 || vp.name.toLowerCase().includes('grosir')" class="text-[9px] font-medium bg-surface-100 px-1.5 py-0.5 rounded text-surface-600" v-tooltip.top="'Min. Beli'">
+                                                            Min: {{ vp.minQty }}
+                                                        </div>
+                                                        <div class="text-xs font-bold text-surface-800 w-20 text-right">{{ formatCurrency(vp.price) }}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                         </div>
-                    </template>
-                </Column>
-
-            </DataTable>
-        </div>
+                    </div>
+                </div>
+            </template>
+        </DataTable>
     </div>
 </template>

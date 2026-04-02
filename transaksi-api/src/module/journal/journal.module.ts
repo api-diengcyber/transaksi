@@ -6,6 +6,9 @@ import { JournalService } from './journal.service';
 import { JournalController } from './journal.controller';
 import { journalDetailProvider } from 'src/common/entities/journal_detail/journal_detail.provider';
 import { ProductModule } from '../product/product.module';
+import { JournalBuyService } from './journal-buy.service';
+import { JournalSaleService } from './journal-sale.service';
+import { JournalStokService } from './journal-stok.service';
 
 @Module({
   imports: [
@@ -16,7 +19,15 @@ import { ProductModule } from '../product/product.module';
     ...journalProvider,
     ...journalDetailProvider,
     JournalService,
+    JournalSaleService,
+    JournalStokService, 
+    JournalBuyService,
   ],
-  exports: [JournalService],
+  exports: [
+    JournalService,
+    JournalSaleService,
+    JournalStokService, 
+    JournalBuyService,
+  ],
 })
 export class JournalModule { }

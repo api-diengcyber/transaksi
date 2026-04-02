@@ -108,7 +108,7 @@ export const useJournalService = () => {
     };
     
     const getChartData = async (startDate: string, endDate: string) => {
-        return await useApi(`${API_BASE}/chart`, {
+        return await useApi(`${API_BASE}/chart-data`, {
             method: 'GET',
             params: { startDate, endDate }
         });

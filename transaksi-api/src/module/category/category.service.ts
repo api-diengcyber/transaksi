@@ -27,24 +27,17 @@ export class CategoryService {
 
     const [data, total] = await this.categoryRepo.findAndCount({
       where: whereCondition,
-      relations: ['parent', 'children'], // Load Parent & Child untuk info lengkap
+      // Tambahkan 'products' jika ingin menghitung jumlah produk di list
+      relations: ['parent', 'children', 'products'], 
       take: limit,
       skip: skip,
       order: { createdAt: 'DESC' },
     });
 
-    // Mapping agar response lebih rapi (opsional)
-    const mappedData = data.map(cat => ({
-      uuid: cat.uuid,
-      name: cat.name,
-      parentName: cat.parent ? cat.parent.name : null, // Info nama parent
-      parentUuid: cat.parent ? cat.parent.uuid : null,
-      childrenCount: cat.children ? cat.children.length : 0,
-      createdAt: cat.createdAt
-    }));
+    // HAPUS bagian const mappedData = data.map(...)
 
     return {
-      data: mappedData,
+      data: data, // <-- Langsung return 'data' asli dari TypeORM
       meta: {
         total,
         page,

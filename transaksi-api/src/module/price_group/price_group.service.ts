@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { PriceGroupEntity } from '../../common/entities/price_group/price_group.entity';
 // (Pastikan Anda sudah membuat PriceGroupEntity dan provider-nya seperti yang dibahas sebelumnya)
 
@@ -12,7 +12,9 @@ export class PriceGroupService {
 
   async findAll(storeUuid: string) {
     return await this.repo.find({
-      where: { storeUuid },
+      where: { 
+        uuid: Like(`${storeUuid}%`) 
+      },
       order: { name: 'ASC' },
     });
   }

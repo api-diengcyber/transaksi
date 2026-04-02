@@ -158,12 +158,17 @@ export class StoreService {
       }
 
       // Di dalam manager.transaction installStore:
-      const defaultPriceGroups = ['Harga Normal', 'Harga Member'];
+      const defaultPriceGroups = ['Harga Normal', 'Harga Member', 'Harga Grosir Normal', 'Harga Grosir Member'];
       for (const pgName of defaultPriceGroups) {
+        const generatedCode = pgName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/(^_|_$)/g, '');
         await manager.save(manager.create(PriceGroupEntity, {
           uuid: generatePriceGroupUuid(customStoreUuid),
           storeUuid: customStoreUuid,
           name: pgName,
+          code: generatedCode,
         }));
       }
 

@@ -2,22 +2,33 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// 1. DTO Khusus untuk Harga (Bisa dipakai di Produk atau Varian)
+// 1. DTO Khusus untuk Harga
 export class ProductPriceDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  uuid?: string; // Untuk update harga lama
+  uuid?: string;
 
   @ApiProperty()
   @IsNotEmpty()
   @IsString()
-  name: string; // Contoh: "Harga Grosir"
+  priceGroupUuid: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  name: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
-  price?: number; // Nominal harga
+  price?: number;
+
+  // TAMBAHAN: Validasi DTO untuk minQty
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  minQty?: number; 
 }
 
 // 2. DTO Khusus untuk Varian
@@ -42,7 +53,6 @@ export class ProductVariantDto {
   @IsNumber()
   stock?: number;
 
-  // Relasi Harga di dalam Varian
   @ApiPropertyOptional({ type: [ProductPriceDto] })
   @IsOptional()
   @IsArray()
@@ -73,6 +83,12 @@ export class CreateProductDto {
   @IsString()
   unitUuid: string;
 
+  // PENYEBAB ERROR 2: Kategori sebelumnya belum didaftarkan di DTO
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  categoryUuid: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
@@ -83,7 +99,6 @@ export class CreateProductDto {
   @IsString({ each: true })
   shelveUuids: string[];
 
-  // Relasi Harga untuk Produk Utama (Jika tidak pakai varian)
   @ApiPropertyOptional({ type: [ProductPriceDto] })
   @IsOptional()
   @IsArray()
@@ -91,13 +106,10 @@ export class CreateProductDto {
   @Type(() => ProductPriceDto)
   prices?: ProductPriceDto[];
 
-  // Relasi Varian
   @ApiPropertyOptional({ type: [ProductVariantDto] })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ProductVariantDto)
   variants?: ProductVariantDto[];
-
-  // (Tetap biarkan relasi Parent/Child jika sebelumnya Anda sudah definisikan di sini)
 }

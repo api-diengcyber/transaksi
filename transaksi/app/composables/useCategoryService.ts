@@ -1,7 +1,8 @@
 // composables/useCategoryService.ts
 export const useCategoryService = () => {
 
-    const getAllCategorys = async () => {
+    // UBAH NAMA FUNGSI DI SINI
+    const getAllCategories = async () => {
         return await useApi('/category/find-all');
     };
 
@@ -30,7 +31,7 @@ export const useCategoryService = () => {
     };
 
     return {
-        getAllCategorys,
+        getAllCategories, // PASTIKAN EXPORTNYA JUGA DIUBAH
         getCategory,
         createCategory,
         updateCategory,

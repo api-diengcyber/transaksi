@@ -7,7 +7,6 @@ import { useProductService } from '~/composables/useProductService';
 import { useJournalService } from '~/composables/useJournalService';
 import { useCategoryService } from '~/composables/useCategoryService';
 import { useUserService } from '~/composables/useUserService';
-import { useStoreService } from '~/composables/useStoreService';
 import { useCourierService } from '~/composables/useCourierService';
 import { useTableService } from '~/composables/useTableService';
 
@@ -20,7 +19,6 @@ const journalService = useJournalService();
 const categoryService = useCategoryService();
 const bankService = useBankService();
 const userService = useUserService(); 
-const storeService = useStoreService();
 const courierService = useCourierService();
 const tableService = useTableService();
 const authStore = useAuthStore();
@@ -40,6 +38,8 @@ const processing = ref(false);
 const showPaymentModal = ref(false);
 const showCreateProductModal = ref(false);
 const showTableModal = ref(false);
+const showVariantModal = ref(false);
+const selectedProductForVariant = ref(null);
 
 // --- VIEW STATE ---
 const viewMode = ref('grid'); 
@@ -50,19 +50,15 @@ const selectedCategoryUuids = ref([]);
 // --- DATA MASTER ---
 const banks = ref([]);
 const members = ref([]);
-const myStores = ref([]);
 const couriers = ref([]); 
 const availableRoutes = ref([]); 
 const tables = ref([]); 
 
 // --- STATE TRANSAKSI ---
-const transactionType = ref('SALE'); // 'SALE' | 'MUTATION'
 const isPreOrder = ref(false); 
-
 const transactionMeta = reactive({
     memberUuid: null,
     customerName: '', 
-    targetStoreUuid: null,
 });
 
 // --- STATE PENGIRIMAN ---
@@ -141,14 +137,10 @@ const canCheckout = computed(() => {
     if (cart.value.length === 0) return false;
     if (processing.value) return false;
 
-    if (transactionType.value === 'MUTATION' && !transactionMeta.targetStoreUuid) return false;
-    const needsCustomer = (transactionType.value === 'SALE') && (hasDebtOrInstallment.value || isPreOrder.value);
-    if (needsCustomer) {
+    if (hasDebtOrInstallment.value || isPreOrder.value) {
         if (!transactionMeta.memberUuid && (!transactionMeta.customerName || transactionMeta.customerName.trim() === '')) return false;
     }
-
     if (shippingState.enable && (!shippingState.courierUuid || !shippingState.routeUuid)) return false;
-
     if (!hasDebtOrInstallment.value && remainingBalance.value > 100) return false; 
     if (hasDebtOrInstallment.value && Math.abs(remainingBalance.value) > 100) return false;
 
@@ -157,7 +149,6 @@ const canCheckout = computed(() => {
         if (line.type === 'TUNAI' && line.subType === 'BANK' && !line.bankUuid) return false;
         if ((line.type === 'KREDIT' || line.type === 'CICILAN') && !line.dueDate) return false;
     }
-
     return true;
 });
 
@@ -172,46 +163,150 @@ watch(() => shippingState.routeUuid, (newVal) => {
     const route = availableRoutes.value.find(r => r.uuid === newVal);
     shippingState.cost = route ? Number(route.price) : 0;
 });
-watch(transactionType, (val) => {
-    if(val === 'MUTATION') {
-        isPreOrder.value = false;
-        transactionMeta.memberUuid = null;
-        transactionMeta.customerName = '';
-        paymentLines.value = [{ type: 'KREDIT', amount: grandTotal.value, subType: 'CASH', bankUuid: null, dueDate: new Date(), tenor: 1, fee: 0, showSchedule: false }];
-    } else {
-        transactionMeta.targetStoreUuid = null;
-        resetPaymentLines();
-    }
-});
 watch(() => shippingState.cost, () => {
     if (paymentLines.value.length === 1 && paymentLines.value[0].type === 'TUNAI') {
         paymentLines.value[0].amount = grandTotal.value;
     }
 });
 
-// --- ACTIONS ---
+// --- ACTIONS & FORMATTERS ---
 const resetPaymentLines = () => {
     paymentLines.value = [{ type: 'TUNAI', amount: grandTotal.value, subType: 'CASH', bankUuid: null, dueDate: new Date(), tenor: 1, fee: 0, showSchedule: false }];
 };
 
 const resetState = () => {
     resetPaymentLines();
-    transactionType.value = 'SALE';
     isPreOrder.value = false;
     transactionMeta.memberUuid = null;
     transactionMeta.customerName = '';
-    transactionMeta.targetStoreUuid = null;
     shippingState.enable = false;
     shippingState.courierUuid = null; shippingState.routeUuid = null; shippingState.cost = 0;
 };
 
-// Hanya view
-const onTableClick = (table) => {
-    const status = table.is_occupied ? 'TERISI' : 'KOSONG';
-    const severity = table.is_occupied ? 'error' : 'success';
-    toast.add({ severity: severity, summary: `Info Meja: ${table.name}`, detail: `Status: ${status}`, life: 2000 });
+const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+
+const getBasePrice = (prod) => {
+    if (prod.variants && prod.variants.length > 0) return prod.variants[0]?.prices?.[0]?.price || 0;
+    return prod.prices?.[0]?.price || 0;
 };
 
+const getTotalStock = (prod) => {
+    if (prod.variants && prod.variants.length > 0) return prod.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    return Number(prod.stock) || 0;
+};
+
+const getStockColor = (qty) => { 
+    if (qty <= 0) return 'bg-red-100 text-red-600 border-red-200'; 
+    if (qty < 10) return 'bg-amber-100 text-amber-600 border-amber-200'; 
+    return 'bg-blue-50 text-blue-600 border-blue-200'; 
+};
+
+// --- LOGIKA HARGA GROSIR OTOMATIS & CUSTOM ---
+const recalculateItemPrice = (item) => {
+    // Abaikan jika kasir memilih Harga Custom, biarkan kasir mengisi manual
+    if (item.isCustomPrice) return;
+
+    const allPrices = item.allPrices || [];
+    if (allPrices.length === 0) return;
+
+    const baseName = item.basePriceObj?.name?.toLowerCase() || '';
+
+    // Cari referensi Harga Grosir berdasarkan Tier yang dipilih (Normal vs Member)
+    let matchingGrosir = null;
+    if (baseName.includes('member')) {
+        matchingGrosir = allPrices.find(p => p.name.toLowerCase().includes('grosir') && p.name.toLowerCase().includes('member') && p.minQty > 1);
+    } else {
+        matchingGrosir = allPrices.find(p => p.name.toLowerCase().includes('grosir') && !p.name.toLowerCase().includes('member') && p.minQty > 1);
+    }
+
+    // Cek apakah memenuhi syarat grosir
+    if (matchingGrosir && item.qty >= Number(matchingGrosir.minQty)) {
+        item.price = Number(matchingGrosir.price);
+        item.activeTierName = matchingGrosir.name;
+        item.isGrosirActive = true;
+    } else {
+        item.price = Number(item.basePriceObj?.price || 0);
+        item.activeTierName = item.basePriceObj?.name || 'Umum';
+        item.isGrosirActive = false;
+    }
+};
+
+// --- CART LOGIC NEW STRUCTURE ---
+const addToCart = (prod) => {
+    if (prod.variants && prod.variants.length > 0) {
+        selectedProductForVariant.value = prod;
+        showVariantModal.value = true;
+    } else {
+        pushToCart(prod, null);
+    }
+};
+
+const pushToCart = (prod, variant) => {
+    const variantUuid = variant ? variant.uuid : null;
+    const item = cart.value.find(i => i.productUuid === prod.uuid && i.variantUuid === variantUuid);
+
+    if (item) {
+        item.qty++;
+        recalculateItemPrice(item);
+    } else {
+        const availablePrices = variant ? (variant.prices || []) : (prod.prices || []);
+        const unitName = prod.unit?.name || 'Unit';
+        const itemName = variant ? `${prod.name} - ${variant.name}` : prod.name;
+
+        // Filter opsi dropdown: Sembunyikan semua grosir, dan tambahkan opsi Custom
+        const selectableTiers = availablePrices.filter(p => !p.name.toLowerCase().includes('grosir'));
+        selectableTiers.push({ uuid: 'custom', name: 'Harga Custom', price: 0, isCustom: true });
+
+        const defaultBase = selectableTiers.find(p => p.name?.toLowerCase().includes('umum') || p.name?.toLowerCase().includes('normal')) || selectableTiers[0];
+
+        const newItem = {
+            productUuid: prod.uuid,
+            variantUuid: variantUuid,
+            name: itemName,
+            unitUuid: prod.unitUuid,
+            unitName: unitName,
+            price: 0,
+            qty: 1,
+            basePriceObj: defaultBase,
+            isCustomPrice: false,
+            activeTierName: '',
+            isGrosirActive: false,
+            selectableTiers: selectableTiers,
+            allPrices: availablePrices
+        };
+
+        recalculateItemPrice(newItem); 
+        cart.value.push(newItem);
+    }
+
+    showVariantModal.value = false;
+    selectedProductForVariant.value = null;
+    nextTick(() => { const el = document.getElementById('cart-items-container'); if(el) el.scrollTop = el.scrollHeight; });
+};
+
+const changeItemQty = (item, change) => {
+    if (change === -1 && item.qty <= 1) return; 
+    item.qty += change;
+    recalculateItemPrice(item); 
+};
+
+const changeCartItemPriceTier = (item, newBaseObj) => { 
+    if (!newBaseObj) return;
+    item.basePriceObj = newBaseObj;
+    
+    if (newBaseObj.isCustom) {
+        item.isCustomPrice = true;
+        item.isGrosirActive = false;
+        item.activeTierName = 'Custom Manual';
+    } else {
+        item.isCustomPrice = false;
+        recalculateItemPrice(item);
+    }
+};
+
+const removeFromCart = (index) => { cart.value.splice(index, 1); };
+
+// --- PAYMENTS & CHECKOUT ---
 const addPaymentLine = () => {
     const sisa = remainingBalance.value > 0 ? remainingBalance.value : 0;
     paymentLines.value.push({ type: 'TUNAI', amount: sisa, subType: 'CASH', bankUuid: null, dueDate: new Date(), tenor: 1, fee: 0, showSchedule: false });
@@ -243,72 +338,42 @@ const processCheckout = async () => {
     processing.value = true;
 
     try {
-        // --- 1. Kalkulasi Split Pembayaran ---
-        let amountCash = 0;
-        let amountCredit = 0;
-        let amountInstallment = 0;
-        
-        // Object dinamis untuk menampung pembayaran per bank
-        // Format: { amount_bank_UUID1: 10000, amount_bank_UUID2: 5000 }
-        const bankAmounts = {}; 
-        let totalBankAmount = 0;
+        let amountCash = 0; let amountCredit = 0; let amountInstallment = 0;
+        const bankAmounts = {}; let totalBankAmount = 0;
         
         paymentLines.value.forEach(l => {
             const amt = Number(l.amount) || 0;
             if (l.type === 'TUNAI') {
-                if (l.subType === 'CASH') {
-                    amountCash += amt;
-                } else if (l.subType === 'BANK') {
+                if (l.subType === 'CASH') amountCash += amt;
+                else if (l.subType === 'BANK') {
                     totalBankAmount += amt;
-                    if (l.bankUuid) {
-                        // Kumpulkan nominal per UUID Bank
-                        const key = `amount_bank_${l.bankUuid}`;
-                        bankAmounts[key] = (bankAmounts[key] || 0) + amt;
-                    }
+                    if (l.bankUuid) bankAmounts[`amount_bank_${l.bankUuid}`] = (bankAmounts[`amount_bank_${l.bankUuid}`] || 0) + amt;
                 }
-            } else if (l.type === 'KREDIT') {
-                amountCredit += amt;
-            } else if (l.type === 'CICILAN') {
-                amountInstallment += amt;
-            }
+            } else if (l.type === 'KREDIT') amountCredit += amt;
+            else if (l.type === 'CICILAN') amountInstallment += amt;
         });
 
-        // --- 2. Tentukan Metode Pembayaran Utama ---
-        let mainMethod = 'CASH';
-        if (transactionType.value === 'MUTATION') mainMethod = 'CREDIT'; 
-        else if (hasDebtOrInstallment.value) mainMethod = 'CREDIT';
-        else {
-            if (amountCash > 0 && totalBankAmount > 0) mainMethod = 'MIXED';
-            else if (totalBankAmount > 0) mainMethod = 'TRANSFER';
-        }
+        let mainMethod = hasDebtOrInstallment.value ? 'CREDIT' : (amountCash > 0 && totalBankAmount > 0 ? 'MIXED' : (totalBankAmount > 0 ? 'TRANSFER' : 'CASH'));
 
-        // --- 3. Info Customer ---
         let finalCustName = 'Umum';
-        if (transactionType.value === 'MUTATION') {
-            finalCustName = `Mutasi: ${myStores.value.find(s => s.uuid === transactionMeta.targetStoreUuid)?.name}`;
-        } else {
-            if (transactionMeta.memberUuid) finalCustName = members.value.find(m => m.uuid === transactionMeta.memberUuid)?.name || 'Member';
-            else if (transactionMeta.customerName) finalCustName = transactionMeta.customerName;
-        }
+        if (transactionMeta.memberUuid) finalCustName = members.value.find(m => m.uuid === transactionMeta.memberUuid)?.name || 'Member';
+        else if (transactionMeta.customerName) finalCustName = transactionMeta.customerName;
 
-        // --- 4. Notes ---
         const notesArr = [];
         if(isPreOrder.value) notesArr.push('[PRE-ORDER]');
         if (shippingState.enable) notesArr.push(`Ekspedisi: ${formatCurrency(shippingState.cost)}`);
-        
         paymentLines.value.forEach(l => {
             if (l.type === 'TUNAI') {
-                const via = l.subType === 'BANK' 
-                    ? `Transfer ${banks.value.find(b=>b.uuid===l.bankUuid)?.bank_name||''}` 
-                    : 'Cash';
+                const via = l.subType === 'BANK' ? `Transfer ${banks.value.find(b=>b.uuid===l.bankUuid)?.bank_name||''}` : 'Cash';
                 notesArr.push(`Bayar: ${formatCurrency(l.amount)} (${via})`);
             } else if (l.type === 'KREDIT') notesArr.push(`Kredit: ${formatCurrency(l.amount)}`);
             else if (l.type === 'CICILAN') notesArr.push(`Cicilan: ${formatCurrency(l.amount)}`);
         });
 
-        // --- 5. Clean Items Payload ---
+        // Mapping Keranjang
         const itemsPayload = cart.value.map(item => ({
             product_uuid: item.productUuid,
+            variant_uuid: item.variantUuid || null, 
             unit_uuid: item.unitUuid,
             qty: item.qty,
             price: item.price,
@@ -316,48 +381,27 @@ const processCheckout = async () => {
             item_name: item.name,
             unit_name: item.unitName,
             note: item.note || '',
-            price_tier_name: item.selectedPriceObj?.name || 'Manual',
-            
-            // Param Stok (Optional, jika backend butuh)
+            price_tier_name: item.activeTierName || 'Manual',
             stok_product_uuid: item.productUuid,
             stok_unit: item.unitUuid,
             stok_qty_min: item.qty, 
         }));
 
-        // --- 6. Final Payload Construction ---
         const payload = {
-            // Header Utama
             grand_total: grandTotal.value,
             total_items: cart.value.length,
             payment_method: mainMethod,
             customer_name: finalCustName,
             notes: notesArr.join(' | '),
-            
             status: isPreOrder.value ? 'PENDING' : 'COMPLETED',
             due_date: (hasDebtOrInstallment.value) ? paymentLines.value.find(l => l.type !== 'TUNAI')?.dueDate : null,
-            
-            // Nominal Dasar
-            amount_cash: amountCash,
-            amount_credit: amountCredit,
-            amount_installment: amountInstallment,
-            amount_bank_total: totalBankAmount, // Opsional: total semua transfer
-
-            // [SPREAD] Nominal Per Bank (amount_bank_UUID: value)
+            amount_cash: amountCash, amount_credit: amountCredit, amount_installment: amountInstallment, amount_bank_total: totalBankAmount,
             ...bankAmounts,
-            
-            // Shipping
-            shipping_cost: shippingState.enable ? shippingState.cost : 0,
-            courier_uuid: shippingState.enable ? shippingState.courierUuid : null,
-            
-            // References
-            member_uuid: transactionMeta.memberUuid || null,
-            target_store_uuid: transactionType.value === 'MUTATION' ? transactionMeta.targetStoreUuid : null,
-            
-            // Items
+            shipping_cost: shippingState.enable ? shippingState.cost : 0, courier_uuid: shippingState.enable ? shippingState.courierUuid : null,
+            member_uuid: transactionMeta.memberUuid || null, target_store_uuid: null,
             items: itemsPayload
         };
 
-        // Kirim ke Backend
         await journalService.createSaleTransaction(payload);
         
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Transaksi Berhasil', life: 3000 });
@@ -369,44 +413,28 @@ const processCheckout = async () => {
     } finally { processing.value = false; }
 };
 
-// --- STANDARD FUNCTIONS ---
-const addToCart = (product) => {
-    let unit = product.units.find(u => u.uuid === product.defaultUnitUuid) || product.units[0]; if(!unit) return;
-    const unitPrices = product.prices.filter(p => p.unitUuid === unit.uuid);
-    const priceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
-    const item = cart.value.find(i => i.productUuid === product.uuid && i.unitUuid === unit.uuid);
-    if(item) item.qty++;
-    else cart.value.push({ productUuid: product.uuid, name: product.name, unitUuid: unit.uuid, unitName: unit.unitName, price: priceObj?.price||0, qty: 1, selectedPriceObj: priceObj, availableUnits: product.units, allPrices: product.prices });
-    nextTick(() => { const el = document.getElementById('cart-items-container'); if(el) el.scrollTop = el.scrollHeight; });
-};
-const changeCartItemUnit = (item, newUnitUuid) => {
-    const unit = item.availableUnits.find(u => u.uuid === newUnitUuid); if(!unit) return;
-    item.unitUuid = unit.uuid; item.unitName = unit.unitName;
-    const unitPrices = item.allPrices.filter(p => p.unitUuid === unit.uuid);
-    const priceObj = unitPrices.find(p => p.isDefault) || unitPrices.find(p => p.name === 'Umum') || unitPrices[0];
-    item.selectedPriceObj = priceObj; item.price = priceObj?.price||0;
-};
-const changeCartItemPriceTier = (item, newPriceObj) => { if(newPriceObj) { item.selectedPriceObj = newPriceObj; item.price = newPriceObj.price; } };
-const removeFromCart = (index) => { cart.value.splice(index, 1); };
+// --- DATA FETCHING ---
 const onSearchKeydown = (event) => { if (event.key === 'Enter') { currentPage.value = 1; loadProducts(); } };
 const fetchCategories = async () => { try { categories.value = await categoryService.getAllCategorys() || []; } catch (e) {} };
 const loadProducts = async () => {
     loading.value = true; products.value = []; 
     try {
         const response = await productService.getAllProducts(currentPage.value, limit, searchQuery.value.toLowerCase().trim(), selectedCategoryUuids.value.join(','));
-        products.value = (response?.data || []).map(p => ({ ...p, prices: p.prices || [], units: p.units || [], categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) }));
+        products.value = (response?.data || []).map(p => ({ ...p, prices: p.prices || [], variants: p.variants || [], unit: p.unit || null, categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) }));
         totalPages.value = response?.meta?.totalPage || 1; totalProducts.value = response?.meta?.total || 0;
     } catch (error) { console.error(error); } finally { loading.value = false; }
 };
-const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
-const getDefaultUnitStock = (prod) => (prod.units.find(u => u.uuid === prod.defaultUnitUuid) || prod.units[0])?.currentStock || 0; 
-const getStockColor = (qty) => { if (qty <= 0) return 'bg-red-100 text-red-600'; if (qty < 10) return 'bg-amber-100 text-amber-600'; return 'bg-blue-50 text-blue-600'; };
+
+const onTableClick = (table) => {
+    const status = table.is_occupied ? 'TERISI' : 'KOSONG';
+    const severity = table.is_occupied ? 'error' : 'success';
+    toast.add({ severity: severity, summary: `Info Meja: ${table.name}`, detail: `Status: ${status}`, life: 2000 });
+};
 
 onMounted(async () => {
     await fetchCategories(); await loadProducts(); 
     try { const data = await userService.getAllUsers({ role: 'member' }); members.value = data || []; } catch (e) {}
     try { const bData = await bankService.getAllBanks(); banks.value = bData || []; } catch (e) {}
-    try { const sData = await storeService.getMyStore(); if (sData) myStores.value = sData.filter(s => s.uuid !== authStore.activeStore?.uuid); } catch (e) {}
     try { const cData = await courierService.getCouriers(); couriers.value = cData || []; } catch (e) {}
     try { const tData = await tableService.getAllTables(); tables.value = tData || []; } catch (e) {}
     window.addEventListener('keydown', (e) => { if (e.key === 'F2') { e.preventDefault(); document.getElementById('search-input-sale')?.focus(); } });
@@ -419,29 +447,29 @@ defineExpose({ refreshData });
 <template>
     <div class="flex flex-col lg:flex-row h-full gap-4 p-4 overflow-hidden bg-surface-50 font-sans">
         
-        <div class="flex-1 flex flex-col bg-surface-0 rounded-xl shadow-sm border border-surface-200  overflow-hidden">
-             <div class="px-4 py-3 border-b border-surface-100  flex justify-between items-center bg-surface-0">
+        <div class="flex-1 flex flex-col bg-surface-0 rounded-xl shadow-sm border border-surface-200 overflow-hidden">
+             <div class="px-4 py-3 border-b border-surface-100 flex justify-between items-center bg-surface-0">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 "><i class="pi pi-shop text-xl"></i></div>
-                    <div><h1 class="text-lg font-bold  leading-tight">{{ authStore.activeStore?.name || 'POS' }}</h1></div>
+                    <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600"><i class="pi pi-shop text-xl"></i></div>
+                    <div><h1 class="text-lg font-bold leading-tight">{{ authStore.activeStore?.name || 'POS' }}</h1></div>
                 </div>
                 <div class="flex items-center gap-2">
                     <Button label="Lihat Denah Meja" icon="pi pi-table" size="small" outlined severity="secondary" @click="showTableModal = true" />
-                    <div class="hidden md:block text-right text-sm font-bold  ml-3">{{ currentDate }}</div>
+                    <div class="hidden md:block text-right text-sm font-bold ml-3">{{ currentDate }}</div>
                 </div>
             </div>
             
-            <div class="p-3 border-b border-surface-100  flex flex-col md:flex-row gap-2 bg-surface-0">
+            <div class="p-3 border-b border-surface-100 flex flex-col md:flex-row gap-2 bg-surface-0">
                 <MultiSelect v-model="selectedCategoryUuids" :options="categories" optionLabel="name" optionValue="uuid" placeholder="Filter Kategori" display="chip" :maxSelectedLabels="1" class="w-full md:w-48 !h-10 !text-sm" />
                 <div class="relative flex-1">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm"></i>
-                    <input id="search-input-sale" v-model="searchQuery" type="text" placeholder="Cari Produk (F2)" class="w-full pl-9 pr-3 py-2 text-sm border rounded-lg h-10  " @keydown="onSearchKeydown" />
+                    <input id="search-input-sale" v-model="searchQuery" type="text" placeholder="Cari Produk (F2)" class="w-full pl-9 pr-3 py-2 text-sm border rounded-lg h-10" @keydown="onSearchKeydown" />
                 </div>
-                 <div class="flex gap-1 bg-surface-100 rounded-lg p-1 h-10 border border-surface-200 ">
-                    <button @click="viewMode = 'list'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'list' ? 'bg-surface-0  shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-list text-sm"></i></button>
-                    <button @click="viewMode = 'grid'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'grid' ? 'bg-surface-0  shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-th-large text-sm"></i></button>
+                 <div class="flex gap-1 bg-surface-100 rounded-lg p-1 h-10 border border-surface-200">
+                    <button @click="viewMode = 'list'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'list' ? 'bg-surface-0 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-list text-sm"></i></button>
+                    <button @click="viewMode = 'grid'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'grid' ? 'bg-surface-0 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-th-large text-sm"></i></button>
                     <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l pl-1 border-surface-300">
-                        <button v-for="n in [2, 3, 4, 5]" :key="n" @click="gridColumns = n" class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center" :class="gridColumns === n ? 'bg-surface-0  shadow text-primary-600' : 'text-surface-400'">{{ n }}</button>
+                        <button v-for="n in [2, 3, 4, 5]" :key="n" @click="gridColumns = n" class="w-6 h-full rounded text-[10px] font-bold transition hidden lg:flex items-center justify-center" :class="gridColumns === n ? 'bg-surface-0 shadow text-primary-600' : 'text-surface-400'">{{ n }}</button>
                     </div>
                 </div>
                 <Button icon="pi pi-plus" class="!w-10 !h-10 !rounded-lg" severity="primary" outlined v-tooltip.bottom="'Tambah Produk Baru'" @click="showCreateProductModal = true" />
@@ -450,16 +478,27 @@ defineExpose({ refreshData });
             <div class="flex-1 overflow-y-auto p-3 bg-surface-50 scrollbar-thin">
                 <div v-if="loading" class="flex justify-center p-10"><ProgressSpinner style="width: 40px; height: 40px" /></div>
                 <div v-else-if="products.length > 0" :class="gridContainerClass">
-                    <div v-for="prod in products" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 border border-surface-200  rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'">
+                    <div v-for="prod in products" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 border border-surface-200 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-28' : 'p-2 flex items-center justify-between gap-3 h-16'">
                         <div v-if="viewMode === 'grid'">
-                            <div class="text-xs font-bold  line-clamp-2 mb-1">{{ prod.name }}</div>
-                            <div class="flex gap-1 mt-1"><span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getDefaultUnitStock(prod))">Stok: {{ getDefaultUnitStock(prod) }}</span></div>
-                            <div class="flex justify-between items-end mt-2"><span class="text-sm font-black text-surface-800 ">{{ formatCurrency((prod.prices?.find(p => p.isDefault)?.price || prod.prices?.[0]?.price || 0)) }}</span></div>
+                            <div class="text-xs font-bold line-clamp-2 mb-1 pr-1">{{ prod.name }}</div>
+                            <div class="flex gap-1 mt-1 items-center">
+                                <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getTotalStock(prod))">Stok: {{ getTotalStock(prod) }}</span>
+                                <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="info" class="!text-[8px] !px-1.5 !py-0.5" />
+                                <i v-if="prod.prices && prod.prices.some(p => p.minQty > 1)" class="pi pi-tags text-orange-500 text-[10px] ml-1" v-tooltip.top="'Ada Harga Grosir'"></i>
+                            </div>
+                            <div class="flex justify-between items-end mt-2"><span class="text-sm font-black text-surface-800">{{ formatCurrency(getBasePrice(prod)) }}</span></div>
                         </div>
                          <div v-else class="flex items-center gap-3 w-full">
                             <div class="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-400 shrink-0"><i class="pi pi-box"></i></div>
-                            <div class="flex-1 min-w-0"><div class="text-sm font-bold truncate">{{ prod.name }}</div><div class="text-[10px] text-surface-500">Stok: {{ getDefaultUnitStock(prod) }}</div></div>
-                            <div class="text-sm font-black">{{ formatCurrency((prod.prices?.find(p => p.isDefault)?.price || prod.prices?.[0]?.price || 0)) }}</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm font-bold truncate flex items-center gap-2">
+                                    {{ prod.name }}
+                                    <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="info" class="!text-[8px] !px-1.5" />
+                                    <i v-if="prod.prices && prod.prices.some(p => p.minQty > 1)" class="pi pi-tags text-orange-500 text-[10px]" v-tooltip.top="'Ada Harga Grosir'"></i>
+                                </div>
+                                <div class="text-[10px] text-surface-500">Stok: {{ getTotalStock(prod) }}</div>
+                            </div>
+                            <div class="text-sm font-black">{{ formatCurrency(getBasePrice(prod)) }}</div>
                         </div>
                     </div>
                 </div>
@@ -467,15 +506,15 @@ defineExpose({ refreshData });
             </div>
         </div>
 
-        <div class="w-full lg:w-[400px] xl:w-[450px] flex flex-col h-[calc(100vh-2rem)] bg-surface-0 rounded-2xl shadow-xl border border-surface-200  overflow-hidden flex-shrink-0">
+        <div class="w-full lg:w-[400px] xl:w-[450px] flex flex-col h-[calc(100vh-2rem)] bg-surface-0 rounded-2xl shadow-xl border border-surface-200 overflow-hidden flex-shrink-0">
             
-            <div class="p-4 border-b border-surface-100  flex justify-between items-center bg-surface-50/50 backdrop-blur-md z-10">
+            <div class="p-4 border-b border-surface-100 flex justify-between items-center bg-surface-50/50 backdrop-blur-md z-10">
                 <div class="flex items-center gap-3">
                     <div class="relative">
-                        <i class="pi pi-shopping-cart text-xl "></i>
+                        <i class="pi pi-shopping-cart text-xl"></i>
                         <span v-if="totalItems > 0" class="absolute -top-2 -right-2 bg-primary-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">{{ totalItems }}</span>
                     </div>
-                    <span class="font-bold text-lg ">Pesanan</span>
+                    <span class="font-bold text-lg">Pesanan</span>
                 </div>
                 <Button v-if="cart.length > 0" label="Reset" icon="pi pi-trash" text severity="danger" size="small" class="!text-xs !px-2" @click="cart = []" />
             </div>
@@ -486,53 +525,89 @@ defineExpose({ refreshData });
                     <p class="text-sm font-medium">Keranjang belum terisi</p>
                 </div>
 
-                <div v-for="(item, index) in cart" :key="index" class="group relative bg-surface-0 rounded-xl p-3 shadow-sm border border-transparent hover:border-primary-200 transition-all duration-200 hover:shadow-md">
+                <div v-for="(item, index) in cart" :key="index" class="group relative bg-surface-0 rounded-xl p-3 shadow-sm border transition-all duration-200" :class="item.isGrosirActive ? 'border-orange-300 bg-orange-50/20' : 'border-surface-200 hover:border-primary-300'">
                     <button @click="removeFromCart(index)" class="absolute -top-2 -right-2 bg-surface-0 text-surface-400 hover:text-red-500 w-6 h-6 rounded-full shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 scale-0 group-hover:scale-100 border border-surface-100"><i class="pi pi-times text-[10px] font-bold"></i></button>
 
                     <div class="flex justify-between items-start gap-2 mb-2">
                         <div class="flex-1">
-                            <div class="text-sm font-bold  leading-tight line-clamp-2 mb-1" :title="item.name">{{ item.name }}</div>
-                            <div class="flex items-center gap-1">
-                                <Dropdown v-model="item.unitUuid" :options="item.availableUnits" optionLabel="unitName" optionValue="uuid" class="!h-6 !text-[10px] w-24" :pt="{ root: { class: '!bg-surface-50 !border-0' }, input: { class: '!py-0 !px-2 !text-[10px]' }, trigger: { class: '!w-6' } }" @change="(e) => changeCartItemUnit(item, e.value)" />
-                                <Dropdown v-model="item.selectedPriceObj" :options="item.allPrices.filter(p => p.unitUuid === item.unitUuid)" optionLabel="name" class="!h-6 !text-[10px] w-20" :pt="{ root: { class: '!bg-surface-50 !border-0' }, input: { class: '!py-0 !px-2 !text-[10px]' }, trigger: { class: '!w-6' } }" placeholder="Tier" @change="(e) => changeCartItemPriceTier(item, e.value)" />
+                            <div class="text-sm font-bold leading-tight line-clamp-2 mb-1" :title="item.name">{{ item.name }}</div>
+                            <div class="flex items-center gap-2">
+                                <span class="bg-surface-100 text-surface-600 text-[9px] font-bold px-2 py-1 rounded">{{ item.unitName }}</span>
+                                <Dropdown v-model="item.basePriceObj" :options="item.selectableTiers" optionLabel="name" class="!h-6 !text-[10px] w-28" :class="{'!bg-orange-100 !text-orange-800 font-bold': item.isGrosirActive}" :pt="{ root: { class: '!bg-surface-50 !border-0' }, input: { class: '!py-0 !px-2 !text-[10px]' }, trigger: { class: '!w-6' } }" placeholder="Tier Harga" @change="(e) => changeCartItemPriceTier(item, e.value)" />
                             </div>
                         </div>
-                        <div class="text-right"><div class="text-sm font-black text-primary-600 ">{{ formatCurrency(item.price * item.qty) }}</div></div>
+                        <div class="text-right"><div class="text-sm font-black text-primary-600">{{ formatCurrency(item.price * item.qty) }}</div></div>
                     </div>
 
-                    <div class="flex items-center justify-between gap-3 bg-surface-50/50 p-1.5 rounded-lg">
+                    <div class="flex items-center justify-between gap-3 bg-surface-50/50 p-1.5 rounded-lg border border-surface-100">
                         <div class="flex-1 min-w-0">
-                            <div class="relative">
+                            <div class="relative flex items-center h-7 pl-6 pr-2">
                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-surface-400">Rp</span>
-                                <InputNumber v-model="item.price" mode="decimal" locale="id-ID" class="w-full !h-7" inputClass="!pl-6 !pr-2 !py-0 !text-xs !h-7 !bg-transparent !border-0 focus:!ring-0 font-mono font-medium text-surface-700" :min="0" @input="item.selectedPriceObj = null" />
+                                
+                                <InputNumber v-if="item.isCustomPrice" v-model="item.price" mode="decimal" locale="id-ID" class="w-full !h-7" inputClass="!pl-0 !pr-2 !py-0 !text-xs !h-7 !bg-surface-0 !border focus:!ring-primary-500 font-mono font-bold" :min="0" />
+                                
+                                <span v-else class="text-xs font-mono font-bold w-full" :class="item.isGrosirActive ? 'text-orange-600' : 'text-surface-700'">
+                                    {{ new Intl.NumberFormat('id-ID').format(item.price) }}
+                                </span>
                             </div>
                         </div>
                         
-                        <div class="flex items-center bg-surface-0 rounded-md shadow-sm border border-surface-200  h-7 shrink-0 overflow-hidden">
-                            <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-red-500 hover:bg-red-50 transition border-r border-surface-100" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
+                        <div class="flex items-center bg-surface-0 rounded-md shadow-sm border border-surface-200 h-7 shrink-0 overflow-hidden">
+                            <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-red-500 hover:bg-red-50 transition border-r border-surface-100" @click="item.qty > 1 ? changeItemQty(item, -1) : removeFromCart(index)">
                                 <i class="pi text-[10px] font-bold" :class="item.qty > 1 ? 'pi-minus' : 'pi-trash'"></i>
                             </button>
-                            <InputNumber v-model="item.qty" class="!w-10" inputClass="!w-full !text-center !text-xs !border-0 !p-0 !h-full font-bold focus:!ring-0 bg-transparent" :min="1" />
-                            <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-primary-600 hover:bg-primary-50 transition border-l border-surface-100" @click="item.qty++">
+                            <input v-model.number="item.qty" type="number" class="w-10 text-center text-xs font-bold border-0 p-0 h-full focus:ring-0 bg-transparent" min="1" @change="recalculateItemPrice(item)" />
+                            <button class="w-7 h-full flex items-center justify-center text-surface-500 hover:text-primary-600 hover:bg-primary-50 transition border-l border-surface-100" @click="changeItemQty(item, 1)">
                                 <i class="pi pi-plus text-[10px] font-bold"></i>
                             </button>
                         </div>
                     </div>
+                    <div v-if="item.isGrosirActive" class="text-[9px] font-bold text-orange-700 bg-orange-100/80 px-2 py-0.5 rounded-b-lg absolute bottom-0 left-0 right-0 text-center uppercase tracking-widest mt-1 border-t border-orange-200">
+                        Otomatis Harga Grosir
+                    </div>
                 </div>
             </div>
 
-            <div class="p-4 bg-surface-0 border-t border-surface-200  shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-20">
+            <div class="p-4 bg-surface-0 border-t border-surface-200 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-20">
                 <div class="space-y-2 mb-4">
                     <div class="flex justify-between items-center text-sm text-surface-500"><span>Subtotal</span><span class="font-mono">{{ formatCurrency(cartSubtotal) }}</span></div>
                     <div v-if="taxEnabled" class="flex justify-between items-center text-sm text-surface-500"><span>Pajak ({{ taxRate }}%)</span><span class="font-mono text-red-500">+ {{ formatCurrency(taxAmount) }}</span></div>
                     <div class="border-t border-dashed border-surface-200 my-2"></div>
-                    <div class="flex justify-between items-end"><span class="text-base font-bold text-surface-800 uppercase tracking-wide">Total Bayar</span><span class="text-2xl font-black text-primary-600 ">{{ formatCurrency(grandTotal) }}</span></div>
+                    <div class="flex justify-between items-end"><span class="text-base font-bold text-surface-800 uppercase tracking-wide">Total Bayar</span><span class="text-2xl font-black text-primary-600">{{ formatCurrency(grandTotal) }}</span></div>
                 </div>
                 <Button label="Proses Pembayaran" icon="pi pi-arrow-right" iconPos="right" class="w-full !h-12 !text-base !font-bold !rounded-xl shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 transition-all transform active:scale-95" severity="primary" @click="openPaymentModal" :disabled="cart.length === 0" />
             </div>
         </div>
     </div>
     
+    <Dialog v-model:visible="showVariantModal" header="Pilih Varian Produk" modal class="w-full max-w-md" :pt="{ header: { class: '!pb-2 !border-b !border-surface-200' }, content: { class: '!pt-4' } }">
+        <div v-if="selectedProductForVariant" class="flex flex-col gap-4">
+            <div class="text-center">
+                <div class="font-bold text-lg text-surface-800">{{ selectedProductForVariant.name }}</div>
+                <div class="text-xs text-surface-500 mt-1">Silakan pilih varian yang akan dimasukkan ke pesanan.</div>
+            </div>
+            <div class="grid grid-cols-1 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar px-1">
+                <button v-for="v in selectedProductForVariant.variants" :key="v.uuid"
+                        @click="pushToCart(selectedProductForVariant, v)"
+                        class="group flex justify-between items-center p-3 border border-surface-200 rounded-xl hover:border-primary-500 hover:bg-primary-50 hover:shadow-sm transition-all text-left bg-surface-0">
+                    <div>
+                        <div class="font-bold text-sm text-surface-800 group-hover:text-primary-700 transition">{{ v.name }}</div>
+                        <div class="text-[10px] text-surface-500 mt-1 flex items-center gap-2">
+                            <span><i class="pi pi-barcode text-[9px]"></i> {{ v.barcode || '-' }}</span>
+                            <span :class="getStockColor(Number(v.stock))" class="px-1.5 py-0.5 rounded border font-semibold">Stok: {{ v.stock || 0 }}</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end">
+                        <div class="font-bold text-primary-600 text-sm bg-surface-100 group-hover:bg-primary-100 px-3 py-1.5 rounded-lg transition">
+                            {{ formatCurrency(v.prices?.[0]?.price || 0) }}
+                        </div>
+                        <div v-if="v.prices && v.prices.some(p => p.minQty > 1)" class="text-[8px] text-orange-500 mt-1 uppercase font-bold tracking-wider">Ada Harga Grosir</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </Dialog>
+
     <Dialog v-model:visible="showTableModal" header="Denah Meja Restoran" modal class="w-full max-w-2xl">
         <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-2">
             <div v-for="table in tables" :key="table.uuid" 
@@ -551,14 +626,13 @@ defineExpose({ refreshData });
 
     <ProductCreateModal v-model:visible="showCreateProductModal" @saved="loadProducts" />
 
-    <div v-if="showPaymentModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-surface-900/60 backdrop-blur-sm transition-all">
-        <div class="bg-surface-0 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh] border border-surface-100 " :class="{'ring-2 ring-purple-500': isPreOrder, 'ring-2 ring-blue-500': transactionType === 'MUTATION'}">
+    <Dialog v-model:visible="showPaymentModal" class="w-full max-w-2xl m-4 !p-0" :pt="{ root: { class: '!border-0 !shadow-2xl' }, header: { class: 'hidden' }, content: { class: '!p-0 !rounded-xl' } }" modal dismissableMask>
+        <div class="bg-surface-0 overflow-hidden flex flex-col max-h-[95vh] border border-surface-100" :class="{'ring-2 ring-purple-500': isPreOrder}">
             
-            <div class="flex justify-between items-center px-6 py-4 border-b border-surface-200  bg-surface-50">
+            <div class="flex justify-between items-center px-6 py-4 border-b border-surface-200 bg-surface-50">
                 <div class="flex items-center gap-2">
-                    <h3 class="font-bold text-xl ">Pembayaran</h3>
+                    <h3 class="font-bold text-xl">Pembayaran</h3>
                     <span v-if="isPreOrder" class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[10px] font-bold border border-purple-200">PO (Pre-Order)</span>
-                    <span v-if="transactionType === 'MUTATION'" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-bold border border-blue-200">MUTASI STOK</span>
                 </div>
                 <button @click="showPaymentModal = false" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-200 hover:bg-surface-300 text-surface-600 transition"><i class="pi pi-times"></i></button>
             </div>
@@ -571,33 +645,21 @@ defineExpose({ refreshData });
                     <span v-if="shippingState.enable && shippingState.cost > 0" class="text-xs font-semibold text-surface-600 mt-1 flex items-center gap-1"><i class="pi pi-truck"></i> Termasuk Ongkir {{ formatCurrency(shippingState.cost) }}</span>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4">
-                     <div class="flex p-1 bg-surface-100 rounded-lg">
-                         <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'SALE' ? 'bg-surface-0 text-primary-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'SALE'"><i class="pi pi-user"></i> Penjualan</button>
-                        <button class="flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2" :class="transactionType === 'MUTATION' ? 'bg-surface-0 text-blue-600 shadow-sm' : 'text-surface-500'" @click="transactionType = 'MUTATION'"><i class="pi pi-arrow-right-arrow-left"></i> Mutasi Cabang</button>
-                    </div>
-
-                    <div v-if="transactionType === 'SALE'" class="space-y-3">
-                        <div class="flex gap-3">
-                            <div class="flex-1">
-                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Pelanggan</label>
-                                <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Member..." class="w-full !text-sm" showClear />
-                            </div>
-                            <div class="flex-1" v-if="!transactionMeta.memberUuid">
-                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Nama Umum</label>
-                                <InputText v-model="transactionMeta.customerName" placeholder="Cth: Bapak Budi" class="w-full !text-sm" />
-                            </div>
+                <div class="space-y-3">
+                    <div class="flex gap-3">
+                        <div class="flex-1">
+                            <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Pelanggan</label>
+                            <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Member..." class="w-full !text-sm" showClear />
                         </div>
-                        
-                        <div class="flex items-center justify-between bg-surface-50/50 px-3 py-2 rounded-lg border border-surface-200">
-                            <div class="flex flex-col"><span class="text-xs font-bold text-surface-700">Pre-Order (PO)</span><span class="text-[9px] text-surface-500">Aktifkan jika barang belum ready</span></div>
-                            <InputSwitch v-model="isPreOrder" class="scale-75" />
+                        <div class="flex-1" v-if="!transactionMeta.memberUuid">
+                            <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Nama Umum</label>
+                            <InputText v-model="transactionMeta.customerName" placeholder="Cth: Bapak Budi" class="w-full !text-sm" />
                         </div>
                     </div>
-
-                    <div v-if="transactionType === 'MUTATION'">
-                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Toko Tujuan</label>
-                        <Dropdown v-model="transactionMeta.targetStoreUuid" :options="myStores" optionLabel="name" optionValue="uuid" placeholder="Pilih Cabang..." class="w-full !text-sm" />
+                    
+                    <div class="flex items-center justify-between bg-surface-50/50 px-3 py-2 rounded-lg border border-surface-200">
+                        <div class="flex flex-col"><span class="text-xs font-bold text-surface-700">Pre-Order (PO)</span><span class="text-[9px] text-surface-500">Aktifkan jika barang belum ready</span></div>
+                        <InputSwitch v-model="isPreOrder" class="scale-75" />
                     </div>
                 </div>
 
@@ -659,18 +721,18 @@ defineExpose({ refreshData });
 
             </div>
 
-            <div class="p-4 border-t border-surface-200  bg-surface-50 space-y-3">
+            <div class="p-4 border-t border-surface-200 bg-surface-50 space-y-3">
                 <div class="flex justify-between items-center">
                     <span class="text-sm font-medium text-surface-600">{{ remainingBalance > 0 ? (hasDebtOrInstallment ? 'Sisa (Akan jadi Hutang)' : 'Kurang Bayar') : 'Kembalian' }}</span>
                     <span class="text-xl font-black font-mono" :class="remainingBalance > 100 ? 'text-red-500' : 'text-emerald-500'">{{ formatCurrency(Math.abs(remainingBalance)) }}</span>
                 </div>
                 <div class="flex gap-3">
                     <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPaymentModal = false" />
-                    <Button :label="hasDebtOrInstallment || transactionType === 'MUTATION' || isPreOrder ? 'Simpan Transaksi' : 'Bayar Lunas'" :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" class="flex-[2] font-bold" :severity="hasDebtOrInstallment || isPreOrder ? 'help' : 'success'" :loading="processing" :disabled="!canCheckout" @click="processCheckout" />
+                    <Button :label="hasDebtOrInstallment || isPreOrder ? 'Simpan Transaksi' : 'Bayar Lunas'" :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" class="flex-[2] font-bold" :severity="hasDebtOrInstallment || isPreOrder ? 'help' : 'success'" :loading="processing" :disabled="!canCheckout" @click="processCheckout" />
                 </div>
             </div>
         </div>
-    </div>
+    </Dialog>
 </template>
 
 <style scoped>

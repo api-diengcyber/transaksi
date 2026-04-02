@@ -46,10 +46,12 @@ const openEditProduct = (product) => {
     showModal.value = true;
 };
 
+// --- HANDLERS: PRODUK ---
 const onProductSaved = () => {
     // Refresh data tabel produk tanpa reload halaman
     if (productListRef.value) {
-        productListRef.value.refresh();
+        // UBAH BARIS INI: dari refresh() menjadi fetchProducts()
+        productListRef.value.fetchProducts(); 
     }
 };
 

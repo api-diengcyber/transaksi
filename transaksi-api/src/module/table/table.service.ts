@@ -3,7 +3,7 @@ import { TableEntity, TableStatus } from "src/common/entities/tables/table.entit
 import { Repository, DataSource, Like } from "typeorm";
 import { CreateTableDto, UpdateTableDto } from "./dto/create-table.dto";
 import { BookTableDto } from "./dto/update-status.dto";
-import { JournalService } from "../journal/journal.service";
+import { JournalSaleService } from "../journal/journal-sale.service";
 import { generateTableUuid } from "src/common/utils/generate_uuid_util";
 
 @Injectable()
@@ -15,7 +15,7 @@ export class TableService {
     private readonly tableRepo: Repository<TableEntity>,
     @Inject('DATA_SOURCE')
     private readonly dataSource: DataSource,
-    private readonly journalService: JournalService,
+    private readonly journalSaleService: JournalSaleService,
   ) { }
 
   // ============================
@@ -144,7 +144,7 @@ export class TableService {
 
     // 3. Eksekusi Journal Service
     try {
-        await this.journalService.createSale({
+        await this.journalSaleService.createSale({
             amount: 0, // Nominal 0 karena hanya booking (kecuali ada DP, logic bisa disesuaikan)
             grand_total: 0,
             payment_method: 'BOOKING_SYSTEM',
@@ -186,7 +186,7 @@ export class TableService {
     const specialCode = `IN-${cleanTableName}-${Date.now()}`;
 
     try {
-        await this.journalService.createSale({
+        await this.journalSaleService.createSale({
             amount: 0,
             grand_total: 0,
             payment_method: 'CHECKIN_SYSTEM',
@@ -219,7 +219,7 @@ export class TableService {
     const specialCode = `OUT-${cleanTableName}-${Date.now()}`;
 
     try {
-        await this.journalService.createSale({
+        await this.journalSaleService.createSale({
             amount: 0,
             grand_total: 0,
             payment_method: 'CLEAR_SYSTEM',

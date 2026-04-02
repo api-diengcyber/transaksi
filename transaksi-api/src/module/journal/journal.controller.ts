@@ -4,13 +4,17 @@ import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth, ApiBody } from '@nes
 import { AtGuard } from 'src/common/guards/at.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { GetStore } from 'src/common/decorators/get-store.decorator';
+import { JournalSaleService } from './journal-sale.service';
 
 @ApiTags('Journal')
 @ApiBearerAuth()
 @UseGuards(AtGuard)
 @Controller('journal')
 export class JournalController {
-  constructor(private readonly journalService: JournalService) {}
+  constructor(
+    private readonly journalService: JournalService,
+    private readonly journalSaleService: JournalSaleService,
+  ) {}
 
   // =========================================================================
   // TRANSAKSI UMUM (SALE)
@@ -18,7 +22,6 @@ export class JournalController {
 
   @Post('sale')
   @ApiOperation({ summary: 'Create sale journal entry' })
-  // Contoh payload fleksibel
   @ApiBody({ schema: { example: { details: { items: [], grand_total: 10000, any_other_field: "value" } } } })
   @ApiResponse({ status: 201, description: 'Sale journal created successfully' })
   async createSale(
@@ -26,8 +29,7 @@ export class JournalController {
     @GetUser('uuid') userId: string,
     @GetStore() storeUuid: string,
   ) {
-    // Terima apapun yang dikirim frontend dalam object 'details'
-    return this.journalService.createSale(body.details, userId, storeUuid);
+    return this.journalSaleService.createSale(body.details, userId, storeUuid);
   }
 
   @Get('report/:type')
@@ -37,5 +39,18 @@ export class JournalController {
     @GetStore() storeUuid: string,
   ) {
     return this.journalService.findAllByType(type, storeUuid);
+  }
+  
+  // [TAMBAHKAN ENDPOINT INI]
+  @Get('chart-data')
+  async getChartData(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @GetStore() storeUuid: string,
+  ) {
+    if (!startDate || !endDate) {
+      return [];
+    }
+    return this.journalService.getChartData(startDate, endDate, storeUuid);
   }
 }

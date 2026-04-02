@@ -1,3 +1,4 @@
+// transaksi-api/src/common/entities/product_price/product_price.entity.ts
 import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { ProductEntity } from '../product/product.entity';
 import { ProductVariantEntity } from '../product_variant/product_variant.entity';
@@ -11,7 +12,6 @@ export class ProductPriceEntity {
   @Column({ name: 'product_uuid', nullable: true })
   productUuid: string;
 
-  // Tambahkan relasi ke varian
   @Column({ name: 'variant_uuid', nullable: true })
   variantUuid: string;
 
@@ -35,6 +35,10 @@ export class ProductPriceEntity {
 
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   price: number;
+
+  // TAMBAHAN: Kolom Minimum Qty (Untuk aturan grosir)
+  @Column({ name: 'min_qty', type: 'int', default: 1 })
+  minQty: number;
   
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

@@ -4,9 +4,9 @@ import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, Dele
 export class PriceGroupEntity {
   @PrimaryColumn('varchar', { length: 60 })
   uuid: string;
-
-  @Column({ name: 'store_uuid' })
-  storeUuid: string;
+  
+  @Column({ length: 150, nullable: true }) 
+  code: string;
 
   @Column({ length: 255 })
   name: string;

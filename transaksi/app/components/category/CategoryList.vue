@@ -55,9 +55,12 @@ const parentOptions = computed(() => {
 const fetchCategories = async () => {
     loading.value = true;
     try {
-        const data = await categoryService.getAllCategorys();
-        // Pastikan data array
-        categories.value = Array.isArray(data) ? data : (data.data || []);
+        const res = await categoryService.getAllCategories();
+        
+        // Ekstrak data yang aman dari berbagai kemungkinan wrapper (Nuxt/Axios)
+        const raw = res?.value !== undefined ? res.value : res;
+        categories.value = raw?.data?.data || raw?.data || raw || [];
+        
     } catch (err) {
         console.error(err);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat data kategori', life: 3000 });

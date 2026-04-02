@@ -15,6 +15,7 @@ import {
 // BASE DETAILS
 // =============================================================================
 class BaseJournalDetailsDto {
+    // Memastikan DTO tetap bisa menerima payload dinamis (seperti amount_bank_xxx)
     [key: string]: any;
 }
 
@@ -26,6 +27,11 @@ export class JournalItemDto {
     @IsNotEmpty()
     @IsUUID()
     product_uuid: string;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsUUID()
+    variant_uuid?: string;
 
     @ApiProperty()
     @IsNotEmpty()
@@ -42,7 +48,7 @@ export class JournalItemDto {
     @IsNumber()
     price: number;
 
-    // Menangkap field lain seperti name, discount, notes, selectedPriceObj, dll
+    // Menangkap field dinamis dari cart (subtotal, stok_qty_min, item_name, dll)
     [key: string]: any;
 }
 
@@ -50,42 +56,64 @@ export class JournalItemDto {
 // 1. DTO TRANSACTION (SALE / BUY / RETURN)
 // =============================================================================
 export class TransactionDetailsDto extends BaseJournalDetailsDto {
-  @ApiProperty({ description: 'Total keseluruhan transaksi', example: 150000 })
-  @IsNotEmpty()
-  amount: number | string;
+  
+  // amount diubah menjadi Opsional karena frontend mengirimkan grand_total
+  @ApiPropertyOptional({ description: 'Total keseluruhan transaksi', example: 150000 })
+  @IsOptional()
+  amount?: number | string;
 
   @ApiPropertyOptional({ description: 'Grand total', example: 150000 })
   @IsOptional()
   grand_total?: number | string;
 
-  @ApiPropertyOptional({ description: 'Metode pembayaran', example: 'CASH' })
+  @ApiPropertyOptional({ description: 'Total item/kuantitas' })
+  @IsOptional()
+  @IsNumber()
+  total_items?: number;
+
+  @ApiPropertyOptional({ description: 'Metode pembayaran', example: 'MIXED' })
   @IsOptional()
   @IsString()
   payment_method?: string;
 
-  @ApiPropertyOptional({ description: 'Is Credit', example: true })
+  @ApiPropertyOptional({ description: 'Status (PENDING/COMPLETED)' })
   @IsOptional()
-  is_credit?: string | boolean;
+  @IsString()
+  status?: string;
 
-  @ApiPropertyOptional({ description: 'Jatuh Tempo', example: '2025-12-30' })
+  @ApiPropertyOptional({ description: 'Jatuh Tempo (Kredit)', example: '2025-12-30' })
   @IsOptional()
-  @IsDateString()
-  due_date?: string;
+  due_date?: string | Date;
+
+  @ApiPropertyOptional({ description: 'Catatan Kasir' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 
   @ApiPropertyOptional({ description: 'Customer Name', example: 'Budi' })
   @IsOptional()
   @IsString()
   customer_name?: string;
 
-  @ApiPropertyOptional({ description: 'Supplier Name', example: 'PT. Maju' })
+  @ApiPropertyOptional({ description: 'Member UUID (Jika Pelanggan Terdaftar)' })
   @IsOptional()
-  @IsString()
-  supplier?: string;
+  @IsUUID()
+  member_uuid?: string;
 
-  @ApiPropertyOptional({ description: 'Target Store UUID' })
+  @ApiPropertyOptional({ description: 'Target Store UUID (Untuk Mutasi)' })
   @IsOptional()
   @IsUUID()
   target_store_uuid?: string;
+
+  // --- INFORMASI PECAHAN PEMBAYARAN ---
+  @ApiPropertyOptional() @IsOptional() @IsNumber() amount_cash?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() amount_credit?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() amount_installment?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() amount_bank_total?: number;
+
+  // --- INFORMASI PENGIRIMAN ---
+  @ApiPropertyOptional() @IsOptional() @IsNumber() shipping_cost?: number;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() courier_uuid?: string;
 
   // [BARU] Array Items untuk detail lengkap
   @ApiPropertyOptional({ type: [JournalItemDto] })
@@ -103,7 +131,9 @@ export class CreateTransactionDto {
   details: TransactionDetailsDto;
 }
 
-// (Sisa DTO GlobalDebtDetailsDto & CreateGlobalDebtDto & CreatePaymentDto tetap sama seperti file asli)
+// =============================================================================
+// GLOBAL DEBT & PAYMENT (TETAP SAMA)
+// =============================================================================
 export class GlobalDebtDetailsDto extends BaseJournalDetailsDto {
   @ApiProperty() @IsNotEmpty() amount: number | string;
   @ApiPropertyOptional() @IsOptional() @IsString() customer_name?: string;
@@ -111,9 +141,11 @@ export class GlobalDebtDetailsDto extends BaseJournalDetailsDto {
   @ApiPropertyOptional() @IsOptional() @IsDateString() due_date?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
 }
+
 export class CreateGlobalDebtDto {
   @ApiProperty({ type: GlobalDebtDetailsDto }) @IsNotEmpty() @Type(() => GlobalDebtDetailsDto) details: GlobalDebtDetailsDto;
 }
+
 export class PaymentDetailsDto extends BaseJournalDetailsDto {
   @ApiProperty() @IsNotEmpty() amount: number | string;
   @ApiProperty() @IsNotEmpty() @IsString() reference_journal_code: string;
@@ -121,6 +153,7 @@ export class PaymentDetailsDto extends BaseJournalDetailsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() customer_name?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() supplier?: string;
 }
+
 export class CreatePaymentDto {
   @ApiProperty({ type: PaymentDetailsDto }) @IsNotEmpty() @Type(() => PaymentDetailsDto) details: PaymentDetailsDto;
 }

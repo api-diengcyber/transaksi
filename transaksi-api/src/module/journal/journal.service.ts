@@ -1,5 +1,6 @@
+// transaksi-api/src/module/journal/journal.service.ts
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
-import { Repository, DataSource, Like, EntityManager } from 'typeorm';
+import { Repository, DataSource, Like, EntityManager, Between } from 'typeorm';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
 import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
@@ -28,49 +29,13 @@ export class JournalService {
     return `${codePrefix}${String(sequence).padStart(4, '0')}`;
   }
 
-  // Wrapper Sale
-  async createSale(details: any, userId: string, storeUuid: string) {
-    return this.createJournal('SALE', details, userId, storeUuid);
-  }
-
-  // [BARU] Process Stock Adjustment dari Product Service
-  async processStockAdjustment(adjustments: any[], userId: string, manager: EntityManager, storeUuid: string) {
-    if (!adjustments || adjustments.length === 0) return;
-
-    // Mapping adjustments ke format items jurnal
-    const items = adjustments.map(adj => {
-        const diff = Number(adj.newQty) - Number(adj.oldQty);
-        if (diff === 0) return null;
-
-        const item: any = {
-            stok_product_uuid: adj.productUuid,
-            stok_unit: adj.unitUuid,
-        };
-
-        // Sesuai permintaan: stok_qty_min atau stok_qty_plus dengan value qty absolute
-        if (diff > 0) {
-            item.stok_qty_plus = diff;
-        } else {
-            item.stok_qty_min = Math.abs(diff);
-        }
-        
-        return item;
-    }).filter(item => item !== null);
-
-    if (items.length === 0) return;
-
-    // Buat Journal dengan tipe STOCK_ADJUSTMENT
-    await this.createJournal('STOCK_ADJUSTMENT', { items }, userId, storeUuid, manager);
-  }
-
-  // Generic Create Journal (Updated to support external Transaction Manager)
+  // Generic Create Journal (Core Logic)
   async createJournal(type: string, details: Record<string, any>, userId: string, storeUuid: string, externalManager?: EntityManager) {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
         const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         
-        // 1. Buat Header Journal (Langsung Verified)
         const code = await this.generateCode(type, storeUuid);
         const journal = manager.create(JournalEntity, {
           uuid: customJournalUuid,
@@ -83,7 +48,6 @@ export class JournalService {
   
         const detailEntities: JournalDetailEntity[] = [];
   
-        // 2. Simpan Semua Parameter di 'details' sebagai Header (Kecuali items)
         Object.entries(details).forEach(([key, value]) => {
           if (key === 'items') return; 
           if (value === null || value === undefined) return;
@@ -97,8 +61,6 @@ export class JournalService {
           }));
         });
   
-        // 3. Simpan Items (Looping array items)
-        // Format Key otomatis menjadi snake_case dan ditambah index, misal: stok_product_uuid#0, stok_qty_plus#0
         if (details.items && Array.isArray(details.items)) {
             details.items.forEach((item: any, index: number) => {
                 Object.entries(item).forEach(([itemKey, itemValue]) => {
@@ -152,5 +114,38 @@ export class JournalService {
         relations: ['details'], 
         order: { createdAt: 'DESC' } 
     });
+  }
+
+  async getChartData(startDate: string, endDate: string, storeUuid: string) {
+    const start = new Date(`${startDate}T00:00:00.000Z`);
+    const end = new Date(`${endDate}T23:59:59.999Z`);
+
+    const journals = await this.journalRepository.find({
+      where: { code: Like(`%-${storeUuid}-%`), createdAt: Between(start, end) },
+      relations: ['details'],
+      order: { createdAt: 'ASC' },
+    });
+
+    const dateMap = new Map<string, any>();
+    let currDate = new Date(start);
+    while (currDate <= end) {
+      const dateStr = currDate.toISOString().split('T')[0];
+      dateMap.set(dateStr, { date: dateStr, total_sale: 0, total_buy: 0, total_rt_sale: 0, total_rt_buy: 0 });
+      currDate.setDate(currDate.getDate() + 1);
+    }
+
+    for (const journal of journals) {
+      const dateStr = journal.createdAt.toISOString().split('T')[0];
+      const entry = dateMap.get(dateStr);
+      if (entry) {
+        const amountDetail = journal.details.find(d => d.key === 'amount' || d.key === 'grand_total');
+        const amount = amountDetail ? parseFloat(amountDetail.value) || 0 : 0;
+        if (journal.code.startsWith('SALE-')) entry.total_sale += amount;
+        else if (journal.code.startsWith('BUY-')) entry.total_buy += amount;
+        else if (journal.code.startsWith('RETURN_SALE-')) entry.total_rt_sale += amount;
+        else if (journal.code.startsWith('RETURN_BUY-')) entry.total_rt_buy += amount;
+      }
+    }
+    return Array.from(dateMap.values());
   }
 }
