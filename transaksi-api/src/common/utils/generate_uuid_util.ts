@@ -16,3 +16,4 @@ export const generateTableUuid = (storeUuid: string) => `${storeUuid}-TBL-${gene
 export const generateProductUuid = (storeUuid: string) => `${storeUuid}-PRC-${generateLocalUuid()}`;
 export const generateVariantUuid = (storeUuid: string) => `${storeUuid}-VRN-${generateLocalUuid()}`;
 export const generatePriceUuid = (storeUuid: string) => `${storeUuid}-PRC-${generateLocalUuid()}`;
+export const generatePriceGroupUuid = (storeUuid: string) => `${storeUuid}-PRCGRP-${generateLocalUuid()}`;

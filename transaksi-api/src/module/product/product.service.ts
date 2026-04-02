@@ -72,9 +72,6 @@ export class ProductService {
         { name: ILike(`%${search}%`), storeUuid: storeUuid },
         { barcode: ILike(`%${search}%`), storeUuid: storeUuid },
       ];
-    } else {
-      // PERBAIKAN: Jika search kosong, pastikan tetap difilter berdasarkan storeUuid
-      whereCondition = { storeUuid: storeUuid };
     }
 
     const [data, total] = await this.productRepo.findAndCount({

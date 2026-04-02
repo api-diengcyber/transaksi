@@ -10,12 +10,13 @@ import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
-import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateUnitUuid, generateCategoryUuid, generateWarehouseUuid, generateShelveUuid } from 'src/common/utils/generate_uuid_util'; // <-- Tambahkan generateUuid
+import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateUnitUuid, generateCategoryUuid, generateWarehouseUuid, generateShelveUuid, generatePriceGroupUuid } from 'src/common/utils/generate_uuid_util'; // <-- Tambahkan generateUuid
 import { CategoryService } from '../category/category.service';
 import { UnitEntity } from 'src/common/entities/unit/unit.entity'; // <-- Tambahkan import UnitEntity
 import { CategoryEntity } from 'src/common/entities/category/category.entity';
 import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
 import { WarehouseEntity } from 'src/common/entities/warehouse/warehouse.entity';
+import { PriceGroupEntity } from 'src/common/entities/price_group/price_group.entity';
 
 @Injectable()
 export class StoreService {
@@ -154,6 +155,16 @@ export class StoreService {
           });
           await manager.save(newUnit);
         }
+      }
+
+      // Di dalam manager.transaction installStore:
+      const defaultPriceGroups = ['Harga Normal', 'Harga Member'];
+      for (const pgName of defaultPriceGroups) {
+        await manager.save(manager.create(PriceGroupEntity, {
+          uuid: generatePriceGroupUuid(customStoreUuid),
+          storeUuid: customStoreUuid,
+          name: pgName,
+        }));
       }
 
       // 5. SETTINGS

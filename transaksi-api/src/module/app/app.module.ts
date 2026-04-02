@@ -14,6 +14,7 @@ import { JournalConfigModule } from '../journal_config/journal_config.module';
 import { CategoryModule } from '../category/category.module';
 import { UnitModule } from '../unit/unit.module';
 import { ShelveModule } from '../shelve/shelve.module';
+import { PriceGroupModule } from '../price_group/price_group.module';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { ShelveModule } from '../shelve/shelve.module';
     AccountModule,
     UnitModule,
     ShelveModule,
-    CategoryModule
+    PriceGroupModule,
   ],
   controllers: [],
   providers: [],

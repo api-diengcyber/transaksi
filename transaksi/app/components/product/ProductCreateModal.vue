@@ -13,7 +13,8 @@ const emit = defineEmits(['update:visible', 'product-created', 'product-updated'
 const productService = useProductService();
 const shelveService = useShelveService();
 const unitService = useUnitService();
-const categoryService = useCategoryService(); // <-- Tambahkan Service Kategori
+const categoryService = useCategoryService();
+const priceGroupService = usePriceGroupService(); // Service untuk Master Group Harga
 const toast = useToast();
 
 // --- STATE ---
@@ -23,7 +24,8 @@ const isEditMode = computed(() => !!props.productUuid);
 
 const shelves = ref([]);
 const units = ref([]);
-const categories = ref([]); // <-- State untuk Kategori
+const categories = ref([]);
+const priceGroups = ref([]); // State Group Harga
 const existingProducts = ref([]); 
 
 // Data Utama Produk
@@ -32,11 +34,14 @@ const product = reactive({
     barcode: '',
     stock: 0,
     unitUuid: null,
-    categoryUuid: null, // <-- Form Kategori
+    categoryUuid: null,
     conversionQty: 1, 
     shelveUuids: [],
     
-    // State Varian
+    // Multi Harga Umum (Di-generate dari Master Group Harga)
+    prices: [],
+
+    // State Varian (Bisa Multi Varian & Harga Spesifik per Group Harga)
     variants: [],
 
     // State Parent
@@ -57,9 +62,16 @@ const initForm = () => {
     product.barcode = '';
     product.stock = 0;
     product.unitUuid = null;
-    product.categoryUuid = null; // Reset kategori
+    product.categoryUuid = null;
     product.conversionQty = 1;
     product.shelveUuids = [];
+    
+    // Inisialisasi Harga Umum ke 0 berdasarkan Group Harga yang ada
+    product.prices = priceGroups.value.map(pg => ({
+        priceGroupUuid: pg.uuid,
+        name: pg.name,
+        price: 0
+    }));
     
     product.variants = [];
     
@@ -74,15 +86,25 @@ const initForm = () => {
     submitted.value = false;
 };
 
-// Varian Handlers
+// Handlers Varian
 const addVariant = () => {
-    product.variants.push({ name: '', barcode: '', stock: 0 });
+    product.variants.push({ 
+        name: '', 
+        barcode: '', 
+        stock: 0,
+        // Tiap varian otomatis punya input harga sesuai Group Harga
+        prices: priceGroups.value.map(pg => ({
+            priceGroupUuid: pg.uuid,
+            name: pg.name,
+            price: 0
+        })) 
+    });
 };
 const removeVariant = (index) => {
     product.variants.splice(index, 1);
 };
 
-// Child Handlers
+// Handlers Child
 const addChild = () => {
     product.children.push({
         name: product.name ? `${product.name} (Eceran/Child)` : '', 
@@ -96,22 +118,37 @@ const removeChild = (index) => {
 // --- LOAD DROPDOWN DATA ---
 const loadDropdowns = async () => {
     try {
-        const [shelvesRes, unitsRes, categoriesRes, productsRes] = await Promise.all([
+        // Fungsi pembantu untuk memastikan kita selalu mendapatkan Array yang benar
+        const extractArray = (res) => {
+            if (!res) return [];
+            if (Array.isArray(res)) return res; // Jika langsung array
+            if (res.data && Array.isArray(res.data)) return res.data; // Jika { data: [...] }
+            if (res.data?.data && Array.isArray(res.data.data)) return res.data.data; // Paginasi { data: { data: [...] } }
+            return [];
+        };
+
+        // Gunakan Promise.allSettled agar jika 1 API error, yang lain TETAP JALAN
+        const results = await Promise.allSettled([
             shelveService.getAllShelves(),
             unitService.getAllUnits(),
-            categoryService.getAllCategories(), // <-- Panggil API Kategori
+            categoryService.getAllCategories(),
+            priceGroupService.getAllPriceGroups(),
             productService.getAllProducts(1, 1000) 
         ]);
-        
-        shelves.value = shelvesRes.data || shelvesRes;
-        units.value = unitsRes.data || unitsRes;
-        
-        // Sesuaikan dengan format response API kategori Anda
-        categories.value = categoriesRes.data?.data || categoriesRes.data || categoriesRes;
-        
-        existingProducts.value = productsRes.data?.data || productsRes.data || productsRes;
+
+        // Cek satu per satu dan ekstrak datanya
+        shelves.value = results[0].status === 'fulfilled' ? extractArray(results[0].value) : [];
+        units.value = results[1].status === 'fulfilled' ? extractArray(results[1].value) : [];
+        categories.value = results[2].status === 'fulfilled' ? extractArray(results[2].value) : [];
+        priceGroups.value = results[3].status === 'fulfilled' ? extractArray(results[3].value) : [];
+        existingProducts.value = results[4].status === 'fulfilled' ? extractArray(results[4].value) : [];
+
+        // Debugging (Bisa Anda hapus jika sudah jalan)
+        console.log("Shelves Loaded:", shelves.value);
+        console.log("Price Groups Loaded:", priceGroups.value);
+
     } catch (error) {
-        console.error("Gagal memuat data relasi:", error);
+        console.error("Gagal memuat data master relasi:", error);
     }
 };
 
@@ -128,15 +165,40 @@ const loadProductData = async (uuid) => {
         product.barcode = data.barcode || '';
         product.stock = data.stock || 0;
         product.unitUuid = data.unitUuid || null;
-        product.categoryUuid = data.categoryUuid || (data.category ? data.category.uuid : null); // <-- Load Kategori
+        product.categoryUuid = data.categoryUuid || (data.category ? data.category.uuid : null); 
         product.conversionQty = data.conversionQty || 1; 
         product.shelveUuids = data.shelveUuids || (data.shelveUuid ? [data.shelveUuid] : []);
 
-        // Load Varian
+        // Load Harga Umum & Sinkronisasi dengan Master Group Harga Saat Ini
+        product.prices = priceGroups.value.map(pg => {
+            const savedPrice = data.prices?.find(p => p.priceGroupUuid === pg.uuid);
+            return {
+                uuid: savedPrice?.uuid || null,
+                priceGroupUuid: pg.uuid,
+                name: pg.name,
+                price: savedPrice ? Number(savedPrice.price) : 0
+            };
+        });
+
+        // Load Varian & Sinkronisasi Harganya
         if (data.variants && data.variants.length > 0) {
             product.variants = data.variants.map(v => ({
-                uuid: v.uuid, name: v.name, barcode: v.barcode, stock: v.stock
+                uuid: v.uuid, 
+                name: v.name, 
+                barcode: v.barcode, 
+                stock: v.stock,
+                prices: priceGroups.value.map(pg => {
+                    const savedVariantPrice = v.prices?.find(vp => vp.priceGroupUuid === pg.uuid);
+                    return {
+                        uuid: savedVariantPrice?.uuid || null,
+                        priceGroupUuid: pg.uuid,
+                        name: pg.name,
+                        price: savedVariantPrice ? Number(savedVariantPrice.price) : 0
+                    };
+                })
             }));
+        } else {
+            product.variants = [];
         }
 
         // Load relasi Parent
@@ -165,26 +227,25 @@ const loadProductData = async (uuid) => {
 // --- WATCHERS ---
 watch(() => props.visible, async (val) => {
     if (val) {
-        initForm();
+        // Load dropdown dulu agar priceGroups terisi, baru init form / load data
         await loadDropdowns(); 
+        
         if (props.productUuid) {
             await loadProductData(props.productUuid);
+        } else {
+            initForm();
         }
     }
 });
 
-// Watcher untuk reset konversi jika checkbox parent di-uncheck
 watch(() => product.hasParent, (newVal) => {
-    if (!newVal) {
-        product.conversionQty = 1;
-    }
+    if (!newVal) product.conversionQty = 1;
 });
 
 // --- SAVE / UPDATE ---
 const saveProduct = async () => {
     submitted.value = true;
     
-    // Tambahkan validasi Kategori
     if (!product.name || !product.unitUuid || !product.categoryUuid || product.shelveUuids.length === 0) {
         toast.add({ severity: 'warn', summary: 'Perhatian', detail: 'Nama, kategori, satuan, dan minimal 1 rak wajib diisi' });
         return;
@@ -208,14 +269,33 @@ const saveProduct = async () => {
             barcode: product.barcode,
             stock: product.stock,
             unitUuid: product.unitUuid,
-            categoryUuid: product.categoryUuid, // <-- Kirim Kategori
+            categoryUuid: product.categoryUuid,
             shelveUuids: product.shelveUuids,
-            conversionQty: product.hasParent ? product.conversionQty : 1, // Pastikan 1 jika tidak ada parent
+            conversionQty: product.hasParent ? product.conversionQty : 1, 
             
+            // Kirim harga umum hanya jika TIDAK ADA varian
+            prices: product.variants.length === 0 ? product.prices.map(p => ({
+                uuid: p.uuid, 
+                priceGroupUuid: p.priceGroupUuid, 
+                name: p.name, 
+                price: p.price
+            })) : [],
+
+            // Kirim Varian & Harga Spesifiknya
             variants: product.variants.map(v => ({
-                uuid: v.uuid, name: v.name, barcode: v.barcode, stock: v.stock
+                uuid: v.uuid, 
+                name: v.name, 
+                barcode: v.barcode, 
+                stock: v.stock,
+                prices: v.prices.map(vp => ({
+                    uuid: vp.uuid, 
+                    priceGroupUuid: vp.priceGroupUuid, 
+                    name: vp.name, 
+                    price: vp.price
+                }))
             })),
             
+            // Format Parent Product
             parentProduct: product.hasParent ? {
                 isNew: product.parentOption === 'new',
                 uuid: product.parentOption === 'existing' ? product.parentProductUuid : null,
@@ -225,6 +305,7 @@ const saveProduct = async () => {
                 conversionQty: product.conversionQty 
             } : null,
 
+            // Format Child Products
             childProducts: product.children.length > 0 ? product.children.map(c => ({
                 name: c.name, barcode: c.barcode, unitUuid: c.unitUuid, conversionQty: c.conversionQty
             })) : []
@@ -256,7 +337,7 @@ const saveProduct = async () => {
         @update:visible="val => emit('update:visible', val)" 
         :header="isEditMode ? 'Edit Produk' : 'Tambah Produk Baru'" 
         :modal="true" 
-        :style="{ width: '750px' }" 
+        :style="{ width: '800px' }" 
         class="p-fluid bg-surface-0 rounded-xl overflow-hidden" 
         :pt="{ 
             header: { class: '!bg-surface-50 !border-b !border-surface-200 !py-4' },
@@ -357,37 +438,78 @@ const saveProduct = async () => {
                 </div>
             </div>
 
+            <div v-if="product.variants.length === 0" class="mt-4 pt-4 border-t border-surface-200">
+                <div class="mb-3">
+                    <h3 class="font-semibold text-surface-800 text-sm">Pengaturan Harga</h3>
+                    <p class="text-xs text-surface-500 mt-0.5">Isi nominal untuk setiap kategori harga (Rp).</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-surface-50 p-4 border border-surface-200 rounded-lg">
+                    <div v-for="(p, index) in product.prices" :key="p.priceGroupUuid" class="field mb-0">
+                        <label class="text-[11px] font-bold mb-1 block uppercase text-primary-600">
+                            {{ p.name }}
+                        </label>
+                        <InputNumber 
+                            v-model="p.price" 
+                            mode="currency" 
+                            currency="IDR" 
+                            locale="id-ID" 
+                            placeholder="0" 
+                            class="w-full p-inputtext-sm" 
+                        />
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-4 pt-4 border-t border-surface-200">
                 <div class="flex justify-between items-center mb-3">
                     <div>
-                        <h3 class="font-semibold text-surface-800 text-sm">Varian Produk (Opsional)</h3>
-                        <p class="text-xs text-surface-500 mt-0.5">Tambah variasi seperti Warna, Ukuran, atau Rasa.</p>
+                        <h3 class="font-semibold text-surface-800 text-sm">Varian Produk & Harga Spesifik</h3>
+                        <p class="text-xs text-surface-500 mt-0.5">Tambah variasi Warna/Ukuran (Harga akan diatur per-varian).</p>
                     </div>
                     <Button label="Tambah Varian" icon="pi pi-plus" size="small" outlined severity="secondary" @click="addVariant" />
                 </div>
 
                 <div v-if="product.variants.length === 0" class="text-center py-4 text-surface-400 text-sm border border-dashed rounded-lg border-surface-300">
-                    Tidak ada varian khusus.
+                    Tidak ada varian khusus. Harga mengikuti <b>Pengaturan Harga</b> di atas.
                 </div>
 
                 <div 
-                    v-for="(variant, index) in product.variants" 
-                    :key="index" 
-                    class="p-4 border border-surface-200 rounded-lg mb-3 bg-surface-50 relative animate-fade-in"
+                    v-for="(variant, vIdx) in product.variants" 
+                    :key="vIdx" 
+                    class="p-4 border border-surface-200 rounded-lg mb-4 bg-surface-50 relative animate-fade-in shadow-sm"
                 >
-                    <Button icon="pi pi-times" text rounded severity="danger" class="absolute right-2 top-2 h-8 w-8 p-0" @click="removeVariant(index)" />
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1">
+                    <Button icon="pi pi-times" severity="danger" text rounded class="absolute right-2 top-2 h-8 w-8 p-0" @click="removeVariant(vIdx)" />
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                         <div class="field sm:col-span-1 mb-0">
                             <label class="text-xs font-semibold mb-1 block">Nama Varian <span class="text-red-500">*</span></label>
-                            <InputText v-model="variant.name" placeholder="Cth: Merah, Pedas, XL" class="w-full" :class="{'p-invalid': submitted && !variant.name}" />
+                            <InputText v-model="variant.name" placeholder="Cth: XL / Merah" class="w-full" :class="{'p-invalid': submitted && !variant.name}" />
                         </div>
                         <div class="field sm:col-span-1 mb-0">
-                            <label class="text-xs font-semibold mb-1 block">Barcode Spesifik</label>
+                            <label class="text-xs font-semibold mb-1 block">Barcode Varian</label>
                             <InputText v-model="variant.barcode" placeholder="Scan barcode..." class="w-full" />
                         </div>
                         <div class="field sm:col-span-1 mb-0">
                             <label class="text-xs font-semibold mb-1 block">Stok Varian</label>
                             <InputNumber v-model="variant.stock" placeholder="0" class="w-full" />
+                        </div>
+                    </div>
+
+                    <div class="bg-surface-0 p-3 rounded border border-surface-200">
+                        <div class="text-xs font-bold text-primary-600 mb-3 uppercase">Harga Untuk Varian: {{ variant.name || 'Baru' }}</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div v-for="(vp, pIdx) in variant.prices" :key="vp.priceGroupUuid" class="field mb-0">
+                                <label class="text-[10px] font-bold text-surface-500 uppercase">{{ vp.name }}</label>
+                                <InputNumber 
+                                    v-model="vp.price" 
+                                    mode="currency" 
+                                    currency="IDR" 
+                                    locale="id-ID" 
+                                    class="p-inputtext-sm w-full" 
+                                    placeholder="0"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { ProductEntity } from '../product/product.entity';
 import { ProductVariantEntity } from '../product_variant/product_variant.entity';
+import { PriceGroupEntity } from '../price_group/price_group.entity';
 
 @Entity('product_price')
 export class ProductPriceEntity {
@@ -23,7 +24,14 @@ export class ProductPriceEntity {
   variant: ProductVariantEntity;
 
   @Column({ length: 255 })
-  name: string; // Cth: "Harga Toko", "Harga Grosir"
+  name: string;
+  
+  @Column({ name: 'price_group_uuid' })
+  priceGroupUuid: string;
+
+  @ManyToOne(() => PriceGroupEntity)
+  @JoinColumn({ name: 'price_group_uuid' })
+  priceGroup: PriceGroupEntity;
 
   @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
   price: number;
