@@ -14,10 +14,17 @@ export const useWarehouseService = () => {
     const getWarehouseStock = async (uuid: string) => {
         return await useApi(`/warehouse/${uuid}/stock`, { method: 'GET' });
     };
+    
+    const getWarehouseHistory = async (uuid: string) => {
+        return await useApi(`/journal/warehouse/${uuid}/history`, {
+            method: 'GET'
+        });
+    };
 
     return {
         getAllWarehouses,
         createWarehouse,
-        getWarehouseStock
+        getWarehouseStock,
+        getWarehouseHistory
     };
 };

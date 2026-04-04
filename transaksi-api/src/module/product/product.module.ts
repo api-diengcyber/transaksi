@@ -6,6 +6,7 @@ import { productProvider } from 'src/common/entities/product/product.provider';
 import { ProductService } from './product.service';
 import { JournalModule } from '../journal/journal.module';
 import { categoryProvider } from 'src/common/entities/category/category.provider';
+import { productVariantProvider } from 'src/common/entities/product_variant/product_variant.provider';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { categoryProvider } from 'src/common/entities/category/category.provider
   controllers: [ProductController],
   providers: [
     ...productProvider,
+    ...productVariantProvider,
     ...categoryProvider,
     ProductService,
   ],

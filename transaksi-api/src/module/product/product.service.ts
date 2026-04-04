@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { ILike, Repository, DataSource } from 'typeorm';
+import { ILike, Repository, DataSource, Like } from 'typeorm';
 import { ProductEntity } from '../../common/entities/product/product.entity';
 import { ProductVariantEntity } from '../../common/entities/product_variant/product_variant.entity';
 import { ProductPriceEntity } from '../../common/entities/product_price/product_price.entity'; 
@@ -15,6 +15,8 @@ export class ProductService {
   constructor(
     @Inject('PRODUCT_REPOSITORY')
     private readonly productRepo: Repository<ProductEntity>,
+    @Inject('PRODUCT_VARIANT_REPOSITORY')
+    private readonly productVariantRepo: Repository<ProductVariantEntity>,
     @Inject('DATA_SOURCE')
     private readonly dataSource: DataSource,
     private readonly journalStokService: JournalStokService, 
@@ -329,6 +331,40 @@ export class ProductService {
         (product as any).stock = stockMap.get(`${uuid}_null`) || 0;
     }
 
+    return product;
+  }
+
+  async findByBarcode(barcode: string, storeUuid: string) {
+    // 1. Cek di Produk Utama (Induk)
+    let product = await this.productRepo.findOne({
+      where: { 
+        barcode: barcode, 
+        uuid: Like(`%${storeUuid}%`) // <-- Menggunakan Like pada uuid produk
+      },
+      relations: ['variants', 'unit', 'prices', 'variants.prices', 'shelves'],
+    });
+
+    // 2. Jika tidak ada di Produk Utama, Cek di Varian Produk
+    if (!product) {
+      const variant = await this.productVariantRepo.findOne({
+        where: { barcode },
+        relations: ['variants', 'unit', 'prices', 'variants.prices', 'shelves'],
+      });
+      
+      // Jika varian ketemu dan uuid produk induknya mengandung storeUuid
+      if (variant && variant.product && variant.product.uuid.includes(storeUuid)) { // <-- Pengecekan disesuaikan
+        product = await this.productRepo.findOne({
+            where: { uuid: variant.product.uuid },
+            relations: ['variants', 'unit', 'prices', 'variants.prices', 'shelves'],
+        });
+        
+        // Return produk beserta UUID varian yang di-scan agar keranjang Frontend tahu varian spesifik mana yang ditembak
+        return { ...product, matchedVariantUuid: variant.uuid };
+      }
+    }
+
+    if (!product) throw new NotFoundException('Produk dengan barcode ini tidak ditemukan');
+    
     return product;
   }
 }

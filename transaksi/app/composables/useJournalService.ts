@@ -9,9 +9,6 @@ export const useJournalService = () => {
     // =========================================================================
     // TRANSAKSI UTAMA (SALE, BUY)
     // =========================================================================
-    
-    // Menangani Penjualan
-    // Payload dari UI dibungkus ke dalam { details: ... } sesuai DTO Backend
     const createSaleTransaction = async (payload: any) => {
         return await useApi(`${API_BASE}/sale`, {
             method: 'POST',
@@ -44,42 +41,30 @@ export const useJournalService = () => {
             body: { details: payload }
         });
     };
-    
-    // =========================================================================
-    // PIUTANG/HUTANG GLOBAL (AR / AP)
-    // =========================================================================
 
-    // Mencatat Piutang Awal (Saldo Awal / Pinjaman Karyawan dll)
     const createArTransaction = async (payload: any) => {
-        return await useApi(`${API_BASE}/debt/ar`, {
-            method: 'POST',
-            body: { details: payload }
-        });
-    };
-    
-    // Mencatat Hutang Awal (Saldo Awal / Pinjaman Modal dll)
-    const createApTransaction = async (payload: any) => {
-        return await useApi(`${API_BASE}/debt/ap`, {
+        return await useApi(`${API_BASE}/ar`, {
             method: 'POST',
             body: { details: payload }
         });
     };
 
-    // =========================================================================
-    // PEMBAYARAN PIUTANG/HUTANG (PAYMENT)
-    // =========================================================================
-
-    // Pelunasan Piutang (Terima Uang)
     const createArPaymentTransaction = async (payload: any) => {
-        return await useApi(`${API_BASE}/payment/ar`, {
+        return await useApi(`${API_BASE}/ar/payment`, {
             method: 'POST',
             body: { details: payload }
         });
     };
     
-    // Pelunasan Hutang (Keluar Uang)
+    const createApTransaction = async (payload: any) => {
+        return await useApi(`${API_BASE}/ap`, {
+            method: 'POST',
+            body: { details: payload }
+        });
+    };
+    
     const createApPaymentTransaction = async (payload: any) => {
-        return await useApi(`${API_BASE}/payment/ap`, {
+        return await useApi(`${API_BASE}/ap/payment`, {
             method: 'POST',
             body: { details: payload }
         });
@@ -118,19 +103,30 @@ export const useJournalService = () => {
         return await useApi(`${API_BASE}/report/ALL`, { params }); 
     };
 
+    // =========================================================================
+    // MUTASI STOK MANUAL
+    // =========================================================================
+    const createStockMutation = async (payload: any) => {
+        return await useApi(`${API_BASE}/stock-mutation`, {
+            method: 'POST',
+            body: payload
+        });
+    };
+
     return {
         createSaleTransaction,
         createBuyTransaction,
         createSaleReturnTransaction,
         createBuyReturnTransaction,
         createArTransaction, 
-        createApTransaction, 
-        createArPaymentTransaction, 
+        createArPaymentTransaction,
+        createApTransaction,  
         createApPaymentTransaction, 
         getSalesReport,
         getPurchaseReport,
         getChartData,
         findAllByType,
-        findAll
+        findAll,
+        createStockMutation,
     };
 };

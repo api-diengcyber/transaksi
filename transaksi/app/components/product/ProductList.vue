@@ -86,7 +86,7 @@ const getShelveNames = (product) => {
 // Perbaikan Harga Utama (Mencari Harga Normal/Bukan Grosir)
 const getBasePrice = (pricesArray) => {
     if (!pricesArray || pricesArray.length === 0) return 0;
-    const nonGrosir = pricesArray.find(p => !p.name?.toLowerCase().includes('grosir'));
+    const nonGrosir = pricesArray.find(p => !p.name?.toLowerCase().includes('grosir') && !p.name?.toLowerCase().includes('member'));
     return nonGrosir ? nonGrosir.price : pricesArray[0].price;
 };
 

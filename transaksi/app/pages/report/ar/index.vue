@@ -71,14 +71,12 @@ const loadData = async () => {
     loading.value = true;
     try {
         // Fetch SALE, AR, dan PAY_AR secara paralel
-        const [sales, arGlobal, paymentsAr] = await Promise.all([
-             journalService.findAllByType('SALE').catch(() => []),
-             journalService.findAllByType('AR').catch(() => []), 
-             journalService.findAllByType('PAY_AR').catch(() => []),
+       const [arGlobal, paymentsAr] = await Promise.all([
+            journalService.findAllByType('AR').catch(() => []),
+            journalService.findAllByType('PAY_AR').catch(() => []),
         ]);
         
         const rawData = [
-            ...(Array.isArray(sales) ? sales : []), 
             ...(Array.isArray(arGlobal) ? arGlobal : []),
             ...(Array.isArray(paymentsAr) ? paymentsAr : []),
         ];

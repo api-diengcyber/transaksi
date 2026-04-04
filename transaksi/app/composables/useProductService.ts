@@ -39,6 +39,12 @@ export const useProductService = () => {
             method: 'DELETE',
         });
     };
+    
+    const findByBarcode = async (barcode: string) => {
+        return await useApi(`${API_BASE}/barcode/${barcode}`, {
+            method: 'GET'
+        });
+    };
 
     return {
         getAllProducts,
@@ -46,5 +52,6 @@ export const useProductService = () => {
         createProduct,
         updateProduct,
         deleteProduct,
+        findByBarcode,
     };
 };

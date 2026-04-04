@@ -119,6 +119,17 @@ export class JournalStokService {
                     createdBy: userId,
                 }));
             }
+            
+            // Simpan Supplier UUID (Supplier) - BARU DITAMBAHKAN
+            if (item.supplierUuid) {
+                detailEntities.push(manager.create(JournalDetailEntity, {
+                    uuid: generateJournalDetailUuid(storeUuid),
+                    key: `stok_supplier_uuid#${index}`,
+                    value: String(item.supplierUuid),
+                    journalCode: code,
+                    createdBy: userId,
+                }));
+            }
 
             // Simpan Qty (Menggunakan qty_plus untuk IN, dan qty_min untuk OUT)
             const qtyKey = type === 'STOCK_IN' ? `stok_qty_plus#${index}` : `stok_qty_min#${index}`;
@@ -168,31 +179,48 @@ export class JournalStokService {
       groups[groupKey][baseKey] = d.value;
     }
 
-    // 4. Hitung stok (Qty Plus - Qty Min) khusus untuk gudang ini
-    const stockMap = new Map<string, number>();
+    // 4. Hitung stok (Qty Plus - Qty Min), Total Masuk, dan Total Keluar
+    const stockMap = new Map<string, { total_in: number; total_out: number; stock: number }>();
+    
     for (const key in groups) {
       const g = groups[key];
       // Pastikan data jurnal ini masuk/keluar dari gudang yang diminta
       if (g.stok_warehouse_uuid === warehouseUuid) {
         const prodId = g.stok_product_uuid;
+        if (!prodId) continue;
+
         const qtyPlus = Number(g.stok_qty_plus) || 0;
         const qtyMin = Number(g.stok_qty_min) || 0;
         const netQty = qtyPlus - qtyMin;
 
-        stockMap.set(prodId, (stockMap.get(prodId) || 0) + netQty);
+        // Ambil data sementara atau buat data awal
+        const currentData = stockMap.get(prodId) || { total_in: 0, total_out: 0, stock: 0 };
+        
+        currentData.total_in += qtyPlus;
+        currentData.total_out += qtyMin;
+        currentData.stock += netQty;
+
+        stockMap.set(prodId, currentData);
       }
     }
 
-    // 5. Query produk yang stoknya tersisa (> 0) di gudang ini
+    // 5. Query produk yang stoknya tersisa ATAU pernah ada mutasi di gudang ini
     const products: any[] = [];
-    for (const [prodId, qty] of stockMap.entries()) {
-      if (qty > 0) {
+    for (const [prodId, data] of stockMap.entries()) {
+      // Tampilkan jika pernah masuk atau keluar, meskipun stoknya jadi 0
+      if (data.total_in > 0 || data.total_out > 0) {
         const product = await this.dataSource.getRepository('ProductEntity').findOne({
           where: { uuid: prodId },
           relations: ['categories', 'unit'] // Load relasi agar nama kategori & satuan muncul di frontend
         });
+        
         if (product) {
-          products.push({ ...product, stock: qty });
+          products.push({ 
+            ...product, 
+            stock: data.stock, 
+            total_in: data.total_in, 
+            total_out: data.total_out 
+          });
         }
       }
     }
@@ -201,5 +229,111 @@ export class JournalStokService {
       ...warehouse,
       products: products
     };
+  }
+
+  // Tambahkan fungsi ini di dalam class JournalStokService
+  async getWarehouseHistory(warehouseUuid: string, storeUuid: string) {
+    // 1. Cari detail jurnal yang menunjuk ke warehouse yang dipilih
+    const whDetails = await this.dataSource.getRepository(JournalDetailEntity)
+      .createQueryBuilder('jd')
+      .where("jd.journalCode LIKE :store", { store: `%-${storeUuid}-%` })
+      .andWhere("jd.key LIKE 'stok_warehouse_uuid#%'")
+      .andWhere("jd.value = :warehouseUuid", { warehouseUuid })
+      .getMany();
+
+    if (!whDetails || whDetails.length === 0) return [];
+
+    // 2. Dapatkan kombinasi journalCode dan index baris (misal: #0, #1)
+    const targetItems = whDetails.map(d => {
+      const index = d.key.split('#')[1];
+      return { journalCode: d.journalCode, index };
+    });
+
+    const journalCodes = [...new Set(targetItems.map(t => t.journalCode))];
+
+    // 3. Ambil data Header Jurnal (untuk mendapatkan tanggal, referensi, user)
+    const journals = await this.dataSource.getRepository(JournalEntity)
+      .createQueryBuilder('j')
+      .where("j.code IN (:...codes)", { codes: journalCodes })
+      .getMany();
+
+    // 4. Ambil semua detail jurnal lain yang berkaitan dengan baris stok tersebut
+    const allDetails = await this.dataSource.getRepository(JournalDetailEntity)
+      .createQueryBuilder('jd')
+      .where("jd.journalCode IN (:...codes)", { codes: journalCodes })
+      .andWhere("jd.key LIKE 'stok_%'")
+      .getMany();
+
+    // 5. Ambil data Produk untuk mendapatkan nama
+    const productUuids = [...new Set(allDetails.filter(d => d.key.startsWith('stok_product_uuid#')).map(d => d.value))];
+    let products: any[] = [];
+    if (productUuids.length > 0) {
+      products = await this.dataSource.getRepository('ProductEntity') // Pastikan entitas Product benar
+        .createQueryBuilder('p')
+        .where("p.uuid IN (:...uuids)", { uuids: productUuids })
+        .getMany();
+    }
+
+    // 6. Rangkai data menjadi format history untuk frontend
+    const history: any[] = [];
+
+    for (const item of targetItems) {
+      const journal = journals.find(x => x.code === item.journalCode);
+      if (!journal) continue;
+
+      const pUuidDet = allDetails.find(d => d.journalCode === item.journalCode && d.key === `stok_product_uuid#${item.index}`);
+      const qPlusDet = allDetails.find(d => d.journalCode === item.journalCode && d.key === `stok_qty_plus#${item.index}`);
+      const qMinDet = allDetails.find(d => d.journalCode === item.journalCode && d.key === `stok_qty_min#${item.index}`);
+
+      if (!pUuidDet) continue;
+
+      const prod = products.find(p => p.uuid === pUuidDet.value);
+      const qtyPlus = Number(qPlusDet?.value || 0);
+      const qtyMin = Number(qMinDet?.value || 0);
+
+      // Tentukan type IN/OUT dan jumlah Qty mutasi
+      const type = qtyPlus > 0 ? 'IN' : 'OUT';
+      const qty = qtyPlus > 0 ? qtyPlus : qtyMin;
+
+      // Format tanggal ke "YYYY-MM-DD HH:mm:ss" agar bisa di split di Vue frontend
+      const dateObj = journal.verifiedAt || new Date(); 
+      const dateStr = new Date(dateObj).toISOString().replace('T', ' ').substring(0, 19);
+
+      history.push({
+        date: dateStr,
+        ref: journal.code,
+        product: prod ? prod.name : 'Unknown Product',
+        type: type,
+        qty: qty,
+        user: journal.createdBy 
+      });
+    }
+
+    // 7. Urutkan berdasarkan waktu terbaru (Descending)
+    history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return history;
+  }
+  
+  // FUNGSI UNTUK MUTASI MANUAL DARI FRONTEND
+  async createManualMutation(payload: any, userId: string, storeUuid: string) {
+    const { type, product_uuid, warehouse_uuid, shelve_uuid, qty, note } = payload;
+    
+    // Format item agar sesuai dengan struktur jurnal
+    const item = {
+        productUuid: product_uuid,
+        warehouseUuid: warehouse_uuid,
+        shelveUuid: shelve_uuid,
+        qty: Number(qty)
+    };
+
+    // Jalankan jurnal stok tanpa externalManager agar membuat transaksi baru (independen)
+    if (type === 'IN') {
+        return await this._executeStockJournal('STOCK_IN', [item], userId, storeUuid, undefined, note);
+    } else if (type === 'OUT') {
+        return await this._executeStockJournal('STOCK_OUT', [item], userId, storeUuid, undefined, note);
+    } else {
+        throw new BadRequestException('Tipe mutasi tidak valid');
+    }
   }
 }

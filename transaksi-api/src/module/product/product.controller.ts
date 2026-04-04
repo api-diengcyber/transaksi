@@ -89,4 +89,13 @@ export class ProductController {
   ) {
     return await this.productService.remove(uuid, userId);
   }
+
+  @Get('barcode/:barcode')
+  @ApiOperation({ summary: 'Get product by exact Barcode (Scan)' })
+  async getByBarcode(
+    @Param('barcode') barcode: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return this.productService.findByBarcode(barcode, storeUuid);
+  }
 }

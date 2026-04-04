@@ -110,7 +110,8 @@ const items = ref([
         items: [
             { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/sale' }, // Keranjang belanja
             { label: 'Pembelian', icon: 'pi pi-shopping-bag', route: '/buy' }, // Tas belanja (kulakan)
-            { label: 'Retur barang', icon: 'pi pi-refresh', route: '/return' }, // Panah putar balik
+            { label: 'Retur jual', icon: 'pi pi-refresh', route: '/return' }, // Panah putar balik
+            { label: 'Retur beli', icon: 'pi pi-refresh', route: '/return' }, // Panah putar balik
             { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, // Panah masuk (uang masuk)
             { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, // Panah keluar (uang keluar)
             // { label: 'Akun', icon: 'pi pi-tags', route: '/account' }, // Tag akun/kategori
@@ -128,7 +129,8 @@ const items = ref([
              { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph' }, // Diagram lingkaran analisa
              { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale' }, // Persentase profit
              { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy' }, // Dompet pengeluaran
-             { label: 'Retur barang', icon: 'pi pi-replay', route: '/report/return' }, // Replay history
+             { label: 'Retur jual', icon: 'pi pi-replay', route: '/report/return' }, // Replay history
+             { label: 'Retur beli', icon: 'pi pi-replay', route: '/report/return' }, // Replay history
              { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar' }, // Data excel/angka
              { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap' }, // Dokumen tagihan
              { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial' }, // Dokumen tagihan
