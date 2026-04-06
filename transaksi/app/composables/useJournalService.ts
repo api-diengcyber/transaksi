@@ -28,15 +28,15 @@ export const useJournalService = () => {
     // TRANSAKSI RETUR
     // =========================================================================
 
-    const createSaleReturnTransaction = async (payload: any) => {
-        return await useApi(`${API_BASE}/return/sale`, {
+    const createReturnSaleTransaction = async (payload: any) => {
+        return await useApi(`${API_BASE}/return-sale`, {
             method: 'POST',
             body: { details: payload }
         });
     };
 
-    const createBuyReturnTransaction = async (payload: any) => {
-        return await useApi(`${API_BASE}/return/buy`, {
+    const createReturnBuyTransaction = async (payload: any) => {
+        return await useApi(`${API_BASE}/return-buy`, {
             method: 'POST',
             body: { details: payload }
         });
@@ -91,7 +91,31 @@ export const useJournalService = () => {
             method: 'GET'
         });
     };
-    
+
+    /**
+     * Mengambil data laporan Inventori / Stok Gudang
+     * @param startDate Format YYYY-MM-DD
+     * @param endDate Format YYYY-MM-DD
+     */
+    const getInventoryReport = async (startDate: string, endDate: string) => {
+      return await useApi(`${API_BASE}/report-inventory`, {
+        method: 'GET',
+        params: { startDate, endDate }
+      });
+    };
+
+    const getInventoryChart = async (startDate: string, endDate: string) => {
+      return await useApi(`${API_BASE}/report-inventory/chart`, {
+        method: 'GET',
+        params: { startDate, endDate }
+      });
+    }
+
+    /**
+     * Mengambil data untuk grafik (Chart)
+     * @param startDate Format YYYY-MM-DD
+     * @param endDate Format YYYY-MM-DD
+     */
     const getChartData = async (startDate: string, endDate: string) => {
         return await useApi(`${API_BASE}/chart-data`, {
             method: 'GET',
@@ -116,14 +140,16 @@ export const useJournalService = () => {
     return {
         createSaleTransaction,
         createBuyTransaction,
-        createSaleReturnTransaction,
-        createBuyReturnTransaction,
+        createReturnSaleTransaction,
+        createReturnBuyTransaction,
         createArTransaction, 
         createArPaymentTransaction,
         createApTransaction,  
         createApPaymentTransaction, 
         getSalesReport,
         getPurchaseReport,
+        getInventoryReport,
+        getInventoryChart,
         getChartData,
         findAllByType,
         findAll,

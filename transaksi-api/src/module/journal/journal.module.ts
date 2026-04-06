@@ -10,6 +10,8 @@ import { JournalSaleService } from './journal-sale.service';
 import { JournalStokService } from './journal-stok.service';
 import { JournalArService } from './journal-ar.service';
 import { JournalApService } from './journal-ap.service';
+import { JournalReturnSaleService } from './journal-return-sale.service';
+import { JournalReturnBuyService } from './journal-return-buy.service';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { JournalApService } from './journal-ap.service';
     JournalBuyService,
     JournalArService,
     JournalApService,
+    JournalReturnSaleService,
+    JournalReturnBuyService,
   ],
   exports: [
     JournalService,

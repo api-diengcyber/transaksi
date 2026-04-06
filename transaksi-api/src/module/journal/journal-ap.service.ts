@@ -105,4 +105,86 @@ export class JournalApService {
 
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
+
+  async getReport(storeUuid: string) {
+    // 1. Ambil semua jurnal yang berhubungan dengan Hutang (AP & PAY_AP)
+    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndMapMany(
+        'journal.details', 
+        JournalDetailEntity, 
+        'detail', 
+        'detail.journalCode = journal.code'
+      )
+      .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
+      .andWhere('journal.code LIKE :type', { type: `%AP%` }) // Menangkap 'AP' dan 'PAY_AP'
+      .orderBy('journal.createdAt', 'DESC')
+      .getMany();
+
+    // 2. Mapping detail ke dalam bentuk object agar mudah diakses
+    const formattedJournals = journals.map(journal => {
+      const detailsMap = (journal['details'] || []).reduce((acc: any, curr: any) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {});
+      return { ...journal, detailsMap };
+    });
+
+    // 3. Pisahkan Jurnal Induk (AP Murni) dan Jurnal Pembayaran (PAY_AP)
+    const mainAp = formattedJournals.filter(j => j.code.includes('AP') && !j.code.includes('PAY_AP'));
+    const payAp = formattedJournals.filter(j => j.code.includes('PAY_AP'));
+
+    // 4. Susun respons akhir yang sudah disarangkan (Nested)
+    return mainAp.map(main => {
+      // Cari semua pembayaran yang merujuk pada kode tagihan AP ini
+      const payments = payAp
+        .filter(p => p.detailsMap['reference_journal_code'] === main.code)
+        .map(p => ({
+          code: p.code,
+          date: p.createdAt,
+          amount: Number(p.detailsMap['amount'] || p.detailsMap['nominal_ap_paid'] || 0),
+          method: p.detailsMap['payment_method'] || 'CASH',
+          notes: p.detailsMap['notes'] || ''
+        }));
+
+      // Kalkulasi Keuangan
+      const total = Number(main.detailsMap['amount'] || main.detailsMap['grand_total'] || 0);
+      const dp = Number(main.detailsMap['dp_amount'] || main.detailsMap['amount_cash'] || 0);
+      const totalPaid = dp + payments.reduce((sum, p) => sum + p.amount, 0);
+
+      // Ekstrak Informasi Supplier
+      let supplierName = main.detailsMap['supplier'] || main.detailsMap['supplier_name'] || main.detailsMap['vendor'];
+      let supplierUuid = main.detailsMap['supplier_uuid'];
+
+      if (!supplierName) {
+         const itemSupplierKey = Object.keys(main.detailsMap).find(k => 
+           (k.startsWith('supplier_name#') || k.startsWith('supplier#')) && !k.includes('uuid')
+         );
+         if (itemSupplierKey) supplierName = main.detailsMap[itemSupplierKey];
+      }
+
+      if (!supplierUuid) {
+          const itemSupplierUuidKey = Object.keys(main.detailsMap).find(k => k.startsWith('supplier_uuid#'));
+          if (itemSupplierUuidKey) supplierUuid = main.detailsMap[itemSupplierUuidKey];
+      }
+
+      return {
+        uuid: main.uuid,
+        code: main.code,
+        date: main.createdAt,
+        type: 'AP',
+        total: total,
+        dp: dp,
+        paid: totalPaid,
+        remaining: total - totalPaid,
+        isPaidOff: (total - totalPaid) <= 0.01, 
+        supplier: supplierName || 'Supplier Umum / Tidak Diketahui',
+        supplierUuid: supplierUuid || null,
+        dueDate: main.detailsMap['due_date'] || null,
+        refCode: main.detailsMap['reference_journal_code'] || null, // Jurnal sumber (cth: BUY-xxx)
+        referenceNo: main.detailsMap['reference_no'] || null, 
+        notes: main.detailsMap['notes'] || '',
+        payments: payments // <--- KUNCI: Detail cicilan langsung disarangkan di sini
+      };
+    });
+  }
 }

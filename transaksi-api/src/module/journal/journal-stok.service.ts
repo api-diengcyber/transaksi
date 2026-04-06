@@ -336,4 +336,145 @@ export class JournalStokService {
         throw new BadRequestException('Tipe mutasi tidak valid');
     }
   }
+
+  async getInventoryReport(storeUuid: string, startDate: string, endDate: string) {
+    const query = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndMapMany('journal.details', JournalDetailEntity, 'detail', 'detail.journalCode = journal.code')
+      .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
+      .andWhere('journal.createdAt BETWEEN :start AND :end', { 
+        start: `${startDate} 00:00:00`, 
+        end: `${endDate} 23:59:59` 
+      })
+      .orderBy('journal.createdAt', 'ASC');
+
+    const journals = await query.getMany();
+
+    // Map untuk menampung mutasi per produk
+    const inventoryMap = new Map();
+
+    journals.forEach(j => {
+      const detailsMap = j.details.reduce((acc, curr) => { acc[curr.key] = curr.value; return acc; }, {});
+      
+      let idx = 0;
+      // Loop item di setiap jurnal (SALE, BUY, RET_SALE, RET_BUY, ADJUSTMENT)
+      while (detailsMap[`product_uuid#${idx}`]) {
+        const pUuid = detailsMap[`product_uuid#${idx}`];
+        const pName = detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`];
+        const qty = Number(detailsMap[`qty#${idx}`] || detailsMap[`qty_return#${idx}`] || 0);
+        const unit = detailsMap[`unit_name#${idx}`] || 'Unit';
+
+        if (!inventoryMap.has(pUuid)) {
+          inventoryMap.set(pUuid, { 
+            uuid: pUuid, name: pName, unit: unit,
+            stockIn: 0, stockOut: 0, adjustment: 0, finalStock: 0 
+          });
+        }
+
+        const item = inventoryMap.get(pUuid);
+
+        // Logika Mutasi Berdasarkan Kode Jurnal
+        if (j.code.startsWith('BUY') || j.code.startsWith('RET_SALE')) {
+          item.stockIn += qty;
+        } else if (j.code.startsWith('SALE') || j.code.startsWith('RET_BUY')) {
+          item.stockOut += qty;
+        } else if (j.code.startsWith('ADJ')) {
+          item.adjustment += qty; // Bisa minus jika stok berkurang
+        }
+        
+        idx++;
+      }
+    });
+
+    return Array.from(inventoryMap.values()).map(item => ({
+      ...item,
+      finalStock: item.stockIn - item.stockOut + item.adjustment
+    }));
+  }
+
+  async getStockMovementChart(storeUuid: string, startDate: string, endDate: string) {
+    // Ambil semua jurnal yang memiliki pengaruh ke stok dalam rentang tanggal
+    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndSelect('journal.details', 'detail')
+      .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
+      .andWhere('journal.createdAt BETWEEN :start AND :end', { 
+        start: `${startDate} 00:00:00`, 
+        end: `${endDate} 23:59:59` 
+      })
+      .orderBy('journal.createdAt', 'ASC')
+      .getMany();
+
+    const chartMap = new Map();
+
+    // Inisialisasi map agar semua tanggal di range muncul (opsional, tapi disarankan)
+    // Jika ingin hanya tanggal yang ada transaksi saja, lewati bagian inisialisasi ini.
+
+    journals.forEach(j => {
+      // Ambil tanggal murni (YYYY-MM-DD)
+      const dateKey = j.createdAt.toISOString().split('T')[0];
+      
+      if (!chartMap.has(dateKey)) {
+        chartMap.set(dateKey, { date: dateKey, masuk: 0, keluar: 0 });
+      }
+      
+      const entry = chartMap.get(dateKey);
+      
+      // Ambil detail jurnal untuk mencari qty
+      j.details.forEach(detail => {
+        // Kita hanya mencari key yang mengandung 'qty'
+        if (detail.key.startsWith('qty#') || detail.key.startsWith('qty_return#') || detail.key === 'qty') {
+          const qtyValue = Number(detail.value || 0);
+
+          // LOGIKA PEMISAHAN MASUK VS KELUAR
+          // Masuk: Pembelian (BUY) atau Retur Penjualan (RET_SALE)
+          if (j.code.includes('BUY') || j.code.includes('RET_SALE')) {
+            entry.masuk += qtyValue;
+          } 
+          // Keluar: Penjualan (SALE) atau Retur Pembelian (RET_BUY)
+          else if (j.code.includes('SALE') || j.code.includes('RET_BUY')) {
+            entry.keluar += qtyValue;
+          }
+        }
+      });
+    });
+
+    const result = Array.from(chartMap.values());
+    
+    // DEBUG: Cek di terminal backend Anda
+    console.log(`Chart Data Found for ${storeUuid}:`, result.length, 'days');
+    
+    return result;
+  }
+
+  async breakStock(payload: any, userId: string, storeUuid: string) {
+    const { 
+        sourceProductUuid, sourceVariantUuid, 
+        targetProductUuid, targetVariantUuid, 
+        qtyToBreak, conversionVal 
+    } = payload;
+
+    return await this.dataSource.transaction(async (manager) => {
+        // 1. Ambil info produk untuk catatan (keterangan)
+        const source = await manager.getRepository('ProductEntity').findOne({ where: { uuid: sourceProductUuid } });
+        const target = await manager.getRepository('ProductEntity').findOne({ where: { uuid: targetProductUuid } });
+
+        // 2. STOK KELUAR dari Produk Sumber (Unit Besar)
+        await this.stockOut([{
+            productUuid: sourceProductUuid,
+            variantUuid: sourceVariantUuid,
+            qty: qtyToBreak,
+            warehouseUuid: storeUuid
+        }], userId, manager, storeUuid, `Konversi keluar ke: ${target?.name}`);
+
+        // 3. STOK MASUK ke Produk Tujuan (Unit Kecil)
+        const totalAdd = qtyToBreak * conversionVal;
+        await this.stockIn([{
+            productUuid: targetProductUuid,
+            variantUuid: targetVariantUuid,
+            qty: totalAdd,
+            warehouseUuid: storeUuid
+        }], userId, manager, storeUuid, `Konversi masuk dari: ${source?.name}`);
+
+        return { message: 'Konversi stok berhasil', addedQty: totalAdd };
+    });
+  }
 }

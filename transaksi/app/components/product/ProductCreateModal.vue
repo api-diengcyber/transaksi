@@ -26,55 +26,37 @@ const shelves = ref([]);
 const units = ref([]);
 const categories = ref([]);
 const priceGroups = ref([]);
-const existingProducts = ref([]); 
 
-// Data Utama Produk
+// Data Utama Produk (Sudah disederhanakan tanpa Parent/Child)
 const product = reactive({ 
     name: '',
     barcode: '',
     stock: 0,
     unitUuid: null,
     categoryUuid: null,
-    conversionQty: 1, 
     shelveUuids: [],
     prices: [],
-    variants: [],
-    hasParent: false,
-    parentOption: 'existing',
-    parentProductUuid: null,
-    parentNewName: '',
-    parentNewBarcode: '',
-    parentNewUnitUuid: null,
-    children: [] 
+    variants: []
 });
 
 // --- HELPER LOGIKA HARGA GROSIR ---
-// Fungsi ini memasangkan Harga Utama dengan Harga Grosirnya
 const getPricePairs = (pricesArray) => {
     if (!pricesArray || pricesArray.length === 0) return [];
     const pairs = [];
-    
-    // Ambil harga dasar (yang namanya TIDAK mengandung kata 'grosir')
     const basePrices = pricesArray.filter(p => !p.name.toLowerCase().includes('grosir'));
     
     basePrices.forEach(bp => {
-        // Tentukan nama target grosir
         let expectedGrosirName = bp.name.toLowerCase().replace('harga', 'harga grosir').trim();
         if (bp.name.toLowerCase().includes('member')) expectedGrosirName = 'harga grosir member';
         if (bp.name.toLowerCase().includes('normal')) expectedGrosirName = 'harga grosir normal';
         
-        // Cari objek harga grosir yang sesuai
         const grosirPrice = pricesArray.find(p => 
             p.name.toLowerCase() === expectedGrosirName || 
             (p.name.toLowerCase().includes('grosir') && p.name.toLowerCase().includes(bp.name.toLowerCase().replace('harga', '').trim()))
         );
         
-        pairs.push({
-            base: bp,
-            grosir: grosirPrice
-        });
+        pairs.push({ base: bp, grosir: grosirPrice });
     });
-    
     return pairs;
 };
 
@@ -85,61 +67,38 @@ const initForm = () => {
     product.stock = 0;
     product.unitUuid = null;
     product.categoryUuid = null;
-    product.conversionQty = 1;
     product.shelveUuids = [];
     
-    // Set Harga dan Default Min. Beli
     product.prices = priceGroups.value.map(pg => {
         const isGrosir = pg.name.toLowerCase().includes('grosir');
         return {
             priceGroupUuid: pg.uuid,
             name: pg.name,
             price: 0,
-            minQty: isGrosir ? 0 : 0 // Grosir default 0, Harga Utama default 1
+            minQty: 0
         };
     });
     
     product.variants = [];
-    product.hasParent = false;
-    product.parentOption = 'existing';
-    product.parentProductUuid = null;
-    product.parentNewName = '';
-    product.parentNewBarcode = '';
-    product.parentNewUnitUuid = null;
-    product.children = [];
     submitted.value = false;
 };
 
-// Handlers Varian
 const addVariant = () => {
     product.variants.push({ 
         name: '', 
         barcode: '', 
         stock: 0,
-        prices: priceGroups.value.map(pg => {
-            const isGrosir = pg.name.toLowerCase().includes('grosir');
-            return {
-                priceGroupUuid: pg.uuid,
-                name: pg.name,
-                price: 0,
-                minQty: isGrosir ? 0 : 0
-            };
-        }) 
+        prices: priceGroups.value.map(pg => ({
+            priceGroupUuid: pg.uuid,
+            name: pg.name,
+            price: 0,
+            minQty: 0
+        })) 
     });
-};
-const removeVariant = (index) => {
-    product.variants.splice(index, 1);
 };
 
-// Handlers Child
-const addChild = () => {
-    product.children.push({
-        name: product.name ? `${product.name} (Eceran)` : '', 
-        barcode: '', unitUuid: null, conversionQty: 1 
-    });
-};
-const removeChild = (index) => {
-    product.children.splice(index, 1);
+const removeVariant = (index) => {
+    product.variants.splice(index, 1);
 };
 
 const loadDropdowns = async () => {
@@ -156,15 +115,13 @@ const loadDropdowns = async () => {
             shelveService.getAllShelves(),
             unitService.getAllUnits(),
             categoryService.getAllCategories(),
-            priceGroupService.getAllPriceGroups(),
-            productService.getAllProducts(1, 1000) 
+            priceGroupService.getAllPriceGroups()
         ]);
 
         shelves.value = results[0].status === 'fulfilled' ? extractArray(results[0].value) : [];
         units.value = results[1].status === 'fulfilled' ? extractArray(results[1].value) : [];
         categories.value = results[2].status === 'fulfilled' ? extractArray(results[2].value) : [];
         priceGroups.value = results[3].status === 'fulfilled' ? extractArray(results[3].value) : [];
-        existingProducts.value = results[4].status === 'fulfilled' ? extractArray(results[4].value) : [];
     } catch (error) {
         console.error("Gagal memuat master:", error);
     }
@@ -176,14 +133,13 @@ const loadProductData = async (uuid) => {
         const response = await productService.getProduct(uuid);
         const data = response.data || response; 
 
-        if (!data) throw new Error("Data produk kosong dari server");
+        if (!data) throw new Error("Data produk kosong");
 
         product.name = data.name || '';
         product.barcode = data.barcode || '';
         product.stock = data.stock || 0;
         product.unitUuid = data.unitUuid || null;
         product.categoryUuid = data.categoryUuid || (data.category ? data.category.uuid : null); 
-        product.conversionQty = data.conversionQty || 1; 
 
         if (data.shelves && Array.isArray(data.shelves)) {
             product.shelveUuids = data.shelves.map(shelf => shelf.uuid);
@@ -192,53 +148,35 @@ const loadProductData = async (uuid) => {
         }
 
         product.prices = priceGroups.value.map(pg => {
-            const isGrosir = pg.name.toLowerCase().includes('grosir');
             const savedPrice = data.prices?.find(p => p.priceGroupUuid === pg.uuid);
             return {
                 uuid: savedPrice?.uuid || null,
                 priceGroupUuid: pg.uuid,
                 name: pg.name,
                 price: savedPrice ? Number(savedPrice.price) : 0,
-                minQty: savedPrice ? Number(savedPrice.minQty) : (isGrosir ? 0 : 0)
+                minQty: savedPrice ? Number(savedPrice.minQty) : 0
             };
         });
 
-        if (data.variants && data.variants.length > 0) {
-            product.variants = data.variants.map(v => ({
-                uuid: v.uuid, 
-                name: v.name, 
-                barcode: v.barcode, 
-                stock: v.stock,
-                prices: priceGroups.value.map(pg => {
-                    const isGrosir = pg.name.toLowerCase().includes('grosir');
-                    const savedVariantPrice = v.prices?.find(vp => vp.priceGroupUuid === pg.uuid);
-                    return {
-                        uuid: savedVariantPrice?.uuid || null,
-                        priceGroupUuid: pg.uuid,
-                        name: pg.name,
-                        price: savedVariantPrice ? Number(savedVariantPrice.price) : 0,
-                        minQty: savedVariantPrice ? Number(savedVariantPrice.minQty) : (isGrosir ? 0 : 0)
-                    };
-                })
-            }));
-        } else {
-            product.variants = [];
-        }
-
-        if (data.parentProduct) {
-            product.hasParent = true;
-            product.parentOption = 'existing';
-            product.parentProductUuid = data.parentProduct.uuid || null;
-        }
-
-        if (data.childProducts && data.childProducts.length > 0) {
-            product.children = data.childProducts.map(c => ({
-                name: c.name, barcode: c.barcode, unitUuid: c.unitUuid, conversionQty: c.conversionQty || 1
-            }));
-        }
+        product.variants = (data.variants || []).map(v => ({
+            uuid: v.uuid, 
+            name: v.name, 
+            barcode: v.barcode, 
+            stock: v.stock,
+            prices: priceGroups.value.map(pg => {
+                const savedVariantPrice = v.prices?.find(vp => vp.priceGroupUuid === pg.uuid);
+                return {
+                    uuid: savedVariantPrice?.uuid || null,
+                    priceGroupUuid: pg.uuid,
+                    name: pg.name,
+                    price: savedVariantPrice ? Number(savedVariantPrice.price) : 0,
+                    minQty: savedVariantPrice ? Number(savedVariantPrice.minQty) : 0
+                };
+            })
+        }));
 
     } catch (error) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memuat data.' });
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memuat data produk.' });
         emit('update:visible', false); 
     } finally {
         loading.value = false;
@@ -251,10 +189,6 @@ watch(() => props.visible, async (val) => {
         if (props.productUuid) await loadProductData(props.productUuid);
         else initForm();
     }
-});
-
-watch(() => product.hasParent, (newVal) => {
-    if (!newVal) product.conversionQty = 1;
 });
 
 const saveProduct = async () => {
@@ -274,8 +208,8 @@ const saveProduct = async () => {
             unitUuid: product.unitUuid,
             categoryUuid: product.categoryUuid,
             shelveUuids: product.shelveUuids,
-            conversionQty: product.hasParent ? product.conversionQty : 1, 
             
+            // Harga dikosongkan jika ada varian
             prices: product.variants.length === 0 ? product.prices.map(p => ({
                 uuid: p.uuid, priceGroupUuid: p.priceGroupUuid, name: p.name, 
                 price: p.price, minQty: p.minQty
@@ -287,29 +221,16 @@ const saveProduct = async () => {
                     uuid: vp.uuid, priceGroupUuid: vp.priceGroupUuid, name: vp.name, 
                     price: vp.price, minQty: vp.minQty
                 }))
-            })),
-            
-            parentProduct: product.hasParent ? {
-                isNew: product.parentOption === 'new',
-                uuid: product.parentOption === 'existing' ? product.parentProductUuid : null,
-                name: product.parentOption === 'new' ? product.parentNewName : null,
-                barcode: product.parentOption === 'new' ? product.parentNewBarcode : null,
-                unitUuid: product.parentOption === 'new' ? product.parentNewUnitUuid : null,
-                conversionQty: product.conversionQty 
-            } : null,
-
-            childProducts: product.children.length > 0 ? product.children.map(c => ({
-                name: c.name, barcode: c.barcode, unitUuid: c.unitUuid, conversionQty: c.conversionQty
-            })) : []
+            }))
         };
 
         if (isEditMode.value) {
             await productService.updateProduct(props.productUuid, payload);
-            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil diperbarui' });
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk diperbarui' });
             emit('product-updated');
         } else {
             await productService.createProduct(payload);
-            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk berhasil dibuat' });
+            toast.add({ severity: 'success', summary: 'Sukses', detail: 'Produk dibuat' });
             emit('product-created');
         }
         emit('update:visible', false);
@@ -337,7 +258,6 @@ const saveProduct = async () => {
         }"
     >
         <div class="flex flex-col gap-4">
-            
             <div class="field mb-0">
                 <label for="name" class="font-semibold text-sm mb-1.5 block text-surface-700">Nama Produk <span class="text-red-500">*</span></label>
                 <InputGroup>
@@ -384,10 +304,7 @@ const saveProduct = async () => {
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-surface-50 p-4 border border-surface-200 rounded-lg">
                     <div v-for="(pair, idx) in getPricePairs(product.prices)" :key="idx" class="field mb-0 bg-surface-0 p-4 rounded-xl border border-surface-200 shadow-sm flex flex-col gap-3">
-                        
-                        <label class="text-[11px] font-bold uppercase text-primary-700 border-b border-surface-100 pb-2">
-                            {{ pair.base.name }}
-                        </label>
+                        <label class="text-[11px] font-bold uppercase text-primary-700 border-b border-surface-100 pb-2">{{ pair.base.name }}</label>
                         
                         <div class="flex items-center gap-3">
                             <span class="text-xs font-semibold text-surface-600 w-24">Harga Satuan</span>
@@ -400,7 +317,6 @@ const saveProduct = async () => {
                                 <InputNumber v-model="pair.grosir.minQty" placeholder="0" class="w-24 p-inputtext-sm" inputClass="!text-center !font-bold" :min="0" />
                                 <span class="text-[10px] text-surface-400 italic flex-1">Isi > 0 u/ grosir</span>
                             </div>
-
                             <div v-if="pair.grosir.minQty > 0" class="flex items-center gap-3 mt-1 pt-3 border-t border-dashed border-surface-200 animate-fade-in">
                                 <span class="text-xs font-bold text-orange-600 w-24">Harga Grosir</span>
                                 <InputNumber v-model="pair.grosir.price" mode="currency" currency="IDR" locale="id-ID" placeholder="Rp" class="flex-1 p-inputtext-sm" inputClass="!font-bold !text-orange-700 !bg-orange-50" />
@@ -413,59 +329,51 @@ const saveProduct = async () => {
             <div class="mt-4 pt-4 border-t border-surface-200">
                 <div class="flex justify-between items-center mb-3">
                     <div>
-                        <h3 class="font-semibold text-surface-800 text-sm">Varian Produk & Harga Spesifik</h3>
-                        <p class="text-xs text-surface-500 mt-0.5">Tambah variasi Warna/Ukuran (Harga dan Min. Beli diatur per-varian).</p>
+                        <h3 class="font-semibold text-surface-800 text-sm">Varian Produk</h3>
+                        <p class="text-xs text-surface-500 mt-0.5">Tambah variasi Warna/Ukuran dengan harga masing-masing.</p>
                     </div>
                     <Button label="Tambah Varian" icon="pi pi-plus" size="small" outlined severity="secondary" @click="addVariant" />
                 </div>
 
                 <div v-if="product.variants.length === 0" class="text-center py-4 text-surface-400 text-sm border border-dashed rounded-lg border-surface-300 bg-surface-50">
-                    Tidak ada varian khusus. Harga mengikuti <b>Pengaturan Harga</b> di atas.
+                    Tidak ada varian khusus.
                 </div>
 
-                <div 
-                    v-for="(variant, vIdx) in product.variants" 
-                    :key="vIdx" 
-                    class="p-4 border border-surface-200 rounded-xl mb-4 bg-surface-50 relative animate-fade-in shadow-sm"
-                >
+                <div v-for="(variant, vIdx) in product.variants" :key="vIdx" class="p-4 border border-surface-200 rounded-xl mb-4 bg-surface-50 relative animate-fade-in shadow-sm">
                     <Button icon="pi pi-times" severity="danger" text rounded class="absolute right-2 top-2 h-8 w-8 p-0" @click="removeVariant(vIdx)" />
                     
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                        <div class="field sm:col-span-1 mb-0">
+                        <div class="field mb-0">
                             <label class="text-xs font-semibold mb-1 block">Nama Varian <span class="text-red-500">*</span></label>
                             <InputText v-model="variant.name" placeholder="Cth: XL / Merah" class="w-full" :class="{'p-invalid': submitted && !variant.name}" />
                         </div>
-                        <div class="field sm:col-span-1 mb-0">
+                        <div class="field mb-0">
                             <label class="text-xs font-semibold mb-1 block">Barcode Varian</label>
                             <InputText v-model="variant.barcode" placeholder="Scan barcode..." class="w-full" />
                         </div>
-                        <div class="field sm:col-span-1 mb-0">
+                        <div class="field mb-0">
                             <label class="text-xs font-semibold mb-1 block">Stok Varian</label>
                             <InputNumber v-model="variant.stock" placeholder="0" class="w-full" />
                         </div>
                     </div>
 
                     <div class="bg-surface-0 p-3 rounded-lg border border-surface-200">
-                        <div class="text-xs font-bold text-primary-600 mb-3 uppercase border-b border-surface-100 pb-2">Harga Untuk Varian: {{ variant.name || 'Baru' }}</div>
-                        
+                        <div class="text-xs font-bold text-primary-600 mb-3 uppercase border-b border-surface-100 pb-2">Harga Varian: {{ variant.name || 'Baru' }}</div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div v-for="(pair, idx) in getPricePairs(variant.prices)" :key="idx" class="field mb-0 bg-surface-50 p-3 rounded-lg border border-surface-100 flex flex-col gap-2 shadow-sm">
                                 <label class="text-[10px] font-bold text-surface-500 uppercase border-b border-surface-200 pb-1">{{ pair.base.name }}</label>
-                                
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="text-[10px] font-semibold text-surface-600 w-16">Harga</span>
-                                    <InputNumber v-model="pair.base.price" mode="currency" currency="IDR" locale="id-ID" class="p-inputtext-sm flex-1" placeholder="Rp" />
+                                    <InputNumber v-model="pair.base.price" mode="currency" currency="IDR" locale="id-ID" class="p-inputtext-sm flex-1" />
                                 </div>
-
                                 <template v-if="pair.grosir">
                                     <div class="flex items-center justify-between gap-2">
                                         <span class="text-[10px] font-semibold text-surface-600 w-16">Min Gros</span>
-                                        <InputNumber v-model="pair.grosir.minQty" class="p-inputtext-sm w-20" placeholder="0" inputClass="!text-center" :min="0" />
+                                        <InputNumber v-model="pair.grosir.minQty" class="p-inputtext-sm w-20" :min="0" />
                                     </div>
-                                    
                                     <div v-if="pair.grosir.minQty > 0" class="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-dashed border-surface-200 animate-fade-in">
                                         <span class="text-[10px] font-bold text-orange-600 w-16">Hrg Grosir</span>
-                                        <InputNumber v-model="pair.grosir.price" mode="currency" currency="IDR" locale="id-ID" class="p-inputtext-sm flex-1" placeholder="Rp" inputClass="!font-bold !text-orange-700 !bg-orange-50" />
+                                        <InputNumber v-model="pair.grosir.price" mode="currency" currency="IDR" locale="id-ID" class="p-inputtext-sm flex-1" inputClass="!font-bold !text-orange-700 !bg-orange-50" />
                                     </div>
                                 </template>
                             </div>
@@ -473,49 +381,6 @@ const saveProduct = async () => {
                     </div>
                 </div>
             </div>
-
-            <div class="mt-4 pt-4 border-t border-surface-200">
-                <div class="flex items-center gap-2 mb-3">
-                    <Checkbox v-model="product.hasParent" inputId="hasParent" binary />
-                    <label for="hasParent" class="font-semibold cursor-pointer text-surface-800 text-sm">Produk ini memiliki Induk/Parent? (Maks 1)</label>
-                </div>
-                <div v-if="product.hasParent" class="p-4 border border-surface-200 rounded-lg bg-surface-50 mb-0 animate-fade-in">
-                    <div class="field mb-4 pb-4 border-b border-surface-200">
-                        <label class="font-semibold text-sm mb-1.5 block text-primary-700">Isi / Konversi Produk ini (Qty) <span class="text-red-500">*</span></label>
-                        <InputNumber v-model="product.conversionQty" placeholder="1" class="w-full sm:w-1/2" :class="{'p-invalid': submitted && product.conversionQty < 1}" />
-                    </div>
-                    <div class="flex gap-4 mb-4">
-                        <div class="flex items-center"><RadioButton v-model="product.parentOption" inputId="p_exist" value="existing" /><label for="p_exist" class="ml-2 cursor-pointer text-sm">Pilih Produk Ada</label></div>
-                        <div class="flex items-center"><RadioButton v-model="product.parentOption" inputId="p_new" value="new" /><label for="p_new" class="ml-2 cursor-pointer text-sm">Buat Parent Baru</label></div>
-                    </div>
-                    <div v-if="product.parentOption === 'existing'" class="field mb-0">
-                        <label class="text-xs font-semibold mb-1 block">Cari Produk Parent</label>
-                        <Dropdown v-model="product.parentProductUuid" :options="existingProducts" optionLabel="name" optionValue="uuid" filter placeholder="Ketik nama produk..." class="w-full" />
-                    </div>
-                    <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-0">
-                        <div class="field col-span-2"><label class="text-xs font-semibold mb-1 block">Nama Parent (Cth: Dus)</label><InputText v-model="product.parentNewName" class="w-full" /></div>
-                        <div class="field"><label class="text-xs font-semibold mb-1 block">Satuan Parent</label><Dropdown v-model="product.parentNewUnitUuid" :options="units" optionLabel="name" optionValue="uuid" class="w-full" /></div>
-                        <div class="field"><label class="text-xs font-semibold mb-1 block">Barcode Parent</label><InputText v-model="product.parentNewBarcode" class="w-full" /></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-4 pt-4 border-t border-surface-200">
-                <div class="flex justify-between items-center mb-3">
-                    <div><h3 class="font-semibold text-surface-800 text-sm">Produk Turunan / Child</h3></div>
-                    <Button label="Tambah Child" icon="pi pi-plus" size="small" outlined severity="secondary" @click="addChild" />
-                </div>
-                <div v-for="(child, index) in product.children" :key="index" class="p-4 border border-surface-200 rounded-lg mb-3 bg-surface-50 relative animate-fade-in">
-                    <Button icon="pi pi-times" text rounded severity="danger" class="absolute right-2 top-2 h-8 w-8 p-0" @click="removeChild(index)" />
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                        <div class="field"><label class="text-xs font-semibold mb-1 block text-primary-600">Nilai Konversi</label><InputNumber v-model="child.conversionQty" class="w-full" /></div>
-                        <div class="field"><label class="text-xs font-semibold mb-1 block">Satuan Child</label><Dropdown v-model="child.unitUuid" :options="units" optionLabel="name" optionValue="uuid" class="w-full" /></div>
-                        <div class="field col-span-2"><label class="text-xs font-semibold mb-1 block">Nama Produk</label><InputText v-model="child.name" class="w-full" /></div>
-                        <div class="field col-span-2"><label class="text-xs font-semibold mb-1 block">Barcode</label><InputText v-model="child.barcode" class="w-full" /></div>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
         <template #footer>

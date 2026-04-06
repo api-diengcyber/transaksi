@@ -26,7 +26,7 @@ const loading = ref(true);
 const processing = ref(false);
 
 // --- SCAN MODE STATE ---
-const isScanMode = ref(false); // <-- STATE BARU UNTUK MODE BARCODE
+const isScanMode = ref(false);
 
 // --- MASTER DATA ---
 const categories = ref([]); 
@@ -50,11 +50,14 @@ const limit = 16;
 const totalPages = ref(1);
 const totalProducts = ref(0);
 
-// --- STATE TRANSAKSI (SIMPLIFIED FOR CASH ONLY) ---
+// --- STATE TRANSAKSI (UPDATED) ---
 const purchaseInfo = reactive({
     referenceNo: '',
     notes: '',
+    paymentMethod: 'CASH', // CASH atau CREDIT
+    dueDate: null,         // Tanggal jatuh tempo
 });
+const cashAmount = ref(0); // Untuk mencatat uang tunai (DP sudah tidak dipakai di form)
 
 // --- COMPUTED ---
 const grandTotal = computed(() => {
@@ -63,9 +66,22 @@ const grandTotal = computed(() => {
 
 const totalItems = computed(() => cart.value.reduce((a, b) => a + (b.qty || 1), 0));
 
+const isCreditPurchase = computed(() => purchaseInfo.paymentMethod === 'CREDIT');
+
+const remainingBalance = computed(() => {
+    if (isCreditPurchase.value) return 0;
+    return cashAmount.value - grandTotal.value;
+});
+
 const canCheckout = computed(() => {
     if (cart.value.length === 0 || grandTotal.value <= 0) return false;
-    return true;
+    if (processing.value) return false;
+    
+    if (isCreditPurchase.value) {
+        return purchaseInfo.dueDate !== null; // Harus ada jatuh tempo jika hutang
+    } else {
+        return cashAmount.value >= grandTotal.value; // Uang harus pas/lebih jika tunai
+    }
 });
 
 const canProcessTransaction = computed(() => {
@@ -82,6 +98,21 @@ const gridContainerClass = computed(() => {
     if (gridColumns.value === 3) return 'grid grid-cols-2 md:grid-cols-3 gap-3';
     if (gridColumns.value === 5) return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3';
     return 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3';
+});
+
+// --- WATCHERS UNTUK METODE PEMBAYARAN ---
+watch(() => purchaseInfo.paymentMethod, (newMethod) => {
+    if (newMethod === 'CASH') {
+        cashAmount.value = grandTotal.value;
+    } else {
+        cashAmount.value = 0; // Set tunai ke 0 otomatis karena hutang penuh
+    }
+});
+
+watch(grandTotal, (newTotal) => {
+    if (purchaseInfo.paymentMethod === 'CASH') {
+        cashAmount.value = newTotal;
+    }
 });
 
 // --- ACTIONS & FORMATTERS ---
@@ -188,7 +219,6 @@ const processBarcodeScan = async () => {
     const code = searchQuery.value.trim();
     
     try {
-        // Asumsi API findByBarcode tersedia di composable
         const response = await productService.findByBarcode(code);
         const data = response?.data || response;
         
@@ -278,11 +308,14 @@ const onSearchKeydown = async (event) => {
     }
 };
 
-// --- CART LOGIC (FOOLPROOF) ---
+// --- CART LOGIC ---
 const openPurchaseModal = () => {
     if (cart.value.length === 0) {
         toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk terlebih dahulu', life: 2000 });
         return;
+    }
+    if (purchaseInfo.paymentMethod === 'CASH') {
+        cashAmount.value = grandTotal.value;
     }
     showPurchaseModal.value = true;
 };
@@ -363,37 +396,53 @@ const onProductCreated = async (newProduct) => {
 
 // --- TRANSACTION ---
 const processPurchase = async () => {
-    if (!canProcessTransaction.value) return;
+    if (!canProcessTransaction.value || !canCheckout.value) return;
 
     processing.value = true;
     try {
-        const itemsPayload = cart.value.map(item => ({
-            product_uuid: item.productUuid,
-            variant_uuid: item.variantUuid || null, 
-            unit_uuid: item.unitUuid,
-            qty: item.qty,
-            buy_price: item.buyPrice,
-            subtotal: item.qty * item.buyPrice,
-            item_name: item.name,
-            unit_name: item.unitName,
-            
-            supplier_uuid: item.supplierUuid,
-            warehouse_uuid: item.warehouseUuid,
+        // Ambil list supplier unik untuk menentukan global name
+        const uniqueSuppliers = [...new Set(cart.value.map(item => item.supplierUuid))];
+        let globalSupplierName = 'Multi Supplier';
+        if (uniqueSuppliers.length === 1 && uniqueSuppliers[0]) {
+            const sup = suppliers.value.find(s => s.uuid === uniqueSuppliers[0]);
+            if (sup) globalSupplierName = sup.username || sup.name || 'Unknown';
+        }
 
-            stok_product_uuid: item.productUuid,
-            stok_variant_uuid: item.variantUuid || null,
-            stok_unit: item.unitUuid,
-            stok_qty_plus: item.qty, 
-            stok_warehouse_uuid: item.warehouseUuid 
-        }));
+        const itemsPayload = cart.value.map(item => {
+            const sup = suppliers.value.find(s => s.uuid === item.supplierUuid);
+            return {
+                product_uuid: item.productUuid,
+                variant_uuid: item.variantUuid || null, 
+                unit_uuid: item.unitUuid,
+                qty: item.qty,
+                buy_price: item.buyPrice,
+                subtotal: item.qty * item.buyPrice,
+                item_name: item.name,
+                unit_name: item.unitName,
+                
+                supplier_uuid: item.supplierUuid, 
+                supplier_name: sup ? (sup.username || sup.name) : 'Unknown', 
+                warehouse_uuid: item.warehouseUuid,
+
+                stok_product_uuid: item.productUuid,
+                stok_variant_uuid: item.variantUuid || null,
+                stok_unit: item.unitUuid,
+                stok_qty_plus: item.qty, 
+                stok_warehouse_uuid: item.warehouseUuid 
+            }
+        });
 
         const payload = {
             details: {
                 grand_total: grandTotal.value,
-                supplier: 'Multi Supplier', 
+                supplier: globalSupplierName, 
                 reference_no: purchaseInfo.referenceNo || '-',
                 notes: purchaseInfo.notes,
-                payment_method: 'CASH', 
+                payment_method: purchaseInfo.paymentMethod,
+                is_credit: isCreditPurchase.value ? 'true' : 'false',
+                due_date: purchaseInfo.dueDate ? purchaseInfo.dueDate.toISOString().split('T')[0] : null,
+                amount_cash: cashAmount.value, 
+                amount_credit: isCreditPurchase.value ? (grandTotal.value - cashAmount.value) : 0,
                 total_items_count: cart.value.length,
                 items: itemsPayload 
             }
@@ -401,7 +450,7 @@ const processPurchase = async () => {
 
         await journalService.createBuyTransaction(payload);
         
-        toast.add({ severity: 'success', summary: 'Sukses', detail: 'Pembelian Tunai & Stok Masuk Berhasil Disimpan', life: 3000 });
+        toast.add({ severity: 'success', summary: 'Sukses', detail: 'Pembelian Berhasil Disimpan', life: 3000 });
         
         resetState();
         await loadProducts(); 
@@ -418,6 +467,9 @@ const resetState = () => {
     cart.value = [];
     purchaseInfo.referenceNo = '';
     purchaseInfo.notes = '';
+    purchaseInfo.paymentMethod = 'CASH';
+    purchaseInfo.dueDate = null;
+    cashAmount.value = 0;
     showPurchaseModal.value = false;
 };
 
@@ -727,7 +779,7 @@ defineExpose({ refreshData });
         <div class="bg-surface-0 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             
             <div class="flex justify-between items-center p-4 border-b border-surface-200 bg-surface-50">
-                <h3 class="font-bold text-lg">Penyelesaian Transaksi</h3>
+                <h3 class="font-bold text-lg">Penyelesaian Pembelian</h3>
                 <button @click="showPurchaseModal = false" class="text-surface-400 hover:text-surface-600 transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-200">
                     <i class="pi pi-times"></i>
                 </button>
@@ -735,37 +787,90 @@ defineExpose({ refreshData });
 
             <div class="p-5 overflow-y-auto scrollbar-thin space-y-4">
                 
-                <div class="text-center p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <span class="text-xs uppercase text-surface-500 tracking-widest font-bold">Total Pembayaran Lunas</span>
+                <div class="text-center p-4 bg-emerald-50 rounded-xl border border-emerald-100 relative overflow-hidden">
+                    <i class="pi pi-shopping-bag absolute -right-4 -bottom-4 text-8xl opacity-10 text-emerald-500"></i>
+                    <span class="text-xs uppercase text-surface-500 tracking-widest font-bold">Total Nilai Pembelian</span>
                     <div class="text-3xl font-black text-emerald-700 mt-1">
                         {{ formatCurrency(grandTotal) }}
                     </div>
                 </div>
 
-                <div class="space-y-3">
-                    <div class="space-y-1">
-                        <label class="text-xs font-bold text-surface-500 uppercase">No. Referensi / Nota Pembelian</label>
-                        <InputText v-model="purchaseInfo.referenceNo" placeholder="Contoh: INV-001 / Nota dari toko..." class="w-full !text-sm" />
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Metode Pembayaran</label>
+                        <SelectButton 
+                            v-model="purchaseInfo.paymentMethod" 
+                            :options="[{label:'Tunai Lunas', value:'CASH'}, {label:'Hutang (Kredit)', value:'CREDIT'}]" 
+                            optionLabel="label" 
+                            optionValue="value"
+                            class="w-full flex"
+                            :pt="{ button: { class: '!text-xs !py-2.5 flex-1' } }" 
+                        />
                     </div>
 
-                    <div class="space-y-1">
-                        <label class="text-xs font-bold text-surface-500 uppercase">Catatan Tambahan</label>
-                        <Textarea v-model="purchaseInfo.notes" rows="2" placeholder="Catatan opsional (Cth: Dikirim via kurir)..." class="w-full !text-sm resize-none" />
+                    <div v-if="isCreditPurchase" class="space-y-4 bg-orange-50/50 p-4 rounded-xl border border-orange-100 animate-fade-in-down">
+                        <div>
+                            <label class="text-xs font-bold text-orange-700 uppercase mb-1 block">Jatuh Tempo Pembayaran <span class="text-red-500">*</span></label>
+                            <Calendar v-model="purchaseInfo.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="w-full" inputClass="!text-sm" placeholder="Pilih Tanggal..." />
+                        </div>
+                    </div>
+
+                    <div v-else class="space-y-3 pt-2 animate-fade-in-down">
+                        <label class="text-xs font-bold text-surface-600 uppercase block">Nominal Tunai (Cash)</label>
+                        <InputNumber 
+                            v-model="cashAmount" 
+                            mode="currency" 
+                            currency="IDR" 
+                            locale="id-ID" 
+                            class="w-full" 
+                            inputClass="!text-2xl !py-3 !font-black !text-center text-emerald-600 focus:!ring-emerald-500 focus:border-emerald-500" 
+                        />
+                    </div>
+
+                    <div class="space-y-3 pt-2 border-t border-surface-100">
+                        <div>
+                            <label class="text-xs font-bold text-surface-500 uppercase block mb-1">No. Referensi / Nota Supplier</label>
+                            <InputText v-model="purchaseInfo.referenceNo" placeholder="Contoh: INV-SUP-001..." class="w-full !text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-surface-500 uppercase block mb-1">Catatan Tambahan</label>
+                            <Textarea v-model="purchaseInfo.notes" rows="2" placeholder="Catatan opsional..." class="w-full !text-sm resize-none" />
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 border-t border-surface-200 bg-surface-50 flex gap-3">
-                <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPurchaseModal = false" />
-                <Button 
-                    label="Simpan Pembelian & Stok" 
-                    :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" 
-                    class="flex-[2] font-bold"
-                    severity="success"
-                    :loading="processing" 
-                    :disabled="!canProcessTransaction"
-                    @click="processPurchase"
-                />
+            <div class="p-4 border-t border-surface-200 bg-surface-50 space-y-4">
+                <div class="flex justify-between items-center px-2" v-if="!isCreditPurchase">
+                    <span class="text-sm font-bold text-surface-600 uppercase tracking-wide">
+                        {{ remainingBalance < 0 ? 'Kurang Bayar' : 'Kembalian' }}
+                    </span>
+                    <span class="text-2xl font-black font-mono" :class="remainingBalance < 0 ? 'text-red-500' : 'text-emerald-500'">
+                        {{ formatCurrency(Math.abs(remainingBalance)) }}
+                    </span>
+                </div>
+                
+                <div class="flex justify-between items-center px-2" v-else>
+                    <span class="text-sm font-bold text-orange-600 uppercase tracking-wide">
+                        Total Hutang
+                    </span>
+                    <span class="text-2xl font-black font-mono text-orange-600">
+                        {{ formatCurrency(grandTotal) }}
+                    </span>
+                </div>
+
+                <div class="flex gap-3">
+                    <Button label="Batal" class="flex-1" severity="secondary" outlined @click="showPurchaseModal = false" />
+                    <Button 
+                        :label="isCreditPurchase ? 'Catat Hutang & Stok' : 'Simpan Lunas & Stok'" 
+                        :icon="processing ? 'pi pi-spinner pi-spin' : 'pi pi-check'" 
+                        class="flex-[2] font-bold"
+                        :severity="isCreditPurchase ? 'warning' : 'success'"
+                        :loading="processing" 
+                        :disabled="!canProcessTransaction || !canCheckout"
+                        @click="processPurchase"
+                    />
+                </div>
             </div>
         </div>
     </Dialog>

@@ -134,6 +134,20 @@ const formatCurrency = (value) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
 };
 
+// --- STATE BARU ---
+const showBreakModal = ref(false);
+const selectedProductToBreak = ref(null);
+
+// --- HANDLERS BARU ---
+const openBreakModal = (product) => {
+    selectedProductToBreak.value = product;
+    showBreakModal.value = true;
+};
+
+const handleBreakSuccess = () => {
+    fetchProducts(); // Refresh data setelah stok berhasil dipecah
+};
+
 defineExpose({ fetchProducts });
 
 onMounted(async () => {
@@ -242,9 +256,18 @@ onMounted(async () => {
                 </template>
             </Column>
 
-            <Column header="Aksi" alignFrozen="right" :exportable="false" style="min-width: 8rem">
+            <Column header="Aksi" alignFrozen="right" :exportable="false" style="min-width: 10rem">
                 <template #body="{ data }">
                     <div class="flex gap-2">
+                        <Button 
+                            icon="pi pi-clone" 
+                            text 
+                            rounded 
+                            severity="warning" 
+                            @click.stop="openBreakModal(data)" 
+                            v-tooltip.top="'Pecahkan Stok (Konversi)'" 
+                        />
+                        
                         <Button icon="pi pi-pencil" text rounded severity="info" @click.stop="editProduct(data)" v-tooltip.top="'Edit'" />
                         <Button icon="pi pi-trash" text rounded severity="danger" @click.stop="(e) => deleteProduct(e, data)" v-tooltip.top="'Hapus'" />
                     </div>
@@ -363,4 +386,10 @@ onMounted(async () => {
             </template>
         </DataTable>
     </div>
+
+    <ProductBreakModal 
+        v-model:visible="showBreakModal" 
+        :sourceProduct="selectedProductToBreak"
+        @success="handleBreakSuccess"
+    />
 </template>

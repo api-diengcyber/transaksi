@@ -1,13 +1,16 @@
 // transaksi-api/src/module/journal/journal.service.ts
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
-import { Repository, Like, Between } from 'typeorm';
+import { Repository, Like, Between, DataSource } from 'typeorm';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
+import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
 
 @Injectable()
 export class JournalService {
   constructor(
     @Inject('JOURNAL_REPOSITORY')
     private journalRepository: Repository<JournalEntity>,
+    @Inject('DATA_SOURCE')
+    private readonly dataSource: DataSource,
   ) { }
 
   async generateCode(prefix: string, storeUuid: string) {
@@ -34,50 +37,47 @@ export class JournalService {
     return { message: 'Journal verified successfully', journal };
   }
 
-  // DIUBAH MENJADI PUBLIC
   public toSnakeCase(str: string) {
       return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
   }
 
-  async findAllByType(typePrefix: string, storeUuid: string) {
-    const codePattern = `${typePrefix}-${storeUuid}-%`;
-    return await this.journalRepository.find({ 
-        where: { code: Like(`${codePattern}%`) }, 
-        relations: ['details'], 
-        order: { createdAt: 'DESC' } 
-    });
-  }
-
   async getChartData(startDate: string, endDate: string, storeUuid: string) {
-    const start = new Date(`${startDate}T00:00:00.000Z`);
-    const end = new Date(`${endDate}T23:59:59.999Z`);
+    const query = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndMapMany('journal.details', JournalDetailEntity, 'detail', 'detail.journalCode = journal.code')
+      .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
+      .andWhere('journal.createdAt BETWEEN :start AND :end', { 
+        start: `${startDate} 00:00:00`, 
+        end: `${endDate} 23:59:59` 
+      })
+      .orderBy('journal.createdAt', 'ASC');
 
-    const journals = await this.journalRepository.find({
-      where: { code: Like(`%-${storeUuid}-%`), createdAt: Between(start, end) },
-      relations: ['details'],
-      order: { createdAt: 'ASC' },
+    const journals = await query.getMany();
+
+    // Grouping data by date
+    const chartMap = new Map();
+
+    journals.forEach((j: any) => {
+      const date = j.createdAt.toISOString().split('T')[0];
+      if (!chartMap.has(date)) {
+        chartMap.set(date, { 
+          date, sale: 0, buy: 0, ret_sale: 0, ret_buy: 0, ap: 0, ar: 0 
+        });
+      }
+
+      const entry = chartMap.get(date);
+      const detailsMap = j.details.reduce((acc, curr) => { acc[curr.key] = curr.value; return acc; }, {});
+      
+      // Ambil nilai nominal (grand_total atau amount)
+      const value = Number(detailsMap['grand_total'] || detailsMap['amount'] || 0);
+
+      if (j.code.includes('SALE') && !j.code.includes('RET')) entry.sale += value;
+      else if (j.code.includes('BUY') && !j.code.includes('RET')) entry.buy += value;
+      else if (j.code.includes('RET_SALE')) entry.ret_sale += value;
+      else if (j.code.includes('RET_BUY')) entry.ret_buy += value;
+      else if (j.code.includes('AP') && !j.code.includes('PAY')) entry.ap += value;
+      else if (j.code.includes('AR') && !j.code.includes('PAY')) entry.ar += value;
     });
 
-    const dateMap = new Map<string, any>();
-    let currDate = new Date(start);
-    while (currDate <= end) {
-      const dateStr = currDate.toISOString().split('T')[0];
-      dateMap.set(dateStr, { date: dateStr, total_sale: 0, total_buy: 0, total_rt_sale: 0, total_rt_buy: 0 });
-      currDate.setDate(currDate.getDate() + 1);
-    }
-
-    for (const journal of journals) {
-      const dateStr = journal.createdAt.toISOString().split('T')[0];
-      const entry = dateMap.get(dateStr);
-      if (entry) {
-        const amountDetail = journal.details.find(d => d.key === 'amount' || d.key === 'grand_total');
-        const amount = amountDetail ? parseFloat(amountDetail.value) || 0 : 0;
-        if (journal.code.startsWith('SALE-')) entry.total_sale += amount;
-        else if (journal.code.startsWith('BUY-')) entry.total_buy += amount;
-        else if (journal.code.startsWith('RETURN_SALE-')) entry.total_rt_sale += amount;
-        else if (journal.code.startsWith('RETURN_BUY-')) entry.total_rt_buy += amount;
-      }
-    }
-    return Array.from(dateMap.values());
+    return Array.from(chartMap.values());
   }
 }

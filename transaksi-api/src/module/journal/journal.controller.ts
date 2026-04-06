@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestException, Req } from '@nestjs/common';
 import { JournalService } from './journal.service';
 import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
@@ -8,7 +8,9 @@ import { JournalSaleService } from './journal-sale.service';
 import { JournalStokService } from './journal-stok.service';
 import { JournalBuyService } from './journal-buy.service';
 import { JournalArService } from './journal-ar.service'; 
-import { JournalApService } from './journal-ap.service'; // <-- IMPORT AP SERVICE
+import { JournalApService } from './journal-ap.service';
+import { JournalReturnSaleService } from './journal-return-sale.service';
+import { JournalReturnBuyService } from './journal-return-buy.service';
 
 @ApiTags('Journal')
 @ApiBearerAuth()
@@ -21,7 +23,9 @@ export class JournalController {
     private readonly journalBuyService: JournalBuyService,
     private readonly journalStokService: JournalStokService,
     private readonly journalArService: JournalArService, 
-    private readonly journalApService: JournalApService, // <-- INJECT AP SERVICE
+    private readonly journalApService: JournalApService,
+    private readonly journalReturnSaleService: JournalReturnSaleService,
+    private readonly journalReturnBuyService: JournalReturnBuyService,
   ) {}
 
   // =========================================================================
@@ -100,18 +104,85 @@ export class JournalController {
     return this.journalApService.payAp(body.details, userId, storeUuid);
   }
 
+  @Post('return-sale')
+  @ApiOperation({ summary: 'Create return sale journal entry' })
+  async createReturnSale(
+    @Body() body: any,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return this.journalReturnSaleService.createReturnSale(body.details, userId, storeUuid);
+  }
+
+  @Post('return-buy')
+  @ApiOperation({ summary: 'Create return buy journal entry' })
+  async createReturnBuy(
+    @Body() body: any,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return this.journalReturnBuyService.createReturnBuy(body.details, userId, storeUuid);
+  }
+
   // =========================================================================
-  // LAPORAN & HISTORI
+  // LAPORAN & HISTORI (ROUTING DINAMIS KE MASING-MASING SERVICE)
   // =========================================================================
 
   @Get('report/:type')
-  @ApiOperation({ summary: 'Get journal report by type (e.g., SALE)' })
+  @ApiOperation({ summary: 'Get journal report by type (e.g., SALE, BUY, AP, AR)' })
   async getReport(
     @Param('type') type: string,
     @GetStore() storeUuid: string,
   ) {
-    return this.journalService.findAllByType(type, storeUuid);
+    // Normalisasi parameter untuk antisipasi huruf kecil/besar (misal 'buy' menjadi 'BUY')
+    const normalizedType = type.toUpperCase();
+
+    switch (normalizedType) {
+      case 'SALE':
+        return this.journalSaleService.getReport(storeUuid);
+      case 'BUY':
+        return this.journalBuyService.getReport(storeUuid);
+      case 'AP':
+        return this.journalApService.getReport(storeUuid);
+      case 'AR':
+        return this.journalArService.getReport(storeUuid);
+      case 'RET_SALE': 
+        return this.journalReturnSaleService.getReport(storeUuid);
+      case 'RET_BUY': 
+        return this.journalReturnBuyService.getReport(storeUuid);
+      default:
+        // Jika masih ada tipe jurnal lama/umum lainnya yang belum dipisah
+        // Anda bisa menyalakannya dengan memanggil findAllByType jika fungsi itu belum Anda hapus
+        // return this.journalService.findAllByType(normalizedType, storeUuid);
+        throw new BadRequestException(`Tipe report '${normalizedType}' tidak valid atau belum diimplementasikan.`);
+    }
   }
+
+  @Get('report-inventory')
+  async getInventoryReport(
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    const start = startDate || new Date().toISOString().split('T')[0];
+    const end = endDate || new Date().toISOString().split('T')[0];
+    return await this.journalStokService.getInventoryReport(storeUuid, start, end);
+  }
+
+  @Get('report-inventory/chart')
+  async getInventoryChart(
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return await this.journalStokService.getStockMovementChart(storeUuid, startDate, endDate);
+  }
+
+  // =========================================================================
+  // CHART & HISTORI GUDANG
+  // =========================================================================
   
   @Get('chart-data')
   async getChartData(
@@ -119,9 +190,7 @@ export class JournalController {
     @Query('endDate') endDate: string,
     @GetStore() storeUuid: string,
   ) {
-    if (!startDate || !endDate) {
-      return [];
-    }
+    if (!startDate || !endDate) return [];
     return this.journalService.getChartData(startDate, endDate, storeUuid);
   }
   

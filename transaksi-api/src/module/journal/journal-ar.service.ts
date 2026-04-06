@@ -102,4 +102,86 @@ export class JournalArService {
 
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
+
+  async getReport(storeUuid: string) {
+    // 1. Ambil semua jurnal yang berhubungan dengan Piutang (AR & PAY_AR)
+    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndMapMany(
+        'journal.details', 
+        JournalDetailEntity, 
+        'detail', 
+        'detail.journalCode = journal.code'
+      )
+      .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
+      .andWhere('journal.code LIKE :type', { type: `%AR%` }) // Menangkap 'AR' dan 'PAY_AR'
+      .orderBy('journal.createdAt', 'DESC')
+      .getMany();
+
+    // 2. Mapping detail ke dalam bentuk object agar mudah diakses
+    const formattedJournals = journals.map(journal => {
+      const detailsMap = (journal['details'] || []).reduce((acc: any, curr: any) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {});
+      return { ...journal, detailsMap };
+    });
+
+    // 3. Pisahkan Jurnal Induk (AR Murni) dan Jurnal Pembayaran (PAY_AR)
+    const mainAr = formattedJournals.filter(j => j.code.includes('AR') && !j.code.includes('PAY_AR'));
+    const payAr = formattedJournals.filter(j => j.code.includes('PAY_AR'));
+
+    // 4. Susun respons akhir yang sudah disarangkan (Nested)
+    return mainAr.map(main => {
+      // Cari semua pembayaran yang merujuk pada kode tagihan AR ini
+      const payments = payAr
+        .filter(p => p.detailsMap['reference_journal_code'] === main.code)
+        .map(p => ({
+          code: p.code,
+          date: p.createdAt,
+          amount: Number(p.detailsMap['amount'] || p.detailsMap['nominal_ar_paid'] || 0),
+          method: p.detailsMap['payment_method'] || 'CASH',
+          notes: p.detailsMap['notes'] || ''
+        }));
+
+      // Kalkulasi Keuangan
+      const total = Number(main.detailsMap['amount'] || main.detailsMap['grand_total'] || 0);
+      const dp = Number(main.detailsMap['dp_amount'] || main.detailsMap['amount_cash'] || 0);
+      const totalPaid = dp + payments.reduce((sum, p) => sum + p.amount, 0);
+
+      // Ekstrak Informasi Pelanggan
+      let memberName = main.detailsMap['member'] || main.detailsMap['member_name'] || main.detailsMap['customer'] || main.detailsMap['pelanggan'];
+      let memberUuid = main.detailsMap['member_uuid'] || main.detailsMap['customer_uuid'];
+
+      if (!memberName) {
+         const itemMemberKey = Object.keys(main.detailsMap).find(k => 
+           (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid')
+         );
+         if (itemMemberKey) memberName = main.detailsMap[itemMemberKey];
+      }
+
+      if (!memberUuid) {
+          const itemMemberUuidKey = Object.keys(main.detailsMap).find(k => k.startsWith('member_uuid#') || k.startsWith('customer_uuid#'));
+          if (itemMemberUuidKey) memberUuid = main.detailsMap[itemMemberUuidKey];
+      }
+
+      return {
+        uuid: main.uuid,
+        code: main.code,
+        date: main.createdAt,
+        type: 'AR',
+        total: total,
+        dp: dp,
+        paid: totalPaid,
+        remaining: total - totalPaid,
+        isPaidOff: (total - totalPaid) <= 0.01, // Lunas jika sisa <= 0
+        member: memberName || 'Pelanggan Umum / Tidak Diketahui',
+        memberUuid: memberUuid || null,
+        dueDate: main.detailsMap['due_date'] || null,
+        refCode: main.detailsMap['reference_journal_code'] || null, // Jurnal sumber (cth: SALE-xxx)
+        referenceNo: main.detailsMap['reference_no'] || null, // Nota eksternal (cth: INV-001)
+        notes: main.detailsMap['notes'] || '',
+        payments: payments // <--- KUNCI: Detail cicilan langsung disarangkan di sini
+      };
+    });
+  }
 }
