@@ -17,3 +17,4 @@ export const generateProductUuid = (storeUuid: string) => `${storeUuid}-PRC-${ge
 export const generateVariantUuid = (storeUuid: string) => `${storeUuid}-VRN-${generateLocalUuid()}`;
 export const generatePriceUuid = (storeUuid: string) => `${storeUuid}-PRC-${generateLocalUuid()}`;
 export const generatePriceGroupUuid = (storeUuid: string) => `${storeUuid}-PRCGRP-${generateLocalUuid()}`;
+export const generateBrandUuid = (storeUuid: string) => `${storeUuid}-BRD-${generateLocalUuid()}`;

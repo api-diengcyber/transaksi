@@ -133,6 +133,13 @@ export const useJournalService = () => {
             body: payload,
         });
     };
+    
+    const combineStock = async (payload: any) => {
+        return await useApi(`${API_BASE}/combine-stock`, {
+            method: 'POST',
+            body: payload,
+        });
+    };
 
     const getTransactionById = async (uuid: string) => {
         return await useApi(`${API_BASE}/${uuid}`, {
@@ -157,6 +164,7 @@ export const useJournalService = () => {
         findAllByType,
         findAll,
         breakStock,
+        combineStock,
         getTransactionById,
     };
 };

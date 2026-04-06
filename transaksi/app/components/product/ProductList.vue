@@ -211,17 +211,13 @@ onMounted(async () => {
                 </template>
             </Column>
 
-            <Column header="Kategori">
+            <Column header="Kategori & Merek">
                 <template #body="{ data }">
-                    <Tag :value="getCategoryName(data.categoryUuid)" severity="secondary" rounded />
-                </template>
-            </Column>
-
-            <Column header="Lokasi Rak">
-                <template #body="{ data }">
-                    <div class="text-xs text-surface-600">
-                        <i class="pi pi-map-marker text-[10px] mr-1"></i>
-                        {{ getShelveNames(data) }}
+                    <div class="flex flex-col items-start gap-1">
+                        <Tag :value="getCategoryName(data.categoryUuid)" severity="secondary" rounded class="!text-[10px]" />
+                        <span v-if="data.brand?.name" class="text-[10px] text-surface-500 font-medium">
+                            <i class="pi pi-bookmark text-[9px] mr-0.5"></i> {{ data.brand.name }}
+                        </span>
                     </div>
                 </template>
             </Column>
@@ -236,8 +232,20 @@ onMounted(async () => {
 
             <Column header="Stok">
                 <template #body="{ data }">
-                    <div class="font-bold" :class="(data.stock || 0) > 0 ? 'text-primary-600' : 'text-red-500'">
+                    <div v-if="data.isManageStock === false">
+                        <Tag value="Non-Fisik/Jasa" severity="contrast" class="!text-[9px]" />
+                    </div>
+                    <div v-else class="font-bold" :class="(data.stock || 0) > 0 ? 'text-primary-600' : 'text-red-500'">
                         {{ data.stock || 0 }}
+                    </div>
+                </template>
+            </Column>
+
+            <Column header="Lokasi Rak">
+                <template #body="{ data }">
+                    <div class="text-xs text-surface-600">
+                        <i class="pi pi-map-marker text-[10px] mr-1"></i>
+                        {{ getShelveNames(data) }}
                     </div>
                 </template>
             </Column>
@@ -265,7 +273,7 @@ onMounted(async () => {
                             rounded 
                             severity="warning" 
                             @click.stop="openBreakModal(data)" 
-                            v-tooltip.top="'Pecahkan Stok (Konversi)'" 
+                            v-tooltip.top="'Konversi Stok'" 
                         />
                         
                         <Button icon="pi pi-pencil" text rounded severity="info" @click.stop="editProduct(data)" v-tooltip.top="'Edit'" />

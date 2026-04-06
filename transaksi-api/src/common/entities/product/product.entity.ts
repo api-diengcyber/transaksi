@@ -16,6 +16,7 @@ import { ProductVariantEntity } from '../product_variant/product_variant.entity'
 import { UnitEntity } from '../unit/unit.entity';
 import { ProductPriceEntity } from '../product_price/product_price.entity';
 import { ShelveEntity } from '../shelve/shelve.entity';
+import { BrandEntity } from '../brand/brand.entity';
 
 @Entity('product')
 export class ProductEntity {
@@ -103,4 +104,14 @@ export class ProductEntity {
     orphanedRowAction: 'soft-delete' 
   })
   prices: ProductPriceEntity[];
+
+  @Column({ default: true })
+  isManageStock: boolean;
+
+  @ManyToOne(() => BrandEntity, (brand) => brand.products)
+  @JoinColumn({ name: 'brandUuid', referencedColumnName: 'uuid' })
+  brand: BrandEntity;
+
+  @Column({ nullable: true })
+  brandUuid: string;
 }

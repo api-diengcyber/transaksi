@@ -15,6 +15,7 @@ const shelveService = useShelveService();
 const unitService = useUnitService();
 const categoryService = useCategoryService();
 const priceGroupService = usePriceGroupService();
+const brandService = useBrandService(); // <-- [BARU] Inject Brand Service
 const toast = useToast();
 
 // --- STATE ---
@@ -26,14 +27,17 @@ const shelves = ref([]);
 const units = ref([]);
 const categories = ref([]);
 const priceGroups = ref([]);
+const brands = ref([]); // <-- [BARU] State Brands
 
-// Data Utama Produk (Sudah disederhanakan tanpa Parent/Child)
+// Data Utama Produk
 const product = reactive({ 
     name: '',
     barcode: '',
+    isManageStock: true, // <-- [BARU] True = Dengan Stok, False = Tanpa Stok (Jasa/Dll)
     stock: 0,
     unitUuid: null,
     categoryUuid: null,
+    brandUuid: null,     // <-- [BARU] Merek Opsional
     shelveUuids: [],
     prices: [],
     variants: []
@@ -64,19 +68,15 @@ const getPricePairs = (pricesArray) => {
 const initForm = () => {
     product.name = '';
     product.barcode = '';
+    product.isManageStock = true;
     product.stock = 0;
     product.unitUuid = null;
     product.categoryUuid = null;
+    product.brandUuid = null;
     product.shelveUuids = [];
     
     product.prices = priceGroups.value.map(pg => {
-        const isGrosir = pg.name.toLowerCase().includes('grosir');
-        return {
-            priceGroupUuid: pg.uuid,
-            name: pg.name,
-            price: 0,
-            minQty: 0
-        };
+        return { priceGroupUuid: pg.uuid, name: pg.name, price: 0, minQty: 0 };
     });
     
     product.variants = [];
@@ -89,10 +89,7 @@ const addVariant = () => {
         barcode: '', 
         stock: 0,
         prices: priceGroups.value.map(pg => ({
-            priceGroupUuid: pg.uuid,
-            name: pg.name,
-            price: 0,
-            minQty: 0
+            priceGroupUuid: pg.uuid, name: pg.name, price: 0, minQty: 0
         })) 
     });
 };
@@ -115,13 +112,15 @@ const loadDropdowns = async () => {
             shelveService.getAllShelves(),
             unitService.getAllUnits(),
             categoryService.getAllCategories(),
-            priceGroupService.getAllPriceGroups()
+            priceGroupService.getAllPriceGroups(),
+            brandService.getAllBrands() // <-- [BARU] Fetch Brands
         ]);
 
         shelves.value = results[0].status === 'fulfilled' ? extractArray(results[0].value) : [];
         units.value = results[1].status === 'fulfilled' ? extractArray(results[1].value) : [];
         categories.value = results[2].status === 'fulfilled' ? extractArray(results[2].value) : [];
         priceGroups.value = results[3].status === 'fulfilled' ? extractArray(results[3].value) : [];
+        brands.value = results[4].status === 'fulfilled' ? extractArray(results[4].value) : [];
     } catch (error) {
         console.error("Gagal memuat master:", error);
     }
@@ -137,9 +136,11 @@ const loadProductData = async (uuid) => {
 
         product.name = data.name || '';
         product.barcode = data.barcode || '';
+        product.isManageStock = data.isManageStock !== false; // Default true jika undefined
         product.stock = data.stock || 0;
         product.unitUuid = data.unitUuid || null;
         product.categoryUuid = data.categoryUuid || (data.category ? data.category.uuid : null); 
+        product.brandUuid = data.brandUuid || (data.brand ? data.brand.uuid : null); // <-- [BARU] Set Brand
 
         if (data.shelves && Array.isArray(data.shelves)) {
             product.shelveUuids = data.shelves.map(shelf => shelf.uuid);
@@ -151,24 +152,19 @@ const loadProductData = async (uuid) => {
             const savedPrice = data.prices?.find(p => p.priceGroupUuid === pg.uuid);
             return {
                 uuid: savedPrice?.uuid || null,
-                priceGroupUuid: pg.uuid,
-                name: pg.name,
+                priceGroupUuid: pg.uuid, name: pg.name,
                 price: savedPrice ? Number(savedPrice.price) : 0,
                 minQty: savedPrice ? Number(savedPrice.minQty) : 0
             };
         });
 
         product.variants = (data.variants || []).map(v => ({
-            uuid: v.uuid, 
-            name: v.name, 
-            barcode: v.barcode, 
-            stock: v.stock,
+            uuid: v.uuid, name: v.name, barcode: v.barcode, stock: v.stock,
             prices: priceGroups.value.map(pg => {
                 const savedVariantPrice = v.prices?.find(vp => vp.priceGroupUuid === pg.uuid);
                 return {
                     uuid: savedVariantPrice?.uuid || null,
-                    priceGroupUuid: pg.uuid,
-                    name: pg.name,
+                    priceGroupUuid: pg.uuid, name: pg.name,
                     price: savedVariantPrice ? Number(savedVariantPrice.price) : 0,
                     minQty: savedVariantPrice ? Number(savedVariantPrice.minQty) : 0
                 };
@@ -194,8 +190,9 @@ watch(() => props.visible, async (val) => {
 const saveProduct = async () => {
     submitted.value = true;
     
-    if (!product.name || !product.unitUuid || !product.categoryUuid || product.shelveUuids.length === 0) {
-        toast.add({ severity: 'warn', summary: 'Perhatian', detail: 'Nama, kategori, satuan, dan rak wajib diisi' });
+    // Brand opsional, tidak masuk validasi. isManageStock menentukan apakah shelve wajib.
+    if (!product.name || !product.unitUuid || !product.categoryUuid || (product.isManageStock && product.shelveUuids.length === 0)) {
+        toast.add({ severity: 'warn', summary: 'Perhatian', detail: 'Nama, kategori, satuan, dan rak (jika kelola stok) wajib diisi' });
         return;
     }
 
@@ -204,19 +201,21 @@ const saveProduct = async () => {
         const payload = {
             name: product.name,
             barcode: product.barcode,
-            stock: product.stock,
+            isManageStock: product.isManageStock, // <-- [BARU]
+            stock: product.isManageStock ? product.stock : 0, // Set 0 jika tidak dikelola
             unitUuid: product.unitUuid,
             categoryUuid: product.categoryUuid,
-            shelveUuids: product.shelveUuids,
+            brandUuid: product.brandUuid, // <-- [BARU]
+            shelveUuids: product.isManageStock ? product.shelveUuids : [],
             
-            // Harga dikosongkan jika ada varian
             prices: product.variants.length === 0 ? product.prices.map(p => ({
                 uuid: p.uuid, priceGroupUuid: p.priceGroupUuid, name: p.name, 
                 price: p.price, minQty: p.minQty
             })) : [],
 
             variants: product.variants.map(v => ({
-                uuid: v.uuid, name: v.name, barcode: v.barcode, stock: v.stock,
+                uuid: v.uuid, name: v.name, barcode: v.barcode, 
+                stock: product.isManageStock ? v.stock : 0, // Sama untuk varian
                 prices: v.prices.map(vp => ({
                     uuid: vp.uuid, priceGroupUuid: vp.priceGroupUuid, name: vp.name, 
                     price: vp.price, minQty: vp.minQty
@@ -258,45 +257,63 @@ const saveProduct = async () => {
         }"
     >
         <div class="flex flex-col gap-4">
-            <div class="field mb-0">
-                <label for="name" class="font-semibold text-sm mb-1.5 block text-surface-700">Nama Produk <span class="text-red-500">*</span></label>
-                <InputGroup>
-                    <InputGroupAddon class="!bg-surface-100"><i class="pi pi-tag text-surface-500"></i></InputGroupAddon>
-                    <InputText id="name" v-model="product.name" placeholder="Contoh: Kopi Kapal Api" :class="{'p-invalid': submitted && !product.name}" autofocus />
-                </InputGroup>
-            </div>
-
-            <div class="field mb-0">
-                <label for="barcode" class="font-semibold text-sm mb-1.5 block text-surface-700">Barcode / SKU</label>
-                <InputGroup>
-                    <InputGroupAddon class="!bg-surface-100"><i class="pi pi-barcode text-surface-500"></i></InputGroupAddon>
-                    <InputText id="barcode" v-model="product.barcode" placeholder="Scan atau ketik kode..." />
-                </InputGroup>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field mb-0">
-                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">Stok Utama</label>
-                    <InputNumber v-model="product.stock" placeholder="0" class="w-full" />
+                    <label for="name" class="font-semibold text-sm mb-1.5 block text-surface-700">Nama Produk <span class="text-red-500">*</span></label>
+                    <InputGroup>
+                        <InputGroupAddon class="!bg-surface-100"><i class="pi pi-tag text-surface-500"></i></InputGroupAddon>
+                        <InputText id="name" v-model="product.name" placeholder="Contoh: Kopi Kapal Api" :class="{'p-invalid': submitted && !product.name}" autofocus />
+                    </InputGroup>
+                </div>
+
+                <div class="field mb-0">
+                    <label for="barcode" class="font-semibold text-sm mb-1.5 block text-surface-700">Barcode / SKU</label>
+                    <InputGroup>
+                        <InputGroupAddon class="!bg-surface-100"><i class="pi pi-barcode text-surface-500"></i></InputGroupAddon>
+                        <InputText id="barcode" v-model="product.barcode" placeholder="Scan atau ketik kode..." />
+                    </InputGroup>
+                </div>
+            </div>
+
+            <div class="bg-surface-50 p-3 rounded-lg border border-surface-200 mb-2 flex items-center justify-between">
+                <div>
+                    <h4 class="text-sm font-bold text-surface-800">Manajemen Stok</h4>
+                    <p class="text-xs text-surface-500">Pilih "Tanpa Stok" jika ini adalah Jasa atau barang Non-Fisik.</p>
+                </div>
+                <SelectButton v-model="product.isManageStock" :options="[{label: 'Dengan Stok', value: true}, {label: 'Tanpa Stok', value: false}]" optionLabel="label" optionValue="value" class="!text-xs" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1 border-b border-surface-200 pb-4">
+                <div class="field mb-0">
+                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">Kategori <span class="text-red-500">*</span></label>
+                    <Dropdown v-model="product.categoryUuid" :options="categories" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Kategori" :class="{'p-invalid': submitted && !product.categoryUuid}" class="w-full" />
                 </div>
                 
+                <div class="field mb-0">
+                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">Merek (Opsional)</label>
+                    <Dropdown v-model="product.brandUuid" :options="brands" optionLabel="name" optionValue="uuid" filter showClear placeholder="Pilih Merek" class="w-full" />
+                </div>
+
                 <div class="field mb-0">
                     <label class="font-semibold text-sm mb-1.5 block text-surface-700">Satuan <span class="text-red-500">*</span></label>
                     <Dropdown v-model="product.unitUuid" :options="units" optionLabel="name" optionValue="uuid" placeholder="Pilih Satuan" :class="{'p-invalid': submitted && !product.unitUuid}" class="w-full" />
                 </div>
 
-                <div class="field mb-0">
-                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">Kategori <span class="text-red-500">*</span></label>
-                    <Dropdown v-model="product.categoryUuid" :options="categories" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Kategori" :class="{'p-invalid': submitted && !product.categoryUuid}" class="w-full" />
-                </div>
+                <template v-if="product.isManageStock">
+                    <div class="field mb-0 col-span-1">
+                        <label class="font-semibold text-sm mb-1.5 block text-surface-700">Stok Awal Utama</label>
+                        <InputNumber v-model="product.stock" placeholder="0" class="w-full" />
+                    </div>
 
-                <div class="field mb-0 col-span-1 sm:col-span-3">
-                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">Rak / Lokasi (Bisa Multi) <span class="text-red-500">*</span></label>
-                    <MultiSelect v-model="product.shelveUuids" :options="shelves" optionLabel="name" optionValue="uuid" placeholder="Pilih Rak" display="chip" :class="{'p-invalid': submitted && product.shelveUuids.length === 0}" class="w-full" />
-                </div>
+                    <div class="field mb-0 col-span-1 sm:col-span-2">
+                        <label class="font-semibold text-sm mb-1.5 block text-surface-700">Rak / Lokasi (Bisa Multi) <span class="text-red-500">*</span></label>
+                        <MultiSelect v-model="product.shelveUuids" :options="shelves" optionLabel="name" optionValue="uuid" placeholder="Pilih Rak" display="chip" :class="{'p-invalid': submitted && product.shelveUuids.length === 0}" class="w-full" />
+                    </div>
+                </template>
             </div>
 
-            <div v-if="product.variants.length === 0" class="mt-4 pt-4 border-t border-surface-200">
+            <div v-if="product.variants.length === 0" class="mt-4">
                 <div class="mb-3">
                     <h3 class="font-semibold text-surface-800 text-sm">Pengaturan Harga & Grosir</h3>
                     <p class="text-xs text-surface-500 mt-0.5">Isi Min Grosir > 0 untuk memunculkan kolom Harga Grosir.</p>
@@ -305,17 +322,14 @@ const saveProduct = async () => {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-surface-50 p-4 border border-surface-200 rounded-lg">
                     <div v-for="(pair, idx) in getPricePairs(product.prices)" :key="idx" class="field mb-0 bg-surface-0 p-4 rounded-xl border border-surface-200 shadow-sm flex flex-col gap-3">
                         <label class="text-[11px] font-bold uppercase text-primary-700 border-b border-surface-100 pb-2">{{ pair.base.name }}</label>
-                        
                         <div class="flex items-center gap-3">
                             <span class="text-xs font-semibold text-surface-600 w-24">Harga Satuan</span>
                             <InputNumber v-model="pair.base.price" mode="currency" currency="IDR" locale="id-ID" placeholder="Rp" class="flex-1 p-inputtext-sm" />
                         </div>
-
                         <template v-if="pair.grosir">
                             <div class="flex items-center gap-3">
                                 <span class="text-xs font-semibold text-surface-600 w-24">Min Grosir</span>
                                 <InputNumber v-model="pair.grosir.minQty" placeholder="0" class="w-24 p-inputtext-sm" inputClass="!text-center !font-bold" :min="0" />
-                                <span class="text-[10px] text-surface-400 italic flex-1">Isi > 0 u/ grosir</span>
                             </div>
                             <div v-if="pair.grosir.minQty > 0" class="flex items-center gap-3 mt-1 pt-3 border-t border-dashed border-surface-200 animate-fade-in">
                                 <span class="text-xs font-bold text-orange-600 w-24">Harga Grosir</span>
@@ -330,13 +344,8 @@ const saveProduct = async () => {
                 <div class="flex justify-between items-center mb-3">
                     <div>
                         <h3 class="font-semibold text-surface-800 text-sm">Varian Produk</h3>
-                        <p class="text-xs text-surface-500 mt-0.5">Tambah variasi Warna/Ukuran dengan harga masing-masing.</p>
                     </div>
                     <Button label="Tambah Varian" icon="pi pi-plus" size="small" outlined severity="secondary" @click="addVariant" />
-                </div>
-
-                <div v-if="product.variants.length === 0" class="text-center py-4 text-surface-400 text-sm border border-dashed rounded-lg border-surface-300 bg-surface-50">
-                    Tidak ada varian khusus.
                 </div>
 
                 <div v-for="(variant, vIdx) in product.variants" :key="vIdx" class="p-4 border border-surface-200 rounded-xl mb-4 bg-surface-50 relative animate-fade-in shadow-sm">
@@ -351,7 +360,7 @@ const saveProduct = async () => {
                             <label class="text-xs font-semibold mb-1 block">Barcode Varian</label>
                             <InputText v-model="variant.barcode" placeholder="Scan barcode..." class="w-full" />
                         </div>
-                        <div class="field mb-0">
+                        <div v-if="product.isManageStock" class="field mb-0">
                             <label class="text-xs font-semibold mb-1 block">Stok Varian</label>
                             <InputNumber v-model="variant.stock" placeholder="0" class="w-full" />
                         </div>
@@ -360,7 +369,7 @@ const saveProduct = async () => {
                     <div class="bg-surface-0 p-3 rounded-lg border border-surface-200">
                         <div class="text-xs font-bold text-primary-600 mb-3 uppercase border-b border-surface-100 pb-2">Harga Varian: {{ variant.name || 'Baru' }}</div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div v-for="(pair, idx) in getPricePairs(variant.prices)" :key="idx" class="field mb-0 bg-surface-50 p-3 rounded-lg border border-surface-100 flex flex-col gap-2 shadow-sm">
+                            <div v-for="(pair, idx) in getPricePairs(variant.prices)" :key="idx" class="field mb-0 bg-surface-50 p-3 rounded-lg border border-surface-100 flex flex-col gap-2">
                                 <label class="text-[10px] font-bold text-surface-500 uppercase border-b border-surface-200 pb-1">{{ pair.base.name }}</label>
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="text-[10px] font-semibold text-surface-600 w-16">Harga</span>
@@ -371,7 +380,7 @@ const saveProduct = async () => {
                                         <span class="text-[10px] font-semibold text-surface-600 w-16">Min Gros</span>
                                         <InputNumber v-model="pair.grosir.minQty" class="p-inputtext-sm w-20" :min="0" />
                                     </div>
-                                    <div v-if="pair.grosir.minQty > 0" class="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-dashed border-surface-200 animate-fade-in">
+                                    <div v-if="pair.grosir.minQty > 0" class="flex items-center justify-between gap-2 mt-1 pt-2 border-t border-dashed border-surface-200">
                                         <span class="text-[10px] font-bold text-orange-600 w-16">Hrg Grosir</span>
                                         <InputNumber v-model="pair.grosir.price" mode="currency" currency="IDR" locale="id-ID" class="p-inputtext-sm flex-1" inputClass="!font-bold !text-orange-700 !bg-orange-50" />
                                     </div>
@@ -391,10 +400,3 @@ const saveProduct = async () => {
         </template>
     </Dialog>
 </template>
-
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-.animate-fade-in { animation: fadeIn 0.2s ease-in-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-</style>

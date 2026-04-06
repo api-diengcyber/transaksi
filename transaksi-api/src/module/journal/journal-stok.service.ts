@@ -517,4 +517,70 @@ export class JournalStokService {
         };
     });
   }
+
+  async combineStock(payload: any, userId: string, storeUuid: string) {
+    const { 
+        sourceProductUuid, sourceVariantUuid, 
+        targetProductUuid, targetVariantUuid, 
+        qtyAction, conversionVal 
+    } = payload;
+
+    return await this.dataSource.transaction(async (manager) => {
+        // 1. Ambil info produk beserta relasi Rak dan Gudang
+        const source = await manager.getRepository('ProductEntity').findOne({ 
+            where: { uuid: sourceProductUuid },
+            relations: ['shelves', 'shelves.warehouse'] 
+        });
+        
+        const target = await manager.getRepository('ProductEntity').findOne({ 
+            where: { uuid: targetProductUuid },
+            relations: ['shelves', 'shelves.warehouse']
+        });
+
+        if (!source || !target) {
+            throw new Error('Produk sumber atau tujuan tidak ditemukan di database.');
+        }
+
+        // 2. Cari Warehouse UUID dan Shelve UUID dari Rak Default (Index 0)
+        const sourceShelveUuid = source.shelves && source.shelves.length > 0 ? source.shelves[0].uuid : null;
+        const sourceWarehouseUuid = source.shelves && source.shelves.length > 0 
+            ? (source.shelves[0].warehouse?.uuid || source.shelves[0].warehouseUuid) : storeUuid;
+
+        const targetShelveUuid = target.shelves && target.shelves.length > 0 ? target.shelves[0].uuid : null;
+        const targetWarehouseUuid = target.shelves && target.shelves.length > 0 
+            ? (target.shelves[0].warehouse?.uuid || target.shelves[0].warehouseUuid) : storeUuid;
+
+        // 3. STOK KELUAR dari Produk Sumber (Unit Eceran / Kecil)
+        // Logika: Jika ingin membuat 1 Dus (isi 12), maka Pcs yang keluar adalah 1 * 12 = 12
+        const totalDeduct = qtyAction * conversionVal;
+        
+        await this.stockOut([{
+            productUuid: sourceProductUuid,
+            variantUuid: sourceVariantUuid,
+            unitUuid: source.unitUuid,       // Unit sumber (Misal: Pcs)
+            shelveUuid: sourceShelveUuid,    
+            qty: totalDeduct,                // Jumlah yang dikurangi = qty * conversion
+            warehouseUuid: sourceWarehouseUuid 
+        }], userId, manager, storeUuid, `Gabung stok ke: ${target.name}`);
+
+        // 4. STOK MASUK ke Produk Tujuan (Unit Besar)
+        // Logika: Jumlah Dus yang jadi/masuk adalah qtyAction (Misal: 1)
+        await this.stockIn([{
+            productUuid: targetProductUuid,
+            variantUuid: targetVariantUuid,
+            unitUuid: target.unitUuid,       // Unit tujuan (Misal: Dus)
+            shelveUuid: targetShelveUuid,    
+            qty: qtyAction,                  // Jumlah yang ditambah = qtyAction
+            warehouseUuid: targetWarehouseUuid 
+        }], userId, manager, storeUuid, `Gabung stok dari: ${source.name}`);
+
+        return { 
+            message: 'Penggabungan stok berhasil', 
+            addedQty: qtyAction,
+            deductedQty: totalDeduct,
+            sourceWarehouse: sourceWarehouseUuid,
+            targetWarehouse: targetWarehouseUuid
+        };
+    });
+  }
 }

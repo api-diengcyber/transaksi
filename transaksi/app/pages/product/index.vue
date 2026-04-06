@@ -8,20 +8,23 @@ import ProductList from '~/components/product/ProductList.vue';
 import CategoryList from '~/components/category/CategoryList.vue';
 import ShelveList from '~/components/shelve/ShelveList.vue';
 import UnitList from '~/components/unit/UnitList.vue';
+import BrandList from '~/components/brand/BrandList.vue'; // <-- [BARU] Import Brand List
 
 // Import Modal Form
 import ProductCreateModal from '~/components/product/ProductCreateModal.vue';
 import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue';
-import UnitCreateModal from '~/components/unit/UnitCreateModal.vue'; // <-- Import Unit Modal
+import UnitCreateModal from '~/components/unit/UnitCreateModal.vue'; 
+import BrandCreateModal from '~/components/brand/BrandCreateModal.vue'; // <-- [BARU] Import Brand Modal
 
 // --- STATE ---
-const activeMainTab = ref('products'); // 'products' | 'categories' | 'shelves' | 'units'
+const activeMainTab = ref('products'); // 'products' | 'categories' | 'shelves' | 'units' | 'brands'
 
 // Refs ke Child Components (agar bisa panggil method refresh() mereka)
 const productListRef = ref(null);
 const categoryListRef = ref(null);
 const shelfListRef = ref(null);
-const unitListRef = ref(null); // <-- Ref untuk UnitList
+const unitListRef = ref(null); 
+const brandListRef = ref(null); // <-- [BARU] Ref untuk BrandList
 
 // State Modal Produk
 const showModal = ref(false);
@@ -35,6 +38,10 @@ const selectedShelveData = ref(null);
 const showUnitModal = ref(false);
 const selectedUnitData = ref(null);
 
+// State Modal Merek (Brand)
+const showBrandModal = ref(false); // <-- [BARU]
+const selectedBrandData = ref(null); // <-- [BARU]
+
 // --- HANDLERS: PRODUK ---
 const openCreateProduct = () => {
     selectedProductUuid.value = null;
@@ -46,11 +53,9 @@ const openEditProduct = (product) => {
     showModal.value = true;
 };
 
-// --- HANDLERS: PRODUK ---
 const onProductSaved = () => {
     // Refresh data tabel produk tanpa reload halaman
     if (productListRef.value) {
-        // UBAH BARIS INI: dari refresh() menjadi fetchProducts()
         productListRef.value.fetchProducts(); 
     }
 };
@@ -62,13 +67,11 @@ const openCreateShelve = () => {
 };
 
 const openEditShelve = (shelf) => {
-    // Clone object agar data di grid tidak berubah real-time saat diketik di form
     selectedShelveData.value = { ...shelf };
     showShelveModal.value = true;
 };
 
 const onShelveSaved = () => {
-    // Refresh data grid rak
     if (shelfListRef.value) {
         shelfListRef.value.refresh();
     }
@@ -93,6 +96,26 @@ const onUnitSaved = () => {
     showUnitModal.value = false;
 };
 
+// --- HANDLERS: MEREK (BRAND) [BARU] ---
+const openCreateBrand = () => {
+    selectedBrandData.value = null;
+    showBrandModal.value = true;
+};
+
+const openEditBrand = (brand) => {
+    selectedBrandData.value = { ...brand };
+    showBrandModal.value = true;
+};
+
+const onBrandSaved = () => {
+    if (brandListRef.value) {
+        // Asumsi di dalam BrandList.vue Anda membuat fungsi expose refresh() atau fetchBrands()
+        // Sesuaikan dengan nama fungsi yang ada di dalam komponen BrandList Anda
+        brandListRef.value.fetchBrands ? brandListRef.value.fetchBrands() : brandListRef.value.refresh();
+    }
+    showBrandModal.value = false;
+};
+
 // --- UTILS ---
 const getTabClass = (tabName) => {
     return activeMainTab.value === tabName
@@ -108,7 +131,7 @@ definePageMeta({ layout: 'default' });
         <Toast />
         <ConfirmDialog />
 
-        <div class="flex items-end gap-3 mb-6 border-b border-surface-300">
+        <div class="flex flex-wrap items-end gap-3 mb-6 border-b border-surface-300">
 
             <button 
                 @click="activeMainTab = 'products'"
@@ -122,6 +145,13 @@ definePageMeta({ layout: 'default' });
                 :class="getTabClass('categories')"
             >
                 <i class="pi pi-tags"></i> Kategori
+            </button>
+            
+            <button 
+                @click="activeMainTab = 'brands'"
+                :class="getTabClass('brands')"
+            >
+                <i class="pi pi-bookmark"></i> Merek
             </button>
             
             <button 
@@ -140,7 +170,6 @@ definePageMeta({ layout: 'default' });
 
         </div>
 
-
         <div class="content-area">
             <KeepAlive>
             
@@ -154,6 +183,13 @@ definePageMeta({ layout: 'default' });
                 <CategoryList
                     v-else-if="activeMainTab === 'categories'"
                     ref="categoryListRef"
+                />
+
+                <BrandList 
+                    v-else-if="activeMainTab === 'brands'"
+                    ref="brandListRef"
+                    @create="openCreateBrand" 
+                    @edit="openEditBrand"
                 />
 
                 <UnitList 
@@ -180,6 +216,12 @@ definePageMeta({ layout: 'default' });
             :productUuid="selectedProductUuid" 
             @product-created="onProductSaved" 
             @product-updated="onProductSaved" 
+        />
+
+        <BrandCreateModal 
+            v-model:visible="showBrandModal" 
+            :editData="selectedBrandData" 
+            @saved="onBrandSaved" 
         />
 
         <UnitCreateModal 
@@ -217,6 +259,5 @@ button {
     to { opacity: 1; transform: translateY(0); }
 }
 /* Catatan: Class .global-tab-active dan .global-tab-inactive sudah didefinisikan 
-   di base.css dan menggunakan  dan  
-   yang menjamin dukungan Dark Mode pada tombol tab. */
+   di base.css dan menggunakan dukungan Dark Mode pada tombol tab. */
 </style>

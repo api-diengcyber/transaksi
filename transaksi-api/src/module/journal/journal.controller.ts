@@ -230,6 +230,15 @@ export class JournalController {
     return await this.journalStokService.breakStock(payload, userId, storeUuid);
   }
 
+  @Post('combine-stock')
+  async combineStock(
+    @Body() payload: any, 
+    @GetUser('uuid') userId: string, 
+    @GetStore() storeUuid: string,
+  ) {
+    return await this.journalStokService.combineStock(payload, userId, storeUuid);
+  }
+
   @Get(':uuid')
   async getJournalByUuid(@Param('uuid') uuid: string) {
     return await this.journalService.getJournalByUuid(uuid);

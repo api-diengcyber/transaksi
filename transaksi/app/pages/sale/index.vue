@@ -5,6 +5,7 @@ import { useAuthStore } from '~/stores/auth.store';
 import { useProductService } from '~/composables/useProductService';
 import { useJournalService } from '~/composables/useJournalService';
 import { useCategoryService } from '~/composables/useCategoryService';
+import { useBrandService } from '~/composables/useBrandService'; // <-- [BARU] Import Brand Service
 import { useMemberService } from '~/composables/useMemberService'; 
 import { useTableService } from '~/composables/useTableService';
 import { useShelveService } from '~/composables/useShelveService';
@@ -16,6 +17,7 @@ const ProductCreateModal = defineAsyncComponent(() => import('~/components/produ
 const productService = useProductService();
 const journalService = useJournalService();
 const categoryService = useCategoryService();
+const brandService = useBrandService(); // <-- [BARU] Init Brand Service
 const memberService = useMemberService(); 
 const tableService = useTableService();
 const shelveService = useShelveService(); 
@@ -47,6 +49,8 @@ const viewMode = ref('grid');
 const gridColumns = ref(4); 
 const categories = ref([]); 
 const selectedCategoryUuids = ref([]);
+const brands = ref([]); // <-- [BARU] State Brands
+const selectedBrandUuids = ref([]); // <-- [BARU] State Filter Brand
 
 // --- DATA MASTER ---
 const members = ref([]); 
@@ -115,11 +119,9 @@ const canCheckout = computed(() => {
     if (processing.value) return false;
     
     if (isCreditSale.value) {
-        // Jika kredit, harus ada member/nama pelanggan dan tanggal jatuh tempo
         const hasCustomer = transactionMeta.memberUuid || transactionMeta.customerName.trim() !== '';
         return hasCustomer && transactionMeta.dueDate;
     } else {
-        // Jika cash, uang tidak boleh kurang (kecuali mau dicatat sisa piutangnya lewat cashAmount, tapi di sini kita cegah)
         return cashAmount.value >= grandTotal.value;
     }
 });
@@ -225,7 +227,6 @@ const recalculateItemPrice = (item) => {
     }
 };
 
-// --- WATCHER AUTO-SWITCH HARGA MEMBER ---
 watch(() => transactionMeta.memberUuid, (newMemberUuid) => {
     cart.value.forEach(item => {
         if (item.isCustomPrice) return;
@@ -248,12 +249,11 @@ watch(() => transactionMeta.memberUuid, (newMemberUuid) => {
     }
 });
 
-// Watcher untuk mereset cash saat ganti metode
 watch(() => transactionMeta.paymentMethod, (newMethod) => {
     if (newMethod === 'CASH') {
         cashAmount.value = grandTotal.value;
     } else {
-        cashAmount.value = 0; // Jika kredit, set 0 di awal (bisa diisi DP nantinya)
+        cashAmount.value = 0; 
     }
 });
 
@@ -419,8 +419,6 @@ const processCheckout = async (isPrint = false) => {
 
         const response = await journalService.createSaleTransaction(payload);
         
-        // --- PERBAIKAN DI SINI ---
-        // Mengambil UUID dari dalam object 'journal'
         const transactionUuid = response?.data?.journal?.uuid || response?.journal?.uuid;
         
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Transaksi Berhasil Disimpan', life: 3000 });
@@ -429,15 +427,11 @@ const processCheckout = async (isPrint = false) => {
         resetState(); 
         await loadProducts(); 
 
-        // LOGIKA CETAK NOTA
         if (isPrint) {
             if (transactionUuid) {
                 const printWindow = window.open(`/#/receipt/${transactionUuid}`, '_blank');
-                
                 if (!printWindow) {
-
                     const printWindow2 = window.open(`/receipt/${transactionUuid}`, '_blank');
-
                     if (!printWindow2) {
                         toast.add({ 
                             severity: 'warn', 
@@ -448,15 +442,9 @@ const processCheckout = async (isPrint = false) => {
                     }
                 }
             } else {
-                toast.add({ 
-                    severity: 'error', 
-                    summary: 'Gagal Cetak', 
-                    detail: 'Gagal mengambil ID struk untuk dicetak.', 
-                    life: 4000 
-                });
+                toast.add({ severity: 'error', summary: 'Gagal Cetak', detail: 'Gagal mengambil ID struk untuk dicetak.', life: 4000 });
             }
         }
-
     } catch (e) {
         console.error(e); 
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memproses transaksi', life: 3000 });
@@ -466,24 +454,32 @@ const processCheckout = async (isPrint = false) => {
 };
 
 // --- DATA FETCHING & FILTERING ---
-const fetchCategories = async () => { 
+const fetchCategoriesAndBrands = async () => { 
     try { 
-        const res = await categoryService.getAllCategorys(); 
-        categories.value = res?.data?.data || res?.data || res || [];
+        const [catRes, brandRes] = await Promise.all([
+            categoryService.getAllCategories(),
+            brandService.getAllBrands()
+        ]);
+        categories.value = catRes?.data?.data || catRes?.data || catRes || [];
+        brands.value = brandRes?.data?.data || brandRes?.data || brandRes || [];
     } catch (e) {} 
 };
 
 const loadProducts = async () => {
     loading.value = true; products.value = []; 
     try {
-        const response = await productService.getAllProducts(currentPage.value, limit, searchQuery.value.toLowerCase().trim(), selectedCategoryUuids.value.join(','));
+        const response = await productService.getAllProducts(currentPage.value, limit, searchQuery.value.toLowerCase().trim());
         const rawProducts = response?.data || response || [];
         products.value = rawProducts.map(p => ({ 
             ...p, 
             prices: p.prices || [], 
             variants: p.variants || [], 
             unit: p.unit || null, 
-            categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean) 
+            categoryUuids: (p.productCategory || []).map(pc => pc.category?.uuid).filter(Boolean),
+            categoryUuid: p.categoryUuid || p.category?.uuid, // Fallback ke category utama
+            categoryName: p.category?.name || '',
+            brandUuid: p.brandUuid || p.brand?.uuid, // Map brand
+            brandName: p.brand?.name || ''
         }));
         totalPages.value = response?.meta?.totalPage || 1; 
         totalProducts.value = response?.meta?.total || 0;
@@ -508,6 +504,21 @@ const handleLocalFiltering = (isApiLoad = false) => {
             );
         }
     }
+
+    // Filter Kategori Lokal
+    if (selectedCategoryUuids.value.length > 0) {
+        result = result.filter(p => {
+            const uuids = p.categoryUuids || [];
+            if (p.categoryUuid && !uuids.includes(p.categoryUuid)) uuids.push(p.categoryUuid);
+            return uuids.some(c => selectedCategoryUuids.value.includes(c));
+        });
+    }
+
+    // Filter Merek Lokal
+    if (selectedBrandUuids.value.length > 0) {
+        result = result.filter(p => selectedBrandUuids.value.includes(p.brandUuid));
+    }
+
     filteredProducts.value = result;
 };
 
@@ -530,7 +541,7 @@ const onTableClick = (table) => {
 
 // --- INIT ---
 onMounted(async () => {
-    await fetchCategories(); 
+    await fetchCategoriesAndBrands(); 
     await loadProducts(); 
     
     try { 
@@ -570,7 +581,10 @@ defineExpose({ refreshData });
             </div>
             
             <div class="p-3 border-b border-surface-100 flex flex-col md:flex-row gap-2 bg-surface-0">
-                <MultiSelect v-model="selectedCategoryUuids" :options="categories" optionLabel="name" optionValue="uuid" placeholder="Filter Kategori" display="chip" :maxSelectedLabels="1" class="w-full md:w-48 !h-10 !text-sm" />
+                <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto shrink-0">
+                    <MultiSelect v-model="selectedCategoryUuids" :options="categories" optionLabel="name" optionValue="uuid" placeholder="Filter Kategori" display="chip" :maxSelectedLabels="1" class="w-full sm:w-40 !h-10 !text-sm" @change="handleLocalFiltering(false)" />
+                    <MultiSelect v-model="selectedBrandUuids" :options="brands" optionLabel="name" optionValue="uuid" placeholder="Filter Merek" display="chip" :maxSelectedLabels="1" class="w-full sm:w-40 !h-10 !text-sm" @change="handleLocalFiltering(false)" />
+                </div>
                 
                 <div class="relative flex-1 flex gap-2">
                     <div class="relative flex-1">
@@ -595,7 +609,7 @@ defineExpose({ refreshData });
                     />
                 </div>
                 
-                 <div class="flex gap-1 bg-surface-100 rounded-lg p-1 h-10 border border-surface-200">
+                 <div class="flex gap-1 bg-surface-100 rounded-lg p-1 h-10 border border-surface-200 shrink-0">
                     <button @click="viewMode = 'list'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'list' ? 'bg-surface-0 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-list text-sm"></i></button>
                     <button @click="viewMode = 'grid'" class="w-8 h-full rounded flex items-center justify-center transition" :class="viewMode === 'grid' ? 'bg-surface-0 shadow text-primary-600' : 'text-surface-400'"><i class="pi pi-th-large text-sm"></i></button>
                     <div v-if="viewMode === 'grid'" class="flex gap-1 ml-1 border-l pl-1 border-surface-300">
@@ -621,17 +635,24 @@ defineExpose({ refreshData });
                     <div v-if="loading" class="flex justify-center p-10"><ProgressSpinner style="width: 40px; height: 40px" /></div>
                     
                     <div v-else-if="filteredProducts.length > 0" :class="gridContainerClass">
-                        <div v-for="prod in filteredProducts" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 border border-surface-200 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-32' : 'p-2 flex items-center justify-between gap-3 h-16'">
+                        <div v-for="prod in filteredProducts" :key="prod.uuid" @click="addToCart(prod)" class="group relative bg-surface-0 border border-surface-200 rounded-xl cursor-pointer hover:border-primary-400 hover:shadow-md transition-all active:scale-95 select-none" :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-36' : 'p-2 flex items-center justify-between gap-3 h-16'">
                             
                             <div v-if="viewMode === 'grid'" class="flex flex-col h-full justify-between">
                                 <div>
                                     <div class="text-xs font-bold line-clamp-2 mb-1 pr-1 group-hover:text-primary-600 transition">{{ prod.name }}</div>
                                     <div class="text-[9px] text-surface-400 font-mono mb-1 truncate"><i class="pi pi-barcode mr-1"></i>{{ prod.barcode || 'N/A' }}</div>
+                                    
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        <span v-if="prod.categoryName" class="text-[8px] bg-surface-100 text-surface-500 px-1.5 py-0.5 rounded border border-surface-200">{{ prod.categoryName }}</span>
+                                        <span v-if="prod.brandName" class="text-[8px] bg-surface-100 text-surface-500 px-1.5 py-0.5 rounded border border-surface-200"><i class="pi pi-bookmark text-[7px] mr-0.5"></i>{{ prod.brandName }}</span>
+                                    </div>
                                 </div>
                                 
                                 <div>
-                                    <div class="flex gap-1 mt-1 items-center">
-                                        <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getTotalStock(prod))">Stok: {{ getTotalStock(prod) }}</span>
+                                    <div class="flex gap-1 mt-2 items-center">
+                                        <span v-if="prod.isManageStock === false" class="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-200">Non-Fisik / Jasa</span>
+                                        <span v-else class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getTotalStock(prod))">Stok: {{ getTotalStock(prod) }}</span>
+                                        
                                         <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="info" class="!text-[8px] !px-1.5 !py-0.5" />
                                         <i v-if="prod.prices && prod.prices.some(p => p.minQty > 1)" class="pi pi-tags text-orange-500 text-[10px] ml-1" v-tooltip.top="'Ada Harga Grosir'"></i>
                                     </div>
@@ -647,11 +668,16 @@ defineExpose({ refreshData });
                                         <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="info" class="!text-[8px] !px-1.5" />
                                     </div>
                                     <div class="flex gap-2 items-center mt-0.5">
-                                        <span class="text-[10px] text-surface-400 font-mono"><i class="pi pi-barcode text-[9px] mr-0.5"></i>{{ prod.barcode || 'N/A' }}</span>
-                                        <span class="text-[10px] font-medium text-surface-500">Stok: {{ getTotalStock(prod) }}</span>
+                                        <span class="text-[10px] text-surface-400 font-mono shrink-0"><i class="pi pi-barcode text-[9px] mr-0.5"></i>{{ prod.barcode || 'N/A' }}</span>
+                                        
+                                        <span v-if="prod.categoryName" class="text-[9px] text-surface-500 bg-surface-100 px-1 rounded truncate max-w-[80px]">{{ prod.categoryName }}</span>
+                                        <span v-if="prod.brandName" class="text-[9px] text-surface-500 bg-surface-100 px-1 rounded truncate max-w-[80px]"><i class="pi pi-bookmark text-[8px]"></i> {{ prod.brandName }}</span>
+
+                                        <span v-if="prod.isManageStock === false" class="text-[10px] font-medium text-purple-500">Non-Fisik</span>
+                                        <span v-else class="text-[10px] font-medium text-surface-500">Stok: {{ getTotalStock(prod) }}</span>
                                     </div>
                                 </div>
-                                <div class="text-sm font-black">{{ formatCurrency(getBasePrice(prod)) }}</div>
+                                <div class="text-sm font-black shrink-0">{{ formatCurrency(getBasePrice(prod)) }}</div>
                             </div>
 
                         </div>

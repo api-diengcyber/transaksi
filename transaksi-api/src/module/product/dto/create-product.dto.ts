@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // 1. DTO Khusus untuk Harga
@@ -112,4 +112,14 @@ export class CreateProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductVariantDto)
   variants?: ProductVariantDto[];
+
+  @ApiProperty()
+  @IsOptional()
+  @IsString()
+  brandUuid?: string;
+
+  @ApiProperty()
+  @IsOptional()
+  @IsBoolean()
+  isManageStock?: boolean;
 }
