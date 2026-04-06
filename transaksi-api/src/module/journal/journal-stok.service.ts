@@ -447,34 +447,74 @@ export class JournalStokService {
 
   async breakStock(payload: any, userId: string, storeUuid: string) {
     const { 
-        sourceProductUuid, sourceVariantUuid, 
-        targetProductUuid, targetVariantUuid, 
-        qtyToBreak, conversionVal 
+        sourceProductUuid, sourceVariantUuid, sourceUnitUuid, // <-- Ambil unit sumber dari payload
+        targetProductUuid, targetVariantUuid, targetUnitUuid, // <-- Ambil unit tujuan dari payload
+        qtyToBreak, conversionVal
     } = payload;
 
     return await this.dataSource.transaction(async (manager) => {
-        // 1. Ambil info produk untuk catatan (keterangan)
-        const source = await manager.getRepository('ProductEntity').findOne({ where: { uuid: sourceProductUuid } });
-        const target = await manager.getRepository('ProductEntity').findOne({ where: { uuid: targetProductUuid } });
+        // 1. Ambil info produk beserta relasi Rak (shelves) dan Gudang (warehouse)
+        const source = await manager.getRepository('ProductEntity').findOne({ 
+            where: { uuid: sourceProductUuid },
+            relations: ['shelves', 'shelves.warehouse'] 
+        });
+        
+        const target = await manager.getRepository('ProductEntity').findOne({ 
+            where: { uuid: targetProductUuid },
+            relations: ['shelves', 'shelves.warehouse']
+        });
 
-        // 2. STOK KELUAR dari Produk Sumber (Unit Besar)
+        if (!source || !target) {
+            throw new Error('Produk sumber atau tujuan tidak ditemukan di database.');
+        }
+
+        // 2. Cari Warehouse UUID dan Shelve UUID dari Rak Default (Index 0)
+        // Set fallback jika data tidak tersedia
+        const sourceShelveUuid = source.shelves && source.shelves.length > 0 
+            ? source.shelves[0].uuid 
+            : null; // <-- Ambil UUID rak sumber
+
+        const sourceWarehouseUuid = source.shelves && source.shelves.length > 0 
+            ? (source.shelves[0].warehouse?.uuid || source.shelves[0].warehouseUuid)
+            : storeUuid;
+
+        const targetShelveUuid = target.shelves && target.shelves.length > 0 
+            ? target.shelves[0].uuid 
+            : null; // <-- Ambil UUID rak tujuan
+
+        const targetWarehouseUuid = target.shelves && target.shelves.length > 0 
+            ? (target.shelves[0].warehouse?.uuid || target.shelves[0].warehouseUuid)
+            : storeUuid;
+
+        // 3. STOK KELUAR dari Produk Sumber (Unit Besar)
         await this.stockOut([{
             productUuid: sourceProductUuid,
             variantUuid: sourceVariantUuid,
+            unitUuid: sourceUnitUuid,       // <-- Masukkan unit sumber
+            shelveUuid: sourceShelveUuid,   // <-- Masukkan rak sumber
             qty: qtyToBreak,
-            warehouseUuid: storeUuid
-        }], userId, manager, storeUuid, `Konversi keluar ke: ${target?.name}`);
+            warehouseUuid: sourceWarehouseUuid 
+        }], userId, manager, storeUuid, `Konversi keluar ke: ${target.name}`);
 
-        // 3. STOK MASUK ke Produk Tujuan (Unit Kecil)
+        // 4. STOK MASUK ke Produk Tujuan (Unit Kecil)
         const totalAdd = qtyToBreak * conversionVal;
         await this.stockIn([{
             productUuid: targetProductUuid,
             variantUuid: targetVariantUuid,
+            unitUuid: targetUnitUuid,       // <-- Masukkan unit tujuan
+            shelveUuid: targetShelveUuid,   // <-- Masukkan rak tujuan
             qty: totalAdd,
-            warehouseUuid: storeUuid
-        }], userId, manager, storeUuid, `Konversi masuk dari: ${source?.name}`);
+            warehouseUuid: targetWarehouseUuid 
+        }], userId, manager, storeUuid, `Konversi masuk dari: ${source.name}`);
 
-        return { message: 'Konversi stok berhasil', addedQty: totalAdd };
+        return { 
+            message: 'Konversi stok berhasil', 
+            addedQty: totalAdd,
+            sourceWarehouse: sourceWarehouseUuid,
+            sourceShelve: sourceShelveUuid,
+            targetWarehouse: targetWarehouseUuid,
+            targetShelve: targetShelveUuid
+        };
     });
   }
 }

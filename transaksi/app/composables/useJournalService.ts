@@ -127,13 +127,10 @@ export const useJournalService = () => {
         return await useApi(`${API_BASE}/report/ALL`, { params }); 
     };
 
-    // =========================================================================
-    // MUTASI STOK MANUAL
-    // =========================================================================
-    const createStockMutation = async (payload: any) => {
-        return await useApi(`${API_BASE}/stock-mutation`, {
+    const breakStock = async (payload: any) => {
+      return await useApi(`${API_BASE}/break-stock`, {
             method: 'POST',
-            body: payload
+            body: payload,
         });
     };
 
@@ -153,6 +150,6 @@ export const useJournalService = () => {
         getChartData,
         findAllByType,
         findAll,
-        createStockMutation,
+        breakStock,
     };
 };

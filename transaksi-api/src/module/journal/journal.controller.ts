@@ -215,4 +215,18 @@ export class JournalController {
   ) {
     return this.journalStokService.createManualMutation(body, userId, storeUuid);
   }
+
+  /**
+   * Endpoint untuk memecah stok (Konversi antar produk)
+   * URL: POST /journal/break-stock
+   */
+  @Post('break-stock')
+  @ApiOperation({ summary: 'Manual stock mutation (IN/OUT)' })
+  async breakStock(
+    @Body() payload: any,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return await this.journalStokService.breakStock(payload, userId, storeUuid);
+  }
 }
