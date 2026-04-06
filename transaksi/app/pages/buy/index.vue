@@ -50,14 +50,14 @@ const limit = 16;
 const totalPages = ref(1);
 const totalProducts = ref(0);
 
-// --- STATE TRANSAKSI (UPDATED) ---
+// --- STATE TRANSAKSI ---
 const purchaseInfo = reactive({
     referenceNo: '',
     notes: '',
     paymentMethod: 'CASH', // CASH atau CREDIT
     dueDate: null,         // Tanggal jatuh tempo
 });
-const cashAmount = ref(0); // Untuk mencatat uang tunai (DP sudah tidak dipakai di form)
+const cashAmount = ref(0); 
 
 // --- COMPUTED ---
 const grandTotal = computed(() => {
@@ -78,16 +78,13 @@ const canCheckout = computed(() => {
     if (processing.value) return false;
     
     if (isCreditPurchase.value) {
-        return purchaseInfo.dueDate !== null; // Harus ada jatuh tempo jika hutang
+        return purchaseInfo.dueDate !== null; 
     } else {
-        return cashAmount.value >= grandTotal.value; // Uang harus pas/lebih jika tunai
+        return cashAmount.value >= grandTotal.value; 
     }
 });
 
-const canProcessTransaction = computed(() => {
-    if (processing.value) return false;
-    return true;
-});
+const canProcessTransaction = computed(() => !processing.value);
 
 const currentDate = computed(() => {
     return new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -105,7 +102,7 @@ watch(() => purchaseInfo.paymentMethod, (newMethod) => {
     if (newMethod === 'CASH') {
         cashAmount.value = grandTotal.value;
     } else {
-        cashAmount.value = 0; // Set tunai ke 0 otomatis karena hutang penuh
+        cashAmount.value = 0; 
     }
 });
 
@@ -151,7 +148,7 @@ const toggleScanMode = () => {
 // --- DATA FETCHING ---
 const fetchMasterData = async () => {
     try {
-        const cData = await categoryService.getAllCategorys();
+        const cData = await categoryService.getAllCategories();
         categories.value = Array.isArray(cData) ? cData : (cData?.data || []);
     } catch (e) {
         categories.value = [];
@@ -192,6 +189,7 @@ const loadProducts = async () => {
         
         products.value = data.map(p => ({
             ...p,
+            isManageStock: p.isManageStock !== false, // Memastikan properti ini ada (default true)
             prices: p.prices || p.price || [],
             variants: p.variants || [],
             unit: p.unit || null,
@@ -223,6 +221,13 @@ const processBarcodeScan = async () => {
         const data = response?.data || response;
         
         if (data && data.uuid) {
+            // CEK STOK SEBELUM DIMASUKKAN VIA SCANNER
+            if (data.isManageStock === false) {
+                toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk non-fisik/tanpa stok tidak dapat dibeli.', life: 2000 });
+                searchQuery.value = '';
+                return;
+            }
+
             let variant = null;
             if (data.matchedVariantUuid && data.variants) {
                 variant = data.variants.find(v => v.uuid === data.matchedVariantUuid);
@@ -270,6 +275,13 @@ const handleLocalFiltering = (isApiLoad = false) => {
         }
 
         if (exactMatch) {
+            // CEK STOK SEBELUM DIMASUKKAN VIA SCANNER EXACT MATCH
+            if (exactMatch.isManageStock === false) {
+                toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk tanpa stok tidak bisa dibeli.', life: 2000 });
+                searchQuery.value = '';
+                return;
+            }
+
             if (matchedVariant) {
                 pushToCart(exactMatch, matchedVariant);
             } else if (exactMatch.variants && exactMatch.variants.length > 0) {
@@ -321,6 +333,12 @@ const openPurchaseModal = () => {
 };
 
 const addToCart = (prod) => {
+    // CEK STOK SEBELUM DIMASUKKAN VIA KLIK KARTU
+    if (prod.isManageStock === false) {
+        toast.add({ severity: 'warn', summary: 'Peringatan', detail: 'Produk Jasa/Non-Fisik tidak memerlukan input stok pembelian.', life: 2500 });
+        return;
+    }
+
     if (prod.variants && prod.variants.length > 0) {
         selectedProductForVariant.value = prod;
         showVariantModal.value = true;
@@ -388,7 +406,7 @@ const onProductCreated = async (newProduct) => {
     currentPage.value = 1;
     await loadProducts();
     const fullProduct = products.value.find(p => p.uuid === newProduct.uuid);
-    if (fullProduct) {
+    if (fullProduct && fullProduct.isManageStock !== false) {
         addToCart(fullProduct);
         toast.add({ severity: 'info', summary: 'Info', detail: 'Produk baru masuk list pembelian', life: 3000 });
     }
@@ -400,7 +418,6 @@ const processPurchase = async () => {
 
     processing.value = true;
     try {
-        // Ambil list supplier unik untuk menentukan global name
         const uniqueSuppliers = [...new Set(cart.value.map(item => item.supplierUuid))];
         let globalSupplierName = 'Multi Supplier';
         if (uniqueSuppliers.length === 1 && uniqueSuppliers[0]) {
@@ -611,18 +628,25 @@ defineExpose({ refreshData });
                                 v-for="prod in filteredProducts" 
                                 :key="prod.uuid" 
                                 @click="addToCart(prod)" 
-                                class="group relative bg-surface-0 border border-surface-200 rounded-xl cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all active:scale-95 select-none"
-                                :class="viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-32' : 'p-2 flex items-center justify-between gap-3 h-16'"
+                                class="group relative bg-surface-0 border border-surface-200 rounded-xl transition-all active:scale-95 select-none overflow-hidden"
+                                :class="[
+                                    viewMode === 'grid' ? 'p-3 flex flex-col justify-between h-32' : 'p-2 flex items-center justify-between gap-3 h-16',
+                                    prod.isManageStock === false ? 'opacity-60 grayscale border-surface-200 cursor-not-allowed' : 'cursor-pointer hover:border-emerald-400 hover:shadow-md'
+                                ]"
                             >
+                                <div v-if="prod.isManageStock === false" class="absolute inset-0 z-10 flex items-center justify-center bg-white/10 backdrop-blur-[1px]">
+                                    <span class="bg-surface-900/80 text-white text-[9px] font-black uppercase px-2 py-1 rounded shadow-lg tracking-wider">Tanpa Stok / Jasa</span>
+                                </div>
+
                                 <template v-if="viewMode === 'grid'">
                                     <div class="flex flex-col h-full justify-between">
                                         <div>
-                                            <div class="text-xs font-bold line-clamp-2 mb-1 leading-snug group-hover:text-emerald-600 transition-colors pr-1">{{ prod.name }}</div>
+                                            <div class="text-xs font-bold line-clamp-2 mb-1 leading-snug transition-colors pr-1" :class="prod.isManageStock ? 'group-hover:text-emerald-600' : 'text-surface-400'">{{ prod.name }}</div>
                                             <div class="text-[9px] text-surface-400 font-mono mb-1 truncate"><i class="pi pi-barcode mr-1"></i>{{ prod.barcode || 'N/A' }}</div>
                                         </div>
                                         
                                         <div>
-                                            <div class="flex gap-1 mt-1 items-center">
+                                            <div v-if="prod.isManageStock !== false" class="flex gap-1 mt-1 items-center">
                                                 <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getTotalStock(prod))">Stok: {{ getTotalStock(prod) }}</span>
                                                 <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="success" class="!text-[8px] !px-1.5 !py-0.5" />
                                             </div>
@@ -636,18 +660,18 @@ defineExpose({ refreshData });
                                             <i class="pi pi-box"></i>
                                         </div>
                                         <div class="flex flex-col overflow-hidden">
-                                            <div class="text-sm font-bold truncate group-hover:text-emerald-600 transition-colors flex items-center gap-2">
+                                            <div class="text-sm font-bold truncate transition-colors flex items-center gap-2" :class="prod.isManageStock ? 'group-hover:text-emerald-600' : 'text-surface-400'">
                                                 {{ prod.name }}
                                                 <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="success" class="!text-[8px] !px-1.5" />
                                             </div>
                                             <div class="flex gap-2 items-center mt-0.5">
                                                 <span class="text-[10px] text-surface-400 font-mono"><i class="pi pi-barcode text-[9px] mr-0.5"></i>{{ prod.barcode || 'N/A' }}</span>
-                                                <span class="text-[10px] font-medium text-surface-500">Stok: {{ getTotalStock(prod) }}</span>
+                                                <span v-if="prod.isManageStock !== false" class="text-[10px] font-medium text-surface-500">Stok: {{ getTotalStock(prod) }}</span>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="flex flex-col items-end shrink-0">
-                                        <i class="pi pi-plus-circle text-emerald-500 text-lg opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                        <i v-if="prod.isManageStock !== false" class="pi pi-plus-circle text-emerald-500 text-lg opacity-0 group-hover:opacity-100 transition-opacity"></i>
                                     </div>
                                 </template>
                             </div>
@@ -758,7 +782,7 @@ defineExpose({ refreshData });
                 <div class="grid grid-cols-1 gap-3 max-h-[60vh] overflow-y-auto scrollbar-thin px-1">
                     <button v-for="v in selectedProductForVariant.variants" :key="v.uuid"
                             @click="pushToCart(selectedProductForVariant, v)"
-                            class="group flex justify-between items-center p-3 border border-surface-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 hover:shadow-sm transition-all text-left bg-surface-0">
+                            class="group flex justify-between items-center p-3 border border-surface-200 rounded-xl hover:border-emerald-50 hover:bg-emerald-50 hover:shadow-sm transition-all text-left bg-surface-0">
                         <div>
                             <div class="font-bold text-sm text-surface-800 group-hover:text-emerald-700 transition">{{ v.name }}</div>
                             <div class="text-[10px] text-surface-500 mt-1 flex items-center gap-2">

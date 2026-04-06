@@ -100,7 +100,8 @@ const items = ref([
             { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, // Gedung bank/Institusi
             { label: 'Member', icon: 'pi pi-user', route: '/member' }, // User personal
             { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, // Buku alamat rekanan
-            { label: 'User/Pegawai', icon: 'pi pi-id-card', route: '/user' }, // Kartu identitas pegawai
+            { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, // Kartu identitas pegawai
+            { label: 'Media', icon: 'pi pi-image', route: '/media' }, // Kartu identitas pegawai
         ]
     },
     { 

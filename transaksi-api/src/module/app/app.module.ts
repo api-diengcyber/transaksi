@@ -17,6 +17,7 @@ import { ShelveModule } from '../shelve/shelve.module';
 import { PriceGroupModule } from '../price_group/price_group.module';
 import { WarehouseModule } from '../warehouse/warehouse.module';
 import { BrandModule } from '../brand/brand.module';
+import { MediaModule } from '../media/media.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { BrandModule } from '../brand/brand.module';
     PriceGroupModule,
     WarehouseModule,
     BrandModule,
+    MediaModule,
   ],
   controllers: [],
   providers: [],
