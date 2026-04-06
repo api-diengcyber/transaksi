@@ -229,4 +229,9 @@ export class JournalController {
   ) {
     return await this.journalStokService.breakStock(payload, userId, storeUuid);
   }
+
+  @Get(':uuid')
+  async getJournalByUuid(@Param('uuid') uuid: string) {
+    return await this.journalService.getJournalByUuid(uuid);
+  }
 }

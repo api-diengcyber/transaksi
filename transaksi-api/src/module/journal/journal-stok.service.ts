@@ -447,8 +447,8 @@ export class JournalStokService {
 
   async breakStock(payload: any, userId: string, storeUuid: string) {
     const { 
-        sourceProductUuid, sourceVariantUuid, sourceUnitUuid, // <-- Ambil unit sumber dari payload
-        targetProductUuid, targetVariantUuid, targetUnitUuid, // <-- Ambil unit tujuan dari payload
+        sourceProductUuid, sourceVariantUuid, sourceUnitUuid,
+        targetProductUuid, targetVariantUuid, targetUnitUuid,
         qtyToBreak, conversionVal
     } = payload;
 

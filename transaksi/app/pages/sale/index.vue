@@ -353,7 +353,7 @@ const openPaymentModal = () => {
     showPaymentModal.value = true;
 };
 
-const processCheckout = async () => {
+const processCheckout = async (isPrint = false) => {
     if (!canCheckout.value) return;
     processing.value = true;
 
@@ -398,18 +398,15 @@ const processCheckout = async () => {
         const payload = {
             grand_total: grandTotal.value,
             total_items: cart.value.length,
-            payment_method: transactionMeta.paymentMethod, // 'CASH' atau 'CREDIT'
+            payment_method: transactionMeta.paymentMethod,
             customer_name: finalCustName,
             notes: catatan,
             status: isCreditSale.value ? 'PENDING' : 'COMPLETED',
-            amount_cash: cashAmount.value, // Jika kredit, ini akan masuk sebagai DP (Uang Muka)
-            
-            // PAYLOAD SPESIFIK PIUTANG (CREDIT)
+            amount_cash: cashAmount.value,
             ...(isCreditSale.value && {
                 is_credit: 'true',
                 due_date: transactionMeta.dueDate ? transactionMeta.dueDate.toISOString().split('T')[0] : null
             }),
-
             amount_credit: isCreditSale.value ? grandTotal.value : 0, 
             amount_installment: 0, 
             amount_bank_total: 0,
@@ -420,13 +417,46 @@ const processCheckout = async () => {
             items: itemsPayload
         };
 
-        await journalService.createSaleTransaction(payload);
+        const response = await journalService.createSaleTransaction(payload);
+        
+        // --- PERBAIKAN DI SINI ---
+        // Mengambil UUID dari dalam object 'journal'
+        const transactionUuid = response?.data?.journal?.uuid || response?.journal?.uuid;
         
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Transaksi Berhasil Disimpan', life: 3000 });
         showPaymentModal.value = false; 
         cart.value = []; 
         resetState(); 
         await loadProducts(); 
+
+        // LOGIKA CETAK NOTA
+        if (isPrint) {
+            if (transactionUuid) {
+                const printWindow = window.open(`/#/receipt/${transactionUuid}`, '_blank');
+                
+                if (!printWindow) {
+
+                    const printWindow2 = window.open(`/receipt/${transactionUuid}`, '_blank');
+
+                    if (!printWindow2) {
+                        toast.add({ 
+                            severity: 'warn', 
+                            summary: 'Popup Diblokir Browser', 
+                            detail: 'Nota gagal terbuka. Izinkan Popup (ikon di kanan atas address bar browser) lalu coba lagi.', 
+                            life: 6000 
+                        });
+                    }
+                }
+            } else {
+                toast.add({ 
+                    severity: 'error', 
+                    summary: 'Gagal Cetak', 
+                    detail: 'Gagal mengambil ID struk untuk dicetak.', 
+                    life: 4000 
+                });
+            }
+        }
+
     } catch (e) {
         console.error(e); 
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memproses transaksi', life: 3000 });
@@ -875,16 +905,24 @@ defineExpose({ refreshData });
                     </span>
                 </div>
 
-                <div class="flex gap-3">
-                    <Button label="Batal" class="flex-1 font-bold" severity="secondary" outlined @click="showPaymentModal = false" />
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <Button label="Batal" class="flex-1 font-bold" severity="secondary" outlined @click="showPaymentModal = false" :disabled="processing" />
                     <Button 
-                        :label="isCreditSale ? 'Catat Piutang' : 'Bayar Lunas'" 
-                        icon="pi pi-check" 
-                        class="flex-[2] !h-12 !text-base !font-bold !rounded-xl shadow-md transition-colors" 
+                        :label="isCreditSale ? 'Catat Saja' : 'Bayar Saja'" 
+                        class="flex-1 !h-12 !text-sm !font-bold !rounded-xl shadow-md transition-colors" 
+                        :severity="isCreditSale ? 'warning' : 'success'" outlined
+                        :loading="processing" 
+                        :disabled="!canCheckout" 
+                        @click="processCheckout(false)" 
+                    />
+                    <Button 
+                        :label="isCreditSale ? 'Catat & Cetak Nota' : 'Bayar & Cetak Nota'" 
+                        icon="pi pi-print" 
+                        class="flex-[1.5] !h-12 !text-sm !font-bold !rounded-xl shadow-md transition-colors" 
                         :severity="isCreditSale ? 'warning' : 'success'" 
                         :loading="processing" 
                         :disabled="!canCheckout" 
-                        @click="processCheckout" 
+                        @click="processCheckout(true)" 
                     />
                 </div>
             </div>

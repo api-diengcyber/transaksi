@@ -128,9 +128,15 @@ export const useJournalService = () => {
     };
 
     const breakStock = async (payload: any) => {
-      return await useApi(`${API_BASE}/break-stock`, {
+        return await useApi(`${API_BASE}/break-stock`, {
             method: 'POST',
             body: payload,
+        });
+    };
+
+    const getTransactionById = async (uuid: string) => {
+        return await useApi(`${API_BASE}/${uuid}`, {
+            method: 'GET',
         });
     };
 
@@ -151,5 +157,6 @@ export const useJournalService = () => {
         findAllByType,
         findAll,
         breakStock,
+        getTransactionById,
     };
 };

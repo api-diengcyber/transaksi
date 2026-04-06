@@ -1,5 +1,5 @@
 // transaksi-api/src/module/journal/journal.service.ts
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Repository, Like, Between, DataSource } from 'typeorm';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
@@ -12,6 +12,25 @@ export class JournalService {
     @Inject('DATA_SOURCE')
     private readonly dataSource: DataSource,
   ) { }
+
+  async getJournalByUuid(uuid: string) {
+    const journal = await this.journalRepository.findOne({
+        where: { uuid },
+        relations: ['details'], 
+    });
+
+    if (!journal) {
+        throw new NotFoundException(`Jurnal dengan UUID ${uuid} tidak ditemukan`);
+    }
+
+    const { details, ...journalData } = journal;
+
+    return {
+        message: "Journal retrieved successfully",
+        journal: journalData,
+        details: details || []
+    };
+}
 
   async generateCode(prefix: string, storeUuid: string) {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
