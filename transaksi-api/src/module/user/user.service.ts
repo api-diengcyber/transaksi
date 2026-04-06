@@ -131,11 +131,11 @@ export class UserService {
       return this.roleRepo.find();
   }
   
-   async updatePassword(uuid: string, newPassword: string, updaterId: string, storeUuid: string) {
-      const user = await this.findOne(uuid, storeUuid);
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      user.password = hashedPassword;
-      user.updatedBy = updaterId;
-      return this.userRepo.save(user);
+  async updatePassword(uuid: string, newPassword: string, updaterId: string, storeUuid: string) {
+    const user = await this.findOne(uuid, storeUuid);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.updatedBy = updaterId;
+    return this.userRepo.save(user);
   }
 }

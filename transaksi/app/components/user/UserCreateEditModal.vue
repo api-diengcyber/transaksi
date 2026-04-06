@@ -5,40 +5,60 @@ import { useToast } from 'primevue/usetoast';
 const props = defineProps({
     visible: Boolean,
     userData: { type: Object, default: null }, // Data pengguna untuk mode edit
-    roles: { type: Array, default: () => [] },  // Daftar semua role yang tersedia dari backend
+    // Kita tetap biarkan props roles untuk jaga-jaga, tapi kita buatkan state lokal
+    roles: { type: Array, default: () => [] },  
 });
 
 const emit = defineEmits(['update:visible', 'saved']);
 
-// Asumsi: useUserService() sudah dibuat (atau akan dibuat)
+// Asumsi: useUserService() memiliki endpoint untuk CRUD user
 const userService = useUserService();
 const toast = useToast();
 
 const loading = ref(false);
 const submitted = ref(false);
+const localRoles = ref([]); // State untuk menyimpan daftar role dari API
 
 const form = reactive({
     username: '',
     email: '',
     password: '',
     confirmPassword: '',
-    // Role disimpan sebagai array UUID/Value role
     roleValues: [], 
-    // Field opsional lainnya jika ada
 });
 
 const isEditMode = computed(() => !!props.userData);
 
-// Mengonversi daftar roles (contoh: ['ADMIN', 'CASHIER']) ke format yang dibutuhkan Dropdown
+// Mengonversi daftar roles agar formatnya cocok dengan Dropdown (Menangani .name atau .role)
 const roleOptions = computed(() => {
-    // Kita asumsikan role dari backend berupa array of objects { uuid: string, role: string }
-    return props.roles.map(r => ({
-        label: r.role,
-        value: r.role // Menggunakan string role sebagai value untuk form
+    // Gabungkan props dari parent (jika ada) dengan data lokal dari API
+    const sourceRoles = localRoles.value.length > 0 ? localRoles.value : props.roles;
+    
+    return sourceRoles.map(r => ({
+        label: r.name || r.role || r, // Otomatis membaca field 'name' atau 'role'
+        value: r.uuid || r.name || r.role || r // Simpan UUID atau nama role tergantung kebutuhan backend
     }));
 });
 
 // --- LOGIC FORMULIR ---
+const loadRoles = async () => {
+    try {
+        // Coba panggil endpoint getRoles() jika sudah Anda buat di useUserService.ts
+        if (userService.getAllRoles) {
+            const res = await userService.getAllRoles();
+            localRoles.value = res?.data?.data || res?.data || res || [];
+        } else {
+            // FALLBACK STATIS: Jika API getRoles belum ada, tampilkan role default
+            localRoles.value = [
+                { uuid: 'ADMIN', name: 'Admin / Pemilik' },
+                { uuid: 'CASHIER', name: 'Kasir' },
+                { uuid: 'WAREHOUSE', name: 'Gudang' }
+            ];
+        }
+    } catch (e) {
+        console.error("Gagal memuat role", e);
+    }
+};
 
 const resetForm = () => {
     form.username = '';
@@ -53,22 +73,22 @@ const populateForm = () => {
     if (props.userData) {
         form.username = props.userData.username || '';
         form.email = props.userData.email || '';
-        // Mode edit TIDAK memuat atau memerlukan password kecuali diubah
         form.password = ''; 
         form.confirmPassword = '';
-        // Map roles ke array value
-        form.roleValues = (props.userData.roles || []).map(r => r.role); 
+        // Map roles menangani .name atau .role
+        form.roleValues = (props.userData.roles || []).map(r => r.uuid || r.name || r.role); 
     } else {
         resetForm();
     }
 };
 
-watch(() => props.visible, (val) => {
+// Panggil loadRoles dan populateForm setiap kali modal terbuka
+watch(() => props.visible, async (val) => {
     if (val) {
+        await loadRoles();
         populateForm();
     }
 });
-
 
 const handleSave = async () => {
     submitted.value = true;
@@ -79,7 +99,7 @@ const handleSave = async () => {
         return;
     }
 
-    // Validasi Password (Hanya berlaku jika mode Edit DAN password diisi, atau mode Create)
+    // Validasi Password
     if ((!isEditMode.value || form.password) && form.password !== form.confirmPassword) {
         toast.add({ severity: 'error', summary: 'Validasi', detail: 'Password dan Konfirmasi tidak cocok.', life: 3000 });
         return;
@@ -95,11 +115,7 @@ const handleSave = async () => {
         const payload = {
             username: form.username,
             email: form.email,
-            // Jika mode edit dan password diisi, kirim password baru. Jika create, wajib dikirim.
             ...(form.password && { password: form.password }), 
-            
-            // [CATATAN PENTING] Anda harus memastikan backend menerima role dalam format ini.
-            // Di sini kita asumsikan backend menerima array string role (ex: ['ADMIN', 'CASHIER'])
             roles: form.roleValues 
         };
 
@@ -107,7 +123,6 @@ const handleSave = async () => {
             await userService.updateUser(props.userData.uuid, payload);
             toast.add({ severity: 'success', summary: 'Sukses', detail: 'Data pengguna diperbarui.', life: 3000 });
         } else {
-            // Pada mode create, password harus ada
             if (!form.password) {
                  toast.add({ severity: 'error', summary: 'Validasi', detail: 'Password wajib diisi untuk pengguna baru.', life: 3000 });
                  return;
@@ -146,7 +161,7 @@ const closeDialog = () => {
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field">
-                    <label class="text-sm font-bold  mb-1 block">Username <span class="text-red-500">*</span></label>
+                    <label class="text-sm font-bold mb-1 block">Username <span class="text-red-500">*</span></label>
                     <InputText 
                         v-model="form.username" 
                         placeholder="Contoh: ujangkasir" 
@@ -156,7 +171,7 @@ const closeDialog = () => {
                 </div>
 
                 <div class="field">
-                    <label class="text-sm font-bold  mb-1 block">Email (Opsional)</label>
+                    <label class="text-sm font-bold mb-1 block">Email (Opsional)</label>
                     <InputText 
                         v-model="form.email" 
                         placeholder="email@toko.com" 
@@ -166,7 +181,7 @@ const closeDialog = () => {
             </div>
 
             <div class="field">
-                <label class="text-sm font-bold  mb-1 block">Role Pengguna <span class="text-red-500">*</span></label>
+                <label class="text-sm font-bold mb-1 block">Role Pengguna <span class="text-red-500">*</span></label>
                 <MultiSelect 
                     v-model="form.roleValues" 
                     :options="roleOptions" 
@@ -180,13 +195,13 @@ const closeDialog = () => {
                 />
             </div>
             
-            <div class="space-y-4 pt-2 border-t border-surface-100 ">
+            <div class="space-y-4 pt-2 border-t border-surface-100">
                 <p class="text-xs text-surface-500 italic mb-3">
                     {{ isEditMode ? 'Isi hanya jika Anda ingin mengganti password.' : 'Password wajib diisi untuk pengguna baru.' }}
                 </p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="field">
-                        <label class="text-sm font-bold  mb-1 block">
+                        <label class="text-sm font-bold mb-1 block">
                             Password {{ isEditMode ? 'Baru' : '' }}
                         </label>
                         <Password 
@@ -198,7 +213,7 @@ const closeDialog = () => {
                         />
                     </div>
                     <div class="field">
-                        <label class="text-sm font-bold  mb-1 block">Konfirmasi Password</label>
+                        <label class="text-sm font-bold mb-1 block">Konfirmasi Password</label>
                         <Password 
                             v-model="form.confirmPassword" 
                             :feedback="false" 
@@ -213,7 +228,7 @@ const closeDialog = () => {
         </div>
 
         <template #footer>
-            <div class="flex justify-end gap-2 pt-4 border-t border-surface-100  mt-2">
+            <div class="flex justify-end gap-2 pt-4 border-t border-surface-100 mt-2">
                 <Button label="Batal" icon="pi pi-times" text severity="secondary" @click="closeDialog" />
                 <Button :label="isEditMode ? 'Simpan Perubahan' : 'Buat Pengguna'" icon="pi pi-check" :loading="loading" @click="handleSave" />
             </div>
