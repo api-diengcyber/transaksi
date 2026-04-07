@@ -51,7 +51,7 @@ export class CategoryController {
   @ApiOperation({ summary: 'Create New Category' })
   async create(
     @Body() createDto: CreateCategoryDto,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string
     ) {
     return await this.categoryService.create(createDto, storeUuid);

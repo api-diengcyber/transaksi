@@ -1,4 +1,4 @@
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { JournalService } from './journal.service';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
@@ -12,165 +12,73 @@ export class JournalStokService {
     @Inject('DATA_SOURCE') private dataSource: DataSource,
   ) {}
 
-  // FUNGSI UNTUK STOK MASUK (STOCK IN)
-  async stockIn(items: any[], userId: string, manager: EntityManager, storeUuid: string, notes?: string) {
-    if (!items || items.length === 0) return;
-    await this._executeStockJournal('STOCK_IN', items, userId, storeUuid, manager, notes);
+  // ===========================================================================
+  // CORE MUTATION METHODS
+  // ===========================================================================
+
+  async stockIn(items: any[], userId: string, manager: EntityManager | undefined, storeUuid: string, notes?: string, isDraft = false, isOpname = false) {
+    return await this._executeStockJournal('STOCK_IN', items, userId, storeUuid, manager, notes, isDraft, isOpname);
   }
 
-  // FUNGSI UNTUK STOK KELUAR (STOCK OUT / BARANG RUSAK)
-  async stockOut(items: any[], userId: string, manager: EntityManager, storeUuid: string, notes?: string) {
-    if (!items || items.length === 0) return;
-    await this._executeStockJournal('STOCK_OUT', items, userId, storeUuid, manager, notes);
+  async stockOut(items: any[], userId: string, manager: EntityManager | undefined, storeUuid: string, notes?: string, isDraft = false, isOpname = false) {
+    return await this._executeStockJournal('STOCK_OUT', items, userId, storeUuid, manager, notes, isDraft, isOpname);
   }
 
-  // --- KODE PRIVATE YANG SANGAT SIMPLE ---
   private async _executeStockJournal(
-    type: string, 
-    items: any[], 
-    userId: string, 
-    storeUuid: string, 
-    externalManager?: EntityManager, 
-    notes?: string
+    type: string, items: any[], userId: string, storeUuid: string, 
+    externalManager?: EntityManager, notes?: string, isDraft = false, isOpname = false
   ) {
-    if (!storeUuid) throw new BadRequestException('Store ID is required.');
+    if (!storeUuid || items.length === 0) throw new BadRequestException('Invalid data for stock movement.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
-        const code = await this.journalService.generateCode(type, storeUuid);
-        
-        // 1. Simpan Header Jurnal
-        const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
-          code,
-          createdBy: userId,
-          verifiedBy: userId,
-          verifiedAt: new Date(),
-        });
-        await manager.save(JournalEntity, journal);
+      const codeType = isOpname ? 'OPNAME' : type;
+      const code = await this.journalService.generateCode(codeType, storeUuid);
+      
+      const journal = manager.create(JournalEntity, {
+        uuid: `${storeUuid}-JRN-${generateLocalUuid()}`,
+        code, createdBy: userId,
+        verifiedBy: isDraft ? null : userId,
+        verifiedAt: isDraft ? null : new Date(), 
+      });
+      await manager.save(JournalEntity, journal);
 
-        const detailEntities: JournalDetailEntity[] = [];
+      const detailEntities: JournalDetailEntity[] = [];
+      const addDetail = (key: string, value: string) => {
+        detailEntities.push(manager.create(JournalDetailEntity, {
+          uuid: generateJournalDetailUuid(storeUuid),
+          journalCode: code, createdBy: userId, key, value
+        }));
+      };
 
-        // 2. Simpan Catatan (Notes) jika ada
-        if (notes) {
-            detailEntities.push(manager.create(JournalDetailEntity, {
-                uuid: generateJournalDetailUuid(storeUuid),
-                key: 'notes',
-                value: notes,
-                journalCode: code,
-                createdBy: userId,
-            }));
-        }
+      addDetail('journal_type', codeType);
+      addDetail('store_uuid', storeUuid);
+      if (notes) addDetail('notes', notes);
 
-        // 3. Simpan Detail Item secara manual dan eksplisit
-        items.forEach((item, index) => {
-            
-            // Simpan Product UUID
-            if (item.productUuid) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: `stok_product_uuid#${index}`,
-                    value: String(item.productUuid),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
+      items.forEach((item, index) => {
+        addDetail(`stok_user_uuid#${index}`, String(userId));
+        if (item.productUuid) addDetail(`stok_product_uuid#${index}`, String(item.productUuid));
+        if (item.variantUuid) addDetail(`stok_variant_uuid#${index}`, String(item.variantUuid));
+        if (item.unitUuid) addDetail(`stok_unit#${index}`, String(item.unitUuid));
+        if (item.shelveUuid) addDetail(`stok_shelve_uuid#${index}`, String(item.shelveUuid));
+        if (item.warehouseUuid) addDetail(`stok_warehouse_uuid#${index}`, String(item.warehouseUuid));
+        if (item.supplierUuid) addDetail(`stok_supplier_uuid#${index}`, String(item.supplierUuid));
 
-            // Simpan Variant UUID (Jika ada varian)
-            if (item.variantUuid) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: `stok_variant_uuid#${index}`,
-                    value: String(item.variantUuid),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
+        const qtyKey = type === 'STOCK_IN' ? `stok_qty_plus#${index}` : `stok_qty_min#${index}`;
+        if (item.qty !== undefined) addDetail(qtyKey, String(item.qty));
+      });
 
-            // Simpan Unit UUID
-            if (item.unitUuid) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: `stok_unit#${index}`,
-                    value: String(item.unitUuid),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
-
-            // Simpan Shelve UUID (Rak) - BARU
-            if (item.shelveUuid) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: `stok_shelve_uuid#${index}`,
-                    value: String(item.shelveUuid),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
-
-            // Simpan Warehouse UUID (Gudang) - BARU
-            if (item.warehouseUuid) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: `stok_warehouse_uuid#${index}`,
-                    value: String(item.warehouseUuid),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
-            
-            // Simpan Supplier UUID (Supplier) - BARU DITAMBAHKAN
-            if (item.supplierUuid) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: `stok_supplier_uuid#${index}`,
-                    value: String(item.supplierUuid),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
-
-            // Simpan Qty (Menggunakan qty_plus untuk IN, dan qty_min untuk OUT)
-            const qtyKey = type === 'STOCK_IN' ? `stok_qty_plus#${index}` : `stok_qty_min#${index}`;
-            if (item.qty !== undefined && item.qty !== null) {
-                detailEntities.push(manager.create(JournalDetailEntity, {
-                    uuid: generateJournalDetailUuid(storeUuid),
-                    key: qtyKey,
-                    value: String(item.qty),
-                    journalCode: code,
-                    createdBy: userId,
-                }));
-            }
-        });
-
-        // 4. Save Semua Details Sekaligus ke Database
-        if (detailEntities.length > 0) {
-            await manager.save(JournalDetailEntity, detailEntities);
-        }
-
-        return { message: `${type} journal created`, journal, details: detailEntities };
+      await manager.save(JournalDetailEntity, detailEntities);
+      return { journal, details: detailEntities };
     };
 
-    // Jalankan menggunakan manager yang sudah ada (Transaction) atau buat baru
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
 
-  async getWarehouseStock(warehouseUuid: string, storeUuid: string) {
-    // 1. Ambil detail gudang
-    const warehouse = await this.dataSource.getRepository('WarehouseEntity').findOne({ 
-        where: { uuid: warehouseUuid }
-    });
-    if (!warehouse) throw new BadRequestException('Gudang tidak ditemukan');
+  // ===========================================================================
+  // STOCK CALCULATION LOGIC (DRY - Unified Logic)
+  // ===========================================================================
 
-    // 2. Ambil semua jurnal yang berkaitan dengan stok di toko ini
-    const details = await this.dataSource.getRepository(JournalDetailEntity)
-      .createQueryBuilder('jd')
-      .where("jd.journalCode LIKE :store", { store: `%-${storeUuid}-%` })
-      .andWhere("jd.key LIKE 'stok_%'")
-      .getMany();
-
-    // 3. Kelompokkan jurnal berdasarkan kode jurnal dan index baris (Contoh: JRN-001_0)
+  private _processGroupsToStockMap(details: JournalDetailEntity[], filterUuids?: string[], warehouseUuid?: string): Map<string, any> {
     const groups: Record<string, any> = {};
     for (const d of details) {
       const [baseKey, index] = d.key.split('#');
@@ -179,61 +87,197 @@ export class JournalStokService {
       groups[groupKey][baseKey] = d.value;
     }
 
-    // 4. Hitung stok (Qty Plus - Qty Min), Total Masuk, dan Total Keluar
-    const stockMap = new Map<string, { total_in: number; total_out: number; stock: number }>();
-    
+    const stockMap = new Map<string, any>();
     for (const key in groups) {
       const g = groups[key];
-      // Pastikan data jurnal ini masuk/keluar dari gudang yang diminta
-      if (g.stok_warehouse_uuid === warehouseUuid) {
-        const prodId = g.stok_product_uuid;
-        if (!prodId) continue;
+      const prodId = g.stok_product_uuid;
+      
+      // Filter berdasarkan warehouse (jika ada) dan product list (jika ada)
+      if (warehouseUuid && g.stok_warehouse_uuid !== warehouseUuid) continue;
+      if (filterUuids && !filterUuids.includes(prodId)) continue;
+      if (!prodId) continue;
 
-        const qtyPlus = Number(g.stok_qty_plus) || 0;
-        const qtyMin = Number(g.stok_qty_min) || 0;
-        const netQty = qtyPlus - qtyMin;
+      const variantUuid = g.stok_variant_uuid && g.stok_variant_uuid !== 'null' ? g.stok_variant_uuid : 'null';
+      const qtyPlus = Number(g.stok_qty_plus) || 0;
+      const qtyMin = Number(g.stok_qty_min) || 0;
+      const mapKey = `${prodId}_${variantUuid}`;
 
-        // Ambil data sementara atau buat data awal
-        const currentData = stockMap.get(prodId) || { total_in: 0, total_out: 0, stock: 0 };
-        
-        currentData.total_in += qtyPlus;
-        currentData.total_out += qtyMin;
-        currentData.stock += netQty;
-
-        stockMap.set(prodId, currentData);
-      }
+      const current = stockMap.get(mapKey) || { stock: 0, total_in: 0, total_out: 0 };
+      current.total_in += qtyPlus;
+      current.total_out += qtyMin;
+      current.stock += (qtyPlus - qtyMin);
+      stockMap.set(mapKey, current);
     }
-
-    // 5. Query produk yang stoknya tersisa ATAU pernah ada mutasi di gudang ini
-    const products: any[] = [];
-    for (const [prodId, data] of stockMap.entries()) {
-      // Tampilkan jika pernah masuk atau keluar, meskipun stoknya jadi 0
-      if (data.total_in > 0 || data.total_out > 0) {
-        const product = await this.dataSource.getRepository('ProductEntity').findOne({
-          where: { uuid: prodId },
-          relations: ['categories', 'unit'] // Load relasi agar nama kategori & satuan muncul di frontend
-        });
-        
-        if (product) {
-          products.push({ 
-            ...product, 
-            stock: data.stock, 
-            total_in: data.total_in, 
-            total_out: data.total_out 
-          });
-        }
-      }
-    }
-
-    return {
-      ...warehouse,
-      products: products
-    };
+    return stockMap;
   }
 
-  // Tambahkan fungsi ini di dalam class JournalStokService
+  async calculateStockFromJournal(productUuids: string[], storeUuid: string) {
+    if (!productUuids.length) return new Map<string, number>();
+
+    const targetDetails = await this.dataSource.getRepository(JournalDetailEntity)
+      .createQueryBuilder('jd')
+      .select('jd.journalCode', 'code')
+      .where("jd.key LIKE 'stok_product_uuid%' AND jd.value IN (:...uuids)", { uuids: productUuids })
+      .andWhere("jd.journalCode LIKE :store", { store: `%-${storeUuid}-%` })
+      .getRawMany();
+
+    if (!targetDetails.length) return new Map<string, number>();
+    const journalCodes = [...new Set(targetDetails.map(t => t.code))];
+
+    const details = await this.dataSource.getRepository(JournalDetailEntity)
+      .createQueryBuilder('jd')
+      .innerJoin(JournalEntity, 'j', 'j.code = jd.journalCode')
+      .where("jd.journalCode IN (:...codes) AND jd.key LIKE 'stok_%' AND j.verifiedAt IS NOT NULL", { codes: journalCodes })
+      .getMany();
+
+    const fullMap = this._processGroupsToStockMap(details, productUuids);
+    const resultMap = new Map<string, number>();
+    fullMap.forEach((val, key) => resultMap.set(key, val.stock));
+    return resultMap;
+  }
+
+  async getWarehouseStock(warehouseUuid: string, storeUuid: string) {
+    const warehouse = await this.dataSource.getRepository('WarehouseEntity').findOne({ where: { uuid: warehouseUuid } });
+    if (!warehouse) throw new BadRequestException('Gudang tidak ditemukan');
+
+    const details = await this.dataSource.getRepository(JournalDetailEntity)
+      .createQueryBuilder('jd')
+      .innerJoin(JournalEntity, 'j', 'j.code = jd.journalCode')
+      .where("jd.journalCode LIKE :store AND jd.key LIKE 'stok_%' AND j.verifiedAt IS NOT NULL", { store: `%-${storeUuid}-%` })
+      .getMany();
+
+    const stockMap = this._processGroupsToStockMap(details, undefined, warehouseUuid);
+    const products: any[] = [];
+
+    for (const [mapKey, data] of stockMap.entries()) {
+      const [prodId] = mapKey.split('_');
+      const product = await this.dataSource.getRepository('ProductEntity').findOne({ where: { uuid: prodId }, relations: ['categories', 'unit'] });
+      if (product?.isManageStock) {
+        products.push({ ...product, stock: data.stock, total_in: data.total_in, total_out: data.total_out });
+      }
+    }
+    return { ...warehouse, products };
+  }
+
+  // ===========================================================================
+  // CONVERSION METHODS (Break & Combine Simplified)
+  // ===========================================================================
+
+  async breakStock(payload: any, userId: string, storeUuid: string) {
+    return this._executeConversion(payload, userId, storeUuid, 'BREAK');
+  }
+
+  async combineStock(payload: any, userId: string, storeUuid: string) {
+    return this._executeConversion(payload, userId, storeUuid, 'COMBINE');
+  }
+
+  private async _executeConversion(payload: any, userId: string, storeUuid: string, mode: 'BREAK' | 'COMBINE') {
+    return await this.dataSource.transaction(async (manager) => {
+      const { sourceProductUuid, targetProductUuid, qtyToBreak, qtyAction, conversionVal } = payload;
+      const source = await manager.getRepository('ProductEntity').findOne({ where: { uuid: sourceProductUuid }, relations: ['shelves', 'shelves.warehouse'] });
+      const target = await manager.getRepository('ProductEntity').findOne({ where: { uuid: targetProductUuid }, relations: ['shelves', 'shelves.warehouse'] });
+
+      if (!source || !target) throw new Error('Produk tidak ditemukan.');
+
+      const getLoc = (p: any) => ({
+        shelve: p.shelves?.[0]?.uuid || null,
+        wh: p.shelves?.[0]?.warehouse?.uuid || p.shelves?.[0]?.warehouseUuid || storeUuid
+      });
+
+      const locSrc = getLoc(source);
+      const locTrg = getLoc(target);
+
+      const qtyOut = mode === 'BREAK' ? qtyToBreak : (qtyAction * conversionVal);
+      const qtyIn = mode === 'BREAK' ? (qtyToBreak * conversionVal) : qtyAction;
+
+      await this.stockOut([{ productUuid: sourceProductUuid, variantUuid: payload.sourceVariantUuid, unitUuid: source.unitUuid, shelveUuid: locSrc.shelve, warehouseUuid: locSrc.wh, qty: qtyOut }], userId, manager, storeUuid, `${mode} keluar ke ${target.name}`);
+      await this.stockIn([{ productUuid: targetProductUuid, variantUuid: payload.targetVariantUuid, unitUuid: target.unitUuid, shelveUuid: locTrg.shelve, warehouseUuid: locTrg.wh, qty: qtyIn }], userId, manager, storeUuid, `${mode} masuk dari ${source.name}`);
+
+      return { message: 'Konversi berhasil', addedQty: qtyIn, deductedQty: qtyOut };
+    });
+  }
+
+  async createOpnameDraft(payload: any, storeUuid: string) {
+    return await this.dataSource.transaction(async (manager) => {
+        const itemsIn: any[] = [];
+        const itemsOut: any[] = [];
+
+        payload.items.forEach((item: any) => {
+            const diff = Number(item.difference);
+            if (diff === 0) return; 
+
+            const mappedItem = {
+                productUuid: item.product_uuid,
+                warehouseUuid: payload.warehouse_uuid,
+                shelveUuid: item.shelve_uuid,
+                variantUuid: item.variant_uuid,
+                unitUuid: item.unit_uuid,
+                qty: Math.abs(diff)
+            };
+
+            if (diff > 0) itemsIn.push(mappedItem);
+            if (diff < 0) itemsOut.push(mappedItem);
+        });
+
+        const isDraft = true;
+        const isOpname = true;
+
+        if (itemsIn.length > 0) {
+            await this.stockIn(itemsIn, payload.user_uuid, manager, storeUuid, 'Draft Opname Fisik (Penambahan)', isDraft, isOpname);
+        }
+        if (itemsOut.length > 0) {
+            await this.stockOut(itemsOut, payload.user_uuid, manager, storeUuid, 'Draft Opname Fisik (Pengurangan)', isDraft, isOpname);
+        }
+
+        return { message: 'Draft Opname berhasil dibuat dan menunggu verifikasi' };
+    });
+  }
+
+  async getUnverifiedOpnames(warehouseUuid: string, storeUuid: string) {
+    const drafts = await this.dataSource.getRepository(JournalEntity)
+        .createQueryBuilder('j')
+        .innerJoin(JournalDetailEntity, 'jd_type', "jd_type.journalCode = j.code AND jd_type.key = 'journal_type' AND jd_type.value = 'OPNAME'")
+        .innerJoin(JournalDetailEntity, 'jd_wh', "jd_wh.journalCode = j.code AND jd_wh.key LIKE 'stok_warehouse_uuid#%' AND jd_wh.value = :warehouseUuid")
+        .innerJoin(JournalDetailEntity, 'jd_store', "jd_store.journalCode = j.code AND jd_store.key = 'store_uuid' AND jd_store.value = :storeUuid")
+        .where('j.verifiedAt IS NULL')
+        .setParameters({ warehouseUuid, storeUuid })
+        .orderBy('j.createdAt', 'ASC')
+        .getMany();
+
+    if (drafts.length === 0) return [];
+
+    const codes = drafts.map(d => d.code);
+    const details = await this.dataSource.getRepository(JournalDetailEntity)
+        .createQueryBuilder('jd')
+        .where('jd.journalCode IN (:...codes)', { codes })
+        .andWhere("jd.key LIKE 'stok_product_uuid#%'")
+        .getMany();
+
+    return drafts.map(d => {
+        const detailCount = details.filter(jd => jd.journalCode === d.code).length;
+        return { ...d, details: new Array(detailCount) };
+    });
+  }
+
+  async verifyOpnameJournal(journalUuid: string, adminUuid: string) {
+    return await this.dataSource.transaction(async (manager) => {
+        const journal = await manager.getRepository(JournalEntity).findOne({
+            where: { uuid: journalUuid }
+        });
+        
+        if (!journal) throw new NotFoundException('Dokumen Opname tidak ditemukan');
+        if (journal.verifiedAt) throw new BadRequestException('Dokumen sudah diverifikasi');
+
+        journal.verifiedAt = new Date();
+        journal.verifiedBy = adminUuid;
+        
+        await manager.save(JournalEntity, journal);
+
+        return { message: 'Opname diverifikasi dan stok otomatis disesuaikan', data: journal };
+    });
+  }
+
   async getWarehouseHistory(warehouseUuid: string, storeUuid: string) {
-    // 1. Cari detail jurnal yang menunjuk ke warehouse yang dipilih
     const whDetails = await this.dataSource.getRepository(JournalDetailEntity)
       .createQueryBuilder('jd')
       .where("jd.journalCode LIKE :store", { store: `%-${storeUuid}-%` })
@@ -243,7 +287,6 @@ export class JournalStokService {
 
     if (!whDetails || whDetails.length === 0) return [];
 
-    // 2. Dapatkan kombinasi journalCode dan index baris (misal: #0, #1)
     const targetItems = whDetails.map(d => {
       const index = d.key.split('#')[1];
       return { journalCode: d.journalCode, index };
@@ -251,35 +294,32 @@ export class JournalStokService {
 
     const journalCodes = [...new Set(targetItems.map(t => t.journalCode))];
 
-    // 3. Ambil data Header Jurnal (untuk mendapatkan tanggal, referensi, user)
     const journals = await this.dataSource.getRepository(JournalEntity)
       .createQueryBuilder('j')
       .where("j.code IN (:...codes)", { codes: journalCodes })
+      .andWhere("j.verifiedAt IS NOT NULL")
       .getMany();
 
-    // 4. Ambil semua detail jurnal lain yang berkaitan dengan baris stok tersebut
     const allDetails = await this.dataSource.getRepository(JournalDetailEntity)
       .createQueryBuilder('jd')
       .where("jd.journalCode IN (:...codes)", { codes: journalCodes })
       .andWhere("jd.key LIKE 'stok_%'")
       .getMany();
 
-    // 5. Ambil data Produk untuk mendapatkan nama
     const productUuids = [...new Set(allDetails.filter(d => d.key.startsWith('stok_product_uuid#')).map(d => d.value))];
     let products: any[] = [];
     if (productUuids.length > 0) {
-      products = await this.dataSource.getRepository('ProductEntity') // Pastikan entitas Product benar
+      products = await this.dataSource.getRepository('ProductEntity')
         .createQueryBuilder('p')
-        .where("p.uuid IN (:...uuids)", { uuids: productUuids })
+        .where("p.uuid IN (:...uuids) AND p.isManageStock = true", { uuids: productUuids }) 
         .getMany();
     }
 
-    // 6. Rangkai data menjadi format history untuk frontend
     const history: any[] = [];
 
     for (const item of targetItems) {
       const journal = journals.find(x => x.code === item.journalCode);
-      if (!journal) continue;
+      if (!journal) continue; 
 
       const pUuidDet = allDetails.find(d => d.journalCode === item.journalCode && d.key === `stok_product_uuid#${item.index}`);
       const qPlusDet = allDetails.find(d => d.journalCode === item.journalCode && d.key === `stok_qty_plus#${item.index}`);
@@ -288,38 +328,34 @@ export class JournalStokService {
       if (!pUuidDet) continue;
 
       const prod = products.find(p => p.uuid === pUuidDet.value);
+      if (!prod) continue;
+
       const qtyPlus = Number(qPlusDet?.value || 0);
       const qtyMin = Number(qMinDet?.value || 0);
 
-      // Tentukan type IN/OUT dan jumlah Qty mutasi
       const type = qtyPlus > 0 ? 'IN' : 'OUT';
       const qty = qtyPlus > 0 ? qtyPlus : qtyMin;
 
-      // Format tanggal ke "YYYY-MM-DD HH:mm:ss" agar bisa di split di Vue frontend
       const dateObj = journal.verifiedAt || new Date(); 
       const dateStr = new Date(dateObj).toISOString().replace('T', ' ').substring(0, 19);
 
       history.push({
         date: dateStr,
         ref: journal.code,
-        product: prod ? prod.name : 'Unknown Product',
+        product: prod.name,
         type: type,
         qty: qty,
         user: journal.createdBy 
       });
     }
 
-    // 7. Urutkan berdasarkan waktu terbaru (Descending)
     history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
     return history;
   }
   
-  // FUNGSI UNTUK MUTASI MANUAL DARI FRONTEND
   async createManualMutation(payload: any, userId: string, storeUuid: string) {
     const { type, product_uuid, warehouse_uuid, shelve_uuid, qty, note } = payload;
     
-    // Format item agar sesuai dengan struktur jurnal
     const item = {
         productUuid: product_uuid,
         warehouseUuid: warehouse_uuid,
@@ -327,7 +363,6 @@ export class JournalStokService {
         qty: Number(qty)
     };
 
-    // Jalankan jurnal stok tanpa externalManager agar membuat transaksi baru (independen)
     if (type === 'IN') {
         return await this._executeStockJournal('STOCK_IN', [item], userId, storeUuid, undefined, note);
     } else if (type === 'OUT') {
@@ -349,18 +384,41 @@ export class JournalStokService {
 
     const journals = await query.getMany();
 
-    // Map untuk menampung mutasi per produk
     const inventoryMap = new Map();
+
+    const productUuidsToFetch = new Set<string>();
+    journals.forEach(j => {
+        j.details.forEach((d: any) => {
+            if (d.key.startsWith('product_uuid#') || d.key.startsWith('stok_product_uuid#')) {
+                productUuidsToFetch.add(d.value);
+            }
+        });
+    });
+
+    let managedProducts: any[] = []; 
+    if (productUuidsToFetch.size > 0) {
+        managedProducts = await this.dataSource.getRepository('ProductEntity')
+            .createQueryBuilder('p')
+            .where("p.uuid IN (:...uuids)", { uuids: Array.from(productUuidsToFetch) })
+            .andWhere("p.isManageStock = true") 
+            .getMany();
+    }
+    const managedProductUuids = new Set(managedProducts.map(p => p.uuid));
 
     journals.forEach(j => {
       const detailsMap = j.details.reduce((acc, curr) => { acc[curr.key] = curr.value; return acc; }, {});
       
       let idx = 0;
-      // Loop item di setiap jurnal (SALE, BUY, RET_SALE, RET_BUY, ADJUSTMENT)
-      while (detailsMap[`product_uuid#${idx}`]) {
-        const pUuid = detailsMap[`product_uuid#${idx}`];
-        const pName = detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`];
-        const qty = Number(detailsMap[`qty#${idx}`] || detailsMap[`qty_return#${idx}`] || 0);
+      while (detailsMap[`product_uuid#${idx}`] || detailsMap[`stok_product_uuid#${idx}`]) {
+        const pUuid = detailsMap[`product_uuid#${idx}`] || detailsMap[`stok_product_uuid#${idx}`];
+        
+        if (!managedProductUuids.has(pUuid)) {
+            idx++;
+            continue; 
+        }
+
+        const pName = detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`] || 'Unknown';
+        const qty = Number(detailsMap[`qty#${idx}`] || detailsMap[`qty_return#${idx}`] || detailsMap[`stok_qty_plus#${idx}`] || detailsMap[`stok_qty_min#${idx}`] || 0);
         const unit = detailsMap[`unit_name#${idx}`] || 'Unit';
 
         if (!inventoryMap.has(pUuid)) {
@@ -372,13 +430,13 @@ export class JournalStokService {
 
         const item = inventoryMap.get(pUuid);
 
-        // Logika Mutasi Berdasarkan Kode Jurnal
-        if (j.code.startsWith('BUY') || j.code.startsWith('RET_SALE')) {
+        if (j.code.startsWith('BUY') || j.code.startsWith('RET_SALE') || j.code.startsWith('STOCK_IN')) {
           item.stockIn += qty;
-        } else if (j.code.startsWith('SALE') || j.code.startsWith('RET_BUY')) {
+        } else if (j.code.startsWith('SALE') || j.code.startsWith('RET_BUY') || j.code.startsWith('STOCK_OUT')) {
           item.stockOut += qty;
-        } else if (j.code.startsWith('ADJ')) {
-          item.adjustment += qty; // Bisa minus jika stok berkurang
+        } else if (j.code.startsWith('ADJ') || j.code.startsWith('OPN')) {
+          if (detailsMap[`stok_qty_plus#${idx}`]) item.adjustment += qty;
+          if (detailsMap[`stok_qty_min#${idx}`]) item.adjustment -= qty;
         }
         
         idx++;
@@ -392,7 +450,6 @@ export class JournalStokService {
   }
 
   async getStockMovementChart(storeUuid: string, startDate: string, endDate: string) {
-    // Ambil semua jurnal yang memiliki pengaruh ke stok dalam rentang tanggal
     const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndSelect('journal.details', 'detail')
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
@@ -405,11 +462,7 @@ export class JournalStokService {
 
     const chartMap = new Map();
 
-    // Inisialisasi map agar semua tanggal di range muncul (opsional, tapi disarankan)
-    // Jika ingin hanya tanggal yang ada transaksi saja, lewati bagian inisialisasi ini.
-
     journals.forEach(j => {
-      // Ambil tanggal murni (YYYY-MM-DD)
       const dateKey = j.createdAt.toISOString().split('T')[0];
       
       if (!chartMap.has(dateKey)) {
@@ -418,18 +471,13 @@ export class JournalStokService {
       
       const entry = chartMap.get(dateKey);
       
-      // Ambil detail jurnal untuk mencari qty
       j.details.forEach(detail => {
-        // Kita hanya mencari key yang mengandung 'qty'
         if (detail.key.startsWith('qty#') || detail.key.startsWith('qty_return#') || detail.key === 'qty') {
           const qtyValue = Number(detail.value || 0);
 
-          // LOGIKA PEMISAHAN MASUK VS KELUAR
-          // Masuk: Pembelian (BUY) atau Retur Penjualan (RET_SALE)
           if (j.code.includes('BUY') || j.code.includes('RET_SALE')) {
             entry.masuk += qtyValue;
           } 
-          // Keluar: Penjualan (SALE) atau Retur Pembelian (RET_BUY)
           else if (j.code.includes('SALE') || j.code.includes('RET_BUY')) {
             entry.keluar += qtyValue;
           }
@@ -439,148 +487,6 @@ export class JournalStokService {
 
     const result = Array.from(chartMap.values());
     
-    // DEBUG: Cek di terminal backend Anda
-    console.log(`Chart Data Found for ${storeUuid}:`, result.length, 'days');
-    
     return result;
-  }
-
-  async breakStock(payload: any, userId: string, storeUuid: string) {
-    const { 
-        sourceProductUuid, sourceVariantUuid, sourceUnitUuid,
-        targetProductUuid, targetVariantUuid, targetUnitUuid,
-        qtyToBreak, conversionVal
-    } = payload;
-
-    return await this.dataSource.transaction(async (manager) => {
-        // 1. Ambil info produk beserta relasi Rak (shelves) dan Gudang (warehouse)
-        const source = await manager.getRepository('ProductEntity').findOne({ 
-            where: { uuid: sourceProductUuid },
-            relations: ['shelves', 'shelves.warehouse'] 
-        });
-        
-        const target = await manager.getRepository('ProductEntity').findOne({ 
-            where: { uuid: targetProductUuid },
-            relations: ['shelves', 'shelves.warehouse']
-        });
-
-        if (!source || !target) {
-            throw new Error('Produk sumber atau tujuan tidak ditemukan di database.');
-        }
-
-        // 2. Cari Warehouse UUID dan Shelve UUID dari Rak Default (Index 0)
-        // Set fallback jika data tidak tersedia
-        const sourceShelveUuid = source.shelves && source.shelves.length > 0 
-            ? source.shelves[0].uuid 
-            : null; // <-- Ambil UUID rak sumber
-
-        const sourceWarehouseUuid = source.shelves && source.shelves.length > 0 
-            ? (source.shelves[0].warehouse?.uuid || source.shelves[0].warehouseUuid)
-            : storeUuid;
-
-        const targetShelveUuid = target.shelves && target.shelves.length > 0 
-            ? target.shelves[0].uuid 
-            : null; // <-- Ambil UUID rak tujuan
-
-        const targetWarehouseUuid = target.shelves && target.shelves.length > 0 
-            ? (target.shelves[0].warehouse?.uuid || target.shelves[0].warehouseUuid)
-            : storeUuid;
-
-        // 3. STOK KELUAR dari Produk Sumber (Unit Besar)
-        await this.stockOut([{
-            productUuid: sourceProductUuid,
-            variantUuid: sourceVariantUuid,
-            unitUuid: sourceUnitUuid,       // <-- Masukkan unit sumber
-            shelveUuid: sourceShelveUuid,   // <-- Masukkan rak sumber
-            qty: qtyToBreak,
-            warehouseUuid: sourceWarehouseUuid 
-        }], userId, manager, storeUuid, `Konversi keluar ke: ${target.name}`);
-
-        // 4. STOK MASUK ke Produk Tujuan (Unit Kecil)
-        const totalAdd = qtyToBreak * conversionVal;
-        await this.stockIn([{
-            productUuid: targetProductUuid,
-            variantUuid: targetVariantUuid,
-            unitUuid: targetUnitUuid,       // <-- Masukkan unit tujuan
-            shelveUuid: targetShelveUuid,   // <-- Masukkan rak tujuan
-            qty: totalAdd,
-            warehouseUuid: targetWarehouseUuid 
-        }], userId, manager, storeUuid, `Konversi masuk dari: ${source.name}`);
-
-        return { 
-            message: 'Konversi stok berhasil', 
-            addedQty: totalAdd,
-            sourceWarehouse: sourceWarehouseUuid,
-            sourceShelve: sourceShelveUuid,
-            targetWarehouse: targetWarehouseUuid,
-            targetShelve: targetShelveUuid
-        };
-    });
-  }
-
-  async combineStock(payload: any, userId: string, storeUuid: string) {
-    const { 
-        sourceProductUuid, sourceVariantUuid, 
-        targetProductUuid, targetVariantUuid, 
-        qtyAction, conversionVal 
-    } = payload;
-
-    return await this.dataSource.transaction(async (manager) => {
-        // 1. Ambil info produk beserta relasi Rak dan Gudang
-        const source = await manager.getRepository('ProductEntity').findOne({ 
-            where: { uuid: sourceProductUuid },
-            relations: ['shelves', 'shelves.warehouse'] 
-        });
-        
-        const target = await manager.getRepository('ProductEntity').findOne({ 
-            where: { uuid: targetProductUuid },
-            relations: ['shelves', 'shelves.warehouse']
-        });
-
-        if (!source || !target) {
-            throw new Error('Produk sumber atau tujuan tidak ditemukan di database.');
-        }
-
-        // 2. Cari Warehouse UUID dan Shelve UUID dari Rak Default (Index 0)
-        const sourceShelveUuid = source.shelves && source.shelves.length > 0 ? source.shelves[0].uuid : null;
-        const sourceWarehouseUuid = source.shelves && source.shelves.length > 0 
-            ? (source.shelves[0].warehouse?.uuid || source.shelves[0].warehouseUuid) : storeUuid;
-
-        const targetShelveUuid = target.shelves && target.shelves.length > 0 ? target.shelves[0].uuid : null;
-        const targetWarehouseUuid = target.shelves && target.shelves.length > 0 
-            ? (target.shelves[0].warehouse?.uuid || target.shelves[0].warehouseUuid) : storeUuid;
-
-        // 3. STOK KELUAR dari Produk Sumber (Unit Eceran / Kecil)
-        // Logika: Jika ingin membuat 1 Dus (isi 12), maka Pcs yang keluar adalah 1 * 12 = 12
-        const totalDeduct = qtyAction * conversionVal;
-        
-        await this.stockOut([{
-            productUuid: sourceProductUuid,
-            variantUuid: sourceVariantUuid,
-            unitUuid: source.unitUuid,       // Unit sumber (Misal: Pcs)
-            shelveUuid: sourceShelveUuid,    
-            qty: totalDeduct,                // Jumlah yang dikurangi = qty * conversion
-            warehouseUuid: sourceWarehouseUuid 
-        }], userId, manager, storeUuid, `Gabung stok ke: ${target.name}`);
-
-        // 4. STOK MASUK ke Produk Tujuan (Unit Besar)
-        // Logika: Jumlah Dus yang jadi/masuk adalah qtyAction (Misal: 1)
-        await this.stockIn([{
-            productUuid: targetProductUuid,
-            variantUuid: targetVariantUuid,
-            unitUuid: target.unitUuid,       // Unit tujuan (Misal: Dus)
-            shelveUuid: targetShelveUuid,    
-            qty: qtyAction,                  // Jumlah yang ditambah = qtyAction
-            warehouseUuid: targetWarehouseUuid 
-        }], userId, manager, storeUuid, `Gabung stok dari: ${source.name}`);
-
-        return { 
-            message: 'Penggabungan stok berhasil', 
-            addedQty: qtyAction,
-            deductedQty: totalDeduct,
-            sourceWarehouse: sourceWarehouseUuid,
-            targetWarehouse: targetWarehouseUuid
-        };
-    });
   }
 }

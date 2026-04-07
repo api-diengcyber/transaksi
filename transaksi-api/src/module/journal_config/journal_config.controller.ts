@@ -30,7 +30,7 @@ export class JournalConfigController {
   @Post()
   create(
     @Body() dto: CreateJournalConfigDto,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.service.create(dto, userId, storeUuid);
@@ -39,7 +39,7 @@ export class JournalConfigController {
   @Delete(':uuid')
   remove(
     @Param('uuid') uuid: string,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
   ) {
     return this.service.remove(uuid, userId);
   }

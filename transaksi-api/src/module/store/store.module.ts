@@ -10,6 +10,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { userProvider } from 'src/common/entities/user/user.provider';
 import { categoryProvider } from 'src/common/entities/category/category.provider';
 import { CategoryModule } from '../category/category.module';
+import { StorePublicController } from './store-public.controller';
 
 @Module({
   imports: [
@@ -20,7 +21,10 @@ import { CategoryModule } from '../category/category.module';
       dest: './uploads', 
     }),
   ],
-  controllers: [StoreController],
+  controllers: [
+    StoreController,
+    StorePublicController,
+  ],
   providers: [
     ...storeProvider,
     ...storeSettingProvider,

@@ -16,7 +16,7 @@ export class WarehouseController {
   @Post('create')
   create(
         @Body() dto: CreateWarehouseDto, 
-        @GetUser('uuid') userId: string,
+        @GetUser('sub') userId: string,
         @GetStore() storeUuid: string,
     ) {
     return this.warehouseService.create(dto, storeUuid, userId);

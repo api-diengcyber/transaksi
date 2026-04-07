@@ -27,18 +27,16 @@ const openTabs = ref([]);
 
 // Fungsi Menutup Tab
 const closeTab = (index, event) => {
-    event.stopPropagation(); // Mencegah navigasi saat klik tombol close
+    event.stopPropagation(); 
     const tabToRemove = openTabs.value[index];
     
-    // Hapus tab
     openTabs.value.splice(index, 1);
 
-    // Jika tab yang ditutup adalah tab aktif, pindah ke tab sebelumnya (atau tab terakhir)
     if (route.path === tabToRemove.route && openTabs.value.length > 0) {
         const lastTab = openTabs.value[openTabs.value.length - 1];
         router.push(lastTab.route);
     } else if (openTabs.value.length === 0) {
-        router.push('/'); // Jika semua tab tutup, kembali ke dashboard
+        router.push('/'); 
     }
 };
 
@@ -47,7 +45,6 @@ const storeName = computed(() => authStore.activeStore?.name || 'RetailApp');
 const storeDescription = computed(() => authStore.activeStore?.description || 'POS System');
 const primaryColorSetting = computed(() => authStore.getSetting('theme_primary_color', '#2563eb'));
 
-// Default ke topbar. Opsi: 'topbar', 'sidebar', 'tabs', 'multiwindow'
 const layoutMode = computed(() => authStore.getSetting('layout_mode', 'topbar'));
 
 const currentLogoUrl = computed(() => {
@@ -89,58 +86,53 @@ const items = ref([
     { label: 'Dashboard', icon: 'pi pi-home', route: '/', key: 'dashboard' },
     { 
         label: 'Manajemen', 
-        icon: 'pi pi-briefcase', // Representasi bisnis/manajemen
+        icon: 'pi pi-briefcase', 
         key: 'manajemen',
         items: [
-            { label: 'Produk', icon: 'pi pi-box', route: '/product' }, // Box barang
-            { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, // Database stok
-            { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, // Layout meja/grid
-            { label: 'Produksi', icon: 'pi pi-cog', route: '/production' }, // Gear/Proses produksi
-            { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, // Truk pengiriman
-            { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, // Gedung bank/Institusi
-            { label: 'Member', icon: 'pi pi-user', route: '/member' }, // User personal
-            { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, // Buku alamat rekanan
-            { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, // Kartu identitas pegawai
-            { label: 'Media', icon: 'pi pi-image', route: '/media' }, // Kartu identitas pegawai
+            { label: 'Produk', icon: 'pi pi-box', route: '/product' }, 
+            { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, 
+            { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, 
+            { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, 
+            { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, 
+            { label: 'Member', icon: 'pi pi-user', route: '/member' }, 
+            { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, 
+            { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
+            { label: 'Media', icon: 'pi pi-image', route: '/media' }, 
         ]
     },
     { 
         label: 'Transaksi', 
-        icon: 'pi pi-shopping-cart', // Icon transaksi umum
+        icon: 'pi pi-shopping-cart', 
         key: 'transaksi',
         items: [
-            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/sale' }, // Keranjang belanja
-            { label: 'Pembelian', icon: 'pi pi-shopping-bag', route: '/buy' }, // Tas belanja (kulakan)
-            { label: 'Retur jual', icon: 'pi pi-refresh', route: '/return/sale' }, // Panah putar balik
-            { label: 'Retur beli', icon: 'pi pi-refresh', route: '/return/buy' }, // Panah putar balik
-            { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, // Panah masuk (uang masuk)
-            { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, // Panah keluar (uang keluar)
-            // { label: 'Akun', icon: 'pi pi-tags', route: '/account' }, // Tag akun/kategori
-            // { label: 'Jurnal', icon: 'pi pi-book', route: '/journal' }, // Buku pembukuan
-            { label: 'Keuangan', icon: 'pi pi-book', route: '/financial' }, // Keuangan
+            { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/sale' }, 
+            { label: 'Pembelian', icon: 'pi pi-shopping-bag', route: '/buy' }, 
+            { label: 'Retur jual', icon: 'pi pi-refresh', route: '/return/sale' }, 
+            { label: 'Retur beli', icon: 'pi pi-refresh', route: '/return/buy' }, 
+            { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, 
+            { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, 
+            { label: 'Keuangan', icon: 'pi pi-book', route: '/financial' }, 
         ]
     },
     { 
         label: 'Laporan', 
-        icon: 'pi pi-chart-bar', // Grafik batang umum
+        icon: 'pi pi-chart-bar', 
         key: 'report',
         items: [
-             { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale' }, // Persentase profit
-             { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy' }, // Dompet pengeluaran
-             { label: 'Retur jual', icon: 'pi pi-replay', route: '/report/return/sale' }, // Replay history
-             { label: 'Retur beli', icon: 'pi pi-replay', route: '/report/return/buy' }, // Replay history
-             { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar' }, // Data excel/angka
-             { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap' }, // Dokumen tagihan
-             { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory' }, // Diagram lingkaran analisa
-             { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph' }, // Diagram lingkaran analisa
-             { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial' }, // Dokumen tagihan
-             { label: 'Produksi', icon: 'pi pi-sliders-h', route: '#' }, // Slider kontrol produksi
+             { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale' }, 
+             { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy' }, 
+             { label: 'Retur jual', icon: 'pi pi-replay', route: '/report/return/sale' }, 
+             { label: 'Retur beli', icon: 'pi pi-replay', route: '/report/return/buy' }, 
+             { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar' }, 
+             { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap' }, 
+             { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory' }, 
+             { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph' }, 
+             { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial' }, 
         ]
     },
 ]);
 
-// --- [BARU] LOGIC DETEKSI TAB AKTIF ---
-// Helper untuk mencari label menu berdasarkan route saat ini
+// --- LOGIC DETEKSI TAB AKTIF ---
 const findMenuItem = (path, menuItems) => {
     for (const item of menuItems) {
         if (item.route === path) return item;
@@ -152,14 +144,12 @@ const findMenuItem = (path, menuItems) => {
     return null;
 };
 
-// Watch Route Change untuk menambah Tab secara otomatis
 watch(() => route.path, (newPath) => {
     if (layoutMode.value !== 'multiwindow') return;
 
     const existingTab = openTabs.value.find(tab => tab.route === newPath);
     if (!existingTab) {
         const menuItem = findMenuItem(newPath, items.value);
-        // Jika route ada di menu, tambahkan ke tabs. Jika tidak (halaman detail yg tidak ada di menu), pakai nama default
         openTabs.value.push({
             label: menuItem ? menuItem.label : 'Halaman',
             icon: menuItem ? menuItem.icon : 'pi pi-file',
@@ -171,22 +161,18 @@ watch(() => route.path, (newPath) => {
 
 // --- STORE SWITCHER ---
 const storeMenu = ref();
-// layouts/default.vue
 const handleSwitchStore = (store) => {
     storeMenu.value.hide();
     
-    // Cek agar tidak reload jika toko sama
     if (authStore.activeStore?.uuid === store.uuid) return;
 
     targetStoreName.value = store.name;
     isSwitchingStore.value = true;
     
     setTimeout(async () => { 
-        // Panggil switchStore (yang sudah KITA HAPUS reload-nya)
         await authStore.switchStore(store.uuid); 
         
         if (process.client) {
-            // Reload terjadi di sini
             window.location.reload();
         } else {
             isSwitchingStore.value = false;
@@ -232,10 +218,12 @@ const storeItems = computed(() => {
 });
 const toggleStoreMenu = (event) => storeMenu.value.toggle(event);
 
-// --- MENU ACTIONS ---
+// --- MENU ACTIONS (TERMASUK TOMBOL UPDATE) ---
 const profileMenu = ref();
 const profileItems = ref([
-    { label: 'Pengaturan', icon: 'pi pi-cog', command: () => router.push('/setting') },
+    { label: 'Pengaturan Toko', icon: 'pi pi-cog', command: () => router.push('/setting') },
+    // [BARU] Tambahkan menu Update Aplikasi di bawah pengaturan
+    { label: 'Update Aplikasi', icon: 'pi pi-cloud-download', class: 'text-primary-600 font-bold', command: () => router.push('/setting/update') },
     { separator: true },
     { label: 'Logout', icon: 'pi pi-sign-out', class: 'text-red-600 font-bold', command: async () => await authService.logout() }
 ]);
@@ -415,7 +403,7 @@ const isRouteActive = (item) => {
 
             <header v-if="layoutMode !== 'topbar'" 
                     class="sticky top-0 z-40 h-16 border-b border-surface-200  px-4 flex items-center justify-between lg:justify-end" 
-                    :class="layoutMode === 'multiwindow' ? 'hidden lg:flex !h-14 !bg-surface-0 -900 border-b shadow-none' : ''"
+                    :class="layoutMode === 'multiwindow' ? 'hidden lg:flex !h-14 !bg-surface-0 border-b shadow-none' : ''"
                     :style="layoutMode !== 'multiwindow' ? `background-color: var(--app-primary-color);` : ''">
                 
                 <div class="lg:hidden flex items-center gap-2" :class="layoutMode === 'multiwindow' ? 'text-surface-800 ' : ''">
@@ -449,7 +437,7 @@ const isRouteActive = (item) => {
                     
                     <Button :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" text rounded severity="tertiary" 
                             class="!w-10 !h-10 hover:bg-surface-0" 
-                            :class="layoutMode === 'multiwindow' ? 'text-surface-600  hover:!bg-surface-100-800' : 'text-white'"
+                            :class="layoutMode === 'multiwindow' ? 'text-surface-600  hover:!bg-surface-200' : 'text-white'"
                             @click="toggleDarkMode" />
                     
                     <div class="flex items-center gap-2 cursor-pointer p-1.5 rounded-full transition-colors"
@@ -496,7 +484,7 @@ const isRouteActive = (item) => {
 
             <footer class="border-t border-surface-200  py-6 mt-auto hidden md:block" :class="layoutMode === 'tabs' ? 'mb-20' : ''">
                 <div class="container mx-auto px-4 text-center text-sm text-surface-500">
-                    &copy; 2025 {{ storeName }}. <span class="text-primary-600 font-bold">Powered by RetailApp</span>.
+                    &copy; 2026 {{ storeName }}. <span class="text-primary-600 font-bold">Powered by RetailApp</span>.
                 </div>
             </footer>
         </div>
@@ -522,7 +510,7 @@ const isRouteActive = (item) => {
         </nav>
 
         <Menu ref="storeMenu" :model="storeItems" :popup="true" class="w-64 bg-surface-0 " />
-        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-48 bg-surface-0 " />
+        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-56 bg-surface-0 " />
         <Menu ref="desktopMenuRef" :model="desktopSubItems" :popup="true" class="mt-2 w-48 bg-surface-0 " />
         <Menu ref="mobileMenuRef" :model="mobileSubItems" :popup="true" class="!w-48 !mb-2 bg-surface-0 " />
 

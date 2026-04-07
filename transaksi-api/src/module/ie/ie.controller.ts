@@ -67,7 +67,7 @@ export class IeController {
   @UseInterceptors(FileInterceptor('file'))
   async importProduct(
     @UploadedFile() file: Express.Multer.File,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     if (!file) {

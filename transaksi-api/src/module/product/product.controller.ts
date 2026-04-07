@@ -38,7 +38,7 @@ export class ProductController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('search') search: string = '',
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return await this.productService.findAll(Number(page), Number(limit), search, storeUuid);
@@ -49,7 +49,7 @@ export class ProductController {
   @ApiOperation({ summary: 'Get One Product' })
   async findOne(
     @Param('uuid') uuid: string,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return await this.productService.findOne(uuid, storeUuid);
@@ -60,10 +60,11 @@ export class ProductController {
   @ApiOperation({ summary: 'Create Product' })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
   async create(
-    @Body() createProductDto: CreateProductDto,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
+    @Body() createProductDto: CreateProductDto,
   ) {
+    console.log("userId: " + userId);
     return await this.productService.create(createProductDto, storeUuid, userId);
   }
 
@@ -71,10 +72,10 @@ export class ProductController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update Product' })
   async update(
+    @GetUser('sub') userId: string,
+    @GetStore() storeUuid: string,
     @Param('uuid') uuid: string,
     @Body() updateProductDto: UpdateProductDto,
-    @GetUser('uuid') userId: string,
-    @GetStore() storeUuid: string,
   ) {
     return await this.productService.update(uuid, updateProductDto, storeUuid, userId);
   }
@@ -84,7 +85,7 @@ export class ProductController {
   @ApiOperation({ summary: 'Delete Product (Soft)' })
   async delete(
     @Param('uuid') uuid: string,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return await this.productService.remove(uuid, userId);

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useAuthStore } from '~/stores/auth.store';
 import { useRouter } from 'vue-router';
 
@@ -19,46 +19,72 @@ const greeting = computed(() => {
     return 'Selamat Malam';
 });
 
-// Menu Aksi Cepat (Quick Access) - Dikategorikan
+// Aksi Cepat (Highlight Top 4)
 const quickMenu = [
     {
-        title: 'Kasir & Transaksi',
-        desc: 'Proses penjualan dan pembayaran',
+        title: 'Kasir & Penjualan',
+        desc: 'Buka sistem POS',
         icon: 'pi pi-shopping-cart',
         color: 'from-emerald-500 to-teal-600',
-        route: '/transaction'
+        route: '/sale'
     },
     {
-        title: 'Stok Masuk',
-        desc: 'Input pembelian barang baru',
-        icon: 'pi pi-download',
+        title: 'Pembelian Stok',
+        desc: 'Input stok masuk',
+        icon: 'pi pi-shopping-bag',
         color: 'from-blue-500 to-indigo-600',
-        route: '/transaction?tab=buy'
+        route: '/buy'
     },
     {
-        title: 'Manajemen Produk',
-        desc: 'Tambah atau edit master barang',
+        title: 'Data Produk',
+        desc: 'Kelola master barang',
         icon: 'pi pi-box',
         color: 'from-violet-500 to-purple-600',
         route: '/product'
     },
     {
-        title: 'Laporan Keuangan',
-        desc: 'Cek omset dan laba rugi',
-        icon: 'pi pi-chart-line',
+        title: 'Analisa POS',
+        desc: 'Cek grafik & omset',
+        icon: 'pi pi-chart-pie',
         color: 'from-orange-500 to-amber-600',
         route: '/report/graph'
     }
 ];
 
-// Menu Sekunder (Grid Kecil)
-const secondaryMenu = [
-    { label: 'Retur Barang', icon: 'pi pi-refresh', route: '/transaction?tab=return', color: 'text-rose-500 bg-rose-50' },
-    { label: 'Hutang Piutang', icon: 'pi pi-book', route: '/arap', color: 'text-cyan-500 bg-cyan-50' },
-    { label: 'Stok Opname', icon: 'pi pi-check-square', route: '/inventory', color: 'text-lime-500 bg-lime-50 ' },
-    { label: 'Produksi', icon: 'pi pi-cog', route: '/production', color: 'text-slate-500 bg-slate-100' },
-    { label: 'Pelanggan', icon: 'pi pi-users', route: '/member', color: 'text-pink-500 bg-pink-50' },
-    { label: 'Pengaturan', icon: 'pi pi-cog', route: '/setting', color: 'text-gray-500 bg-gray-100' },
+// --- MENU SESUAI HEADER ---
+
+const transaksiMenu = [
+    { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/sale', color: 'text-emerald-500 bg-emerald-50' },
+    { label: 'Pembelian', icon: 'pi pi-shopping-bag', route: '/buy', color: 'text-blue-500 bg-blue-50' },
+    { label: 'Retur Jual', icon: 'pi pi-refresh', route: '/return/sale', color: 'text-rose-500 bg-rose-50' },
+    { label: 'Retur Beli', icon: 'pi pi-refresh', route: '/return/buy', color: 'text-pink-500 bg-pink-50' },
+    { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar', color: 'text-amber-500 bg-amber-50' },
+    { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap', color: 'text-orange-500 bg-orange-50' },
+    { label: 'Keuangan', icon: 'pi pi-book', route: '/financial', color: 'text-cyan-500 bg-cyan-50' },
+];
+
+const manajemenMenu = [
+    { label: 'Produk', icon: 'pi pi-box', route: '/product', color: 'text-blue-500 bg-blue-50' },
+    { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory', color: 'text-emerald-500 bg-emerald-50' },
+    { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant', color: 'text-orange-500 bg-orange-50' },
+    { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier', color: 'text-cyan-500 bg-cyan-50' },
+    { label: 'Bank & Rek.', icon: 'pi pi-building-columns', route: '/bank', color: 'text-indigo-500 bg-indigo-50' },
+    { label: 'Member', icon: 'pi pi-user', route: '/member', color: 'text-pink-500 bg-pink-50' },
+    { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier', color: 'text-rose-500 bg-rose-50' },
+    { label: 'Pegawai', icon: 'pi pi-id-card', route: '/user', color: 'text-violet-500 bg-violet-50' },
+    { label: 'Media', icon: 'pi pi-image', route: '/media', color: 'text-fuchsia-500 bg-fuchsia-50' },
+];
+
+const laporanMenu = [
+    { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale', color: 'text-emerald-500 bg-emerald-50' },
+    { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy', color: 'text-blue-500 bg-blue-50' },
+    { label: 'Retur Jual', icon: 'pi pi-replay', route: '/report/return/sale', color: 'text-rose-500 bg-rose-50' },
+    { label: 'Retur Beli', icon: 'pi pi-replay', route: '/report/return/buy', color: 'text-pink-500 bg-pink-50' },
+    { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar', color: 'text-amber-500 bg-amber-50' },
+    { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap', color: 'text-orange-500 bg-orange-50' },
+    { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory', color: 'text-cyan-500 bg-cyan-50' },
+    { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph', color: 'text-purple-500 bg-purple-50' },
+    { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial', color: 'text-indigo-500 bg-indigo-50' },
 ];
 
 // Mock Data untuk Aktivitas Terbaru (Timeline)
@@ -85,16 +111,16 @@ const navigateTo = (path) => router.push(path);
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                         {{ storeName }} Active
                     </div>
-                    <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-2">
-                        {{ greeting }}, <span class="text-primary-200">{{ userName }}</span>!
+                    <h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-2 text-white">
+                        {{ greeting }}, <span class="text-primary-100">{{ userName }}</span>!
                     </h1>
-                    <p class="text-primary-100/80 text-sm md:text-base max-w-lg leading-relaxed">
-                        Siap untuk mengelola toko hari ini? Berikut ringkasan performa dan menu cepat untuk Anda.
+                    <p class="text-primary-50 text-sm md:text-base max-w-lg leading-relaxed">
+                        Siap untuk mengelola toko hari ini? Berikut ringkasan performa dan menu operasional untuk Anda.
                     </p>
                 </div>
-                <div class="hidden md:block text-right">
+                <div class="hidden md:block text-right text-white">
                     <div class="text-4xl font-black mb-1">Rp 12.500.000</div>
-                    <div class="text-sm text-primary-200 font-medium">Omset Hari Ini <i class="pi pi-arrow-up text-emerald-400 ml-1"></i></div>
+                    <div class="text-sm text-primary-100 font-medium">Omset Hari Ini <i class="pi pi-arrow-up text-emerald-300 ml-1 font-bold"></i></div>
                 </div>
             </div>
         </div>
@@ -104,13 +130,13 @@ const navigateTo = (path) => router.push(path);
             <div class="lg:col-span-2 space-y-8">
                 
                 <div>
-                    <h3 class="text-lg font-bold  mb-4 flex items-center gap-2">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2 text-surface-800">
                         <i class="pi pi-bolt text-amber-500"></i> Aksi Cepat
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div v-for="item in quickMenu" :key="item.title" 
                              @click="navigateTo(item.route)"
-                             class="group relative overflow-hidden bg-surface-0 p-5 rounded-2xl border border-surface-100  shadow-sm hover:shadow-lg transition-all cursor-pointer">
+                             class="group relative overflow-hidden bg-surface-0 p-5 rounded-2xl border border-surface-200 shadow-sm hover:shadow-lg transition-all cursor-pointer">
                             
                             <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-10 rounded-bl-full transition-transform group-hover:scale-110" :class="item.color"></div>
                             
@@ -119,8 +145,8 @@ const navigateTo = (path) => router.push(path);
                                     <i :class="[item.icon, 'text-xl']"></i>
                                 </div>
                                 <div>
-                                    <h4 class="font-bold  text-lg group-hover:text-primary-600 transition-colors">{{ item.title }}</h4>
-                                    <p class="text-xs text-surface-500  mt-1 line-clamp-2">{{ item.desc }}</p>
+                                    <h4 class="font-bold text-lg text-surface-800 group-hover:text-primary-600 transition-colors">{{ item.title }}</h4>
+                                    <p class="text-xs text-surface-500 mt-1 line-clamp-2">{{ item.desc }}</p>
                                 </div>
                             </div>
                             <div class="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
@@ -130,18 +156,50 @@ const navigateTo = (path) => router.push(path);
                     </div>
                 </div>
 
-                <div>
-                    <h3 class="text-lg font-bold  mb-4 flex items-center gap-2">
-                        <i class="pi pi-th-large text-primary-500"></i> Menu Lainnya
+                <div class="bg-surface-0 p-5 rounded-2xl border border-surface-200 shadow-sm">
+                    <h3 class="text-base font-bold mb-4 flex items-center gap-2 text-surface-800 border-b border-surface-100 pb-3">
+                        <i class="pi pi-shopping-cart text-primary-500"></i> Modul Transaksi
                     </h3>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
-                        <div v-for="item in secondaryMenu" :key="item.label"
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        <div v-for="item in transaksiMenu" :key="item.label"
                              @click="navigateTo(item.route)"
-                             class="flex flex-col items-center justify-center gap-2 p-4 bg-surface-0 border border-surface-100  rounded-2xl hover:border-primary-200 hover:shadow-md cursor-pointer transition-all group">
+                             class="flex flex-col items-center justify-center gap-2 p-3 bg-surface-50 border border-transparent rounded-xl hover:border-primary-200 hover:shadow-sm cursor-pointer transition-all group">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110" :class="item.color">
                                 <i :class="[item.icon, 'text-lg']"></i>
                             </div>
-                            <span class="text-xs font-semibold  text-center">{{ item.label }}</span>
+                            <span class="text-[11px] font-bold text-surface-600 text-center uppercase tracking-wider">{{ item.label }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-surface-0 p-5 rounded-2xl border border-surface-200 shadow-sm">
+                    <h3 class="text-base font-bold mb-4 flex items-center gap-2 text-surface-800 border-b border-surface-100 pb-3">
+                        <i class="pi pi-briefcase text-primary-500"></i> Modul Manajemen
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        <div v-for="item in manajemenMenu" :key="item.label"
+                             @click="navigateTo(item.route)"
+                             class="flex flex-col items-center justify-center gap-2 p-3 bg-surface-50 border border-transparent rounded-xl hover:border-primary-200 hover:shadow-sm cursor-pointer transition-all group">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110" :class="item.color">
+                                <i :class="[item.icon, 'text-lg']"></i>
+                            </div>
+                            <span class="text-[11px] font-bold text-surface-600 text-center uppercase tracking-wider">{{ item.label }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-surface-0 p-5 rounded-2xl border border-surface-200 shadow-sm">
+                    <h3 class="text-base font-bold mb-4 flex items-center gap-2 text-surface-800 border-b border-surface-100 pb-3">
+                        <i class="pi pi-chart-bar text-primary-500"></i> Modul Laporan
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        <div v-for="item in laporanMenu" :key="item.label"
+                             @click="navigateTo(item.route)"
+                             class="flex flex-col items-center justify-center gap-2 p-3 bg-surface-50 border border-transparent rounded-xl hover:border-primary-200 hover:shadow-sm cursor-pointer transition-all group">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110" :class="item.color">
+                                <i :class="[item.icon, 'text-lg']"></i>
+                            </div>
+                            <span class="text-[11px] font-bold text-surface-600 text-center uppercase tracking-wider truncate w-full px-1">{{ item.label }}</span>
                         </div>
                     </div>
                 </div>
@@ -150,60 +208,60 @@ const navigateTo = (path) => router.push(path);
 
             <div class="space-y-6">
                 
-                <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-100  p-5">
-                    <h3 class="font-bold  mb-4 text-sm uppercase tracking-wider">Ringkasan Hari Ini</h3>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center p-3 bg-surface-50  rounded-xl">
+                <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200 p-5">
+                    <h3 class="font-bold mb-4 text-sm uppercase tracking-wider text-surface-700">Ringkasan Hari Ini</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-surface-50 rounded-xl border border-surface-100">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
                                     <i class="pi pi-receipt"></i>
                                 </div>
-                                <span class="text-sm font-medium ">Transaksi</span>
+                                <span class="text-sm font-bold text-surface-600">Transaksi</span>
                             </div>
-                            <span class="font-bold ">24 Nota</span>
+                            <span class="font-black text-surface-800">24 Nota</span>
                         </div>
-                        <div class="flex justify-between items-center p-3 bg-surface-50  rounded-xl">
+                        <div class="flex justify-between items-center p-3 bg-surface-50 rounded-xl border border-surface-100">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
                                     <i class="pi pi-box"></i>
                                 </div>
-                                <span class="text-sm font-medium ">Item Terjual</span>
+                                <span class="text-sm font-bold text-surface-600">Item Terjual</span>
                             </div>
-                            <span class="font-bold ">145 Pcs</span>
+                            <span class="font-black text-surface-800">145 Pcs</span>
                         </div>
-                        <div class="flex justify-between items-center p-3 bg-surface-50  rounded-xl">
+                        <div class="flex justify-between items-center p-3 bg-surface-50 rounded-xl border border-surface-100">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
                                     <i class="pi pi-exclamation-circle"></i>
                                 </div>
-                                <span class="text-sm font-medium ">Piutang Jatuh Tempo</span>
+                                <span class="text-sm font-bold text-surface-600">Piutang Jatuh Tempo</span>
                             </div>
-                            <span class="font-bold text-red-600">3 Orang</span>
+                            <span class="font-black text-red-600">3 Orang</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-100  p-5">
+                <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200 p-5">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold  text-sm uppercase tracking-wider">Aktivitas Terakhir</h3>
-                        <button class="text-xs text-primary-600 hover:underline">Lihat Semua</button>
+                        <h3 class="font-bold text-sm uppercase tracking-wider text-surface-700">Aktivitas Terakhir</h3>
+                        <button class="text-xs font-bold text-primary-600 hover:underline">Lihat Semua</button>
                     </div>
                     
                     <div class="relative pl-2 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-200">
                         <div v-for="(act, idx) in recentActivities" :key="idx" class="relative pl-6">
-                            <div class="absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 border-white "
+                            <div class="absolute left-[-5px] top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-surface-0"
                                 :class="{
                                     'bg-emerald-500': act.type === 'in',
                                     'bg-red-500': act.type === 'out',
-                                    'bg-gray-400': act.type === 'neutral'
+                                    'bg-surface-400': act.type === 'neutral'
                                 }"></div>
                             
                             <div class="flex justify-between items-start">
                                 <div>
                                     <h5 class="text-sm font-bold text-surface-800">{{ act.title }}</h5>
-                                    <span class="text-xs text-surface-400 block mt-0.5">{{ act.time }}</span>
+                                    <span class="text-xs font-medium text-surface-400 block mt-0.5">{{ act.time }}</span>
                                 </div>
-                                <span class="text-xs font-bold"
+                                <span class="text-xs font-black"
                                     :class="{
                                         'text-emerald-600': act.type === 'in',
                                         'text-red-600': act.type === 'out',
@@ -216,13 +274,13 @@ const navigateTo = (path) => router.push(path);
                     </div>
                 </div>
 
-                <div class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden group cursor-pointer" @click="navigateTo('/product')">
+                <div class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden group cursor-pointer hover:shadow-indigo-500/30 transition-shadow" @click="navigateTo('/inventory')">
                     <div class="relative z-10">
-                        <h4 class="font-bold text-lg mb-1">Stok Menipis!</h4>
-                        <p class="text-indigo-100 text-xs mb-3">Ada 5 barang yang stoknya di bawah batas minimum.</p>
-                        <button class="bg-surface-0 hover:bg-surface-0 backdrop-blur-sm text-xs px-3 py-1.5 rounded-lg transition-colors">Cek Sekarang</button>
+                        <h4 class="font-black text-lg mb-1">Stok Menipis!</h4>
+                        <p class="text-indigo-100 text-xs mb-4 font-medium">Ada 5 barang yang stoknya di bawah batas minimum.</p>
+                        <button class="bg-white/20 hover:bg-white/30 backdrop-blur-sm font-bold text-xs px-4 py-2 rounded-lg transition-colors border border-white/30">Cek Gudang Sekarang</button>
                     </div>
-                    <i class="pi pi-bell text-6xl absolute -bottom-4 -right-4 opacity-20 rotate-12 group-hover:scale-110 transition-transform"></i>
+                    <i class="pi pi-bell text-7xl absolute -bottom-4 -right-4 opacity-20 rotate-12 group-hover:scale-110 transition-transform"></i>
                 </div>
 
             </div>

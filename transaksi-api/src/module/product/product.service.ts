@@ -22,58 +22,6 @@ export class ProductService {
     private readonly journalStokService: JournalStokService, 
   ) {}
 
-  // --- HELPER UNTUK MENGHITUNG STOK DARI JURNAL ---
-  private async calculateStockFromJournal(productUuids: string[], storeUuid: string) {
-    if (productUuids.length === 0) return new Map<string, number>();
-
-    // 1. Cari kode jurnal yang melibatkan produk-produk ini
-    const productDetails = await this.dataSource.getRepository(JournalDetailEntity)
-        .createQueryBuilder('jd')
-        .where("jd.key LIKE 'stok_product_uuid%'")
-        .andWhere("jd.value IN (:...uuids)", { uuids: productUuids })
-        .andWhere("jd.journalCode LIKE :store", { store: `%-${storeUuid}-%` })
-        .getMany();
-
-    if (productDetails.length === 0) return new Map<string, number>();
-
-    // 2. Ekstrak kode jurnal dan index (suffix #0, #1, dst)
-    const targets = productDetails.map(pd => ({
-        code: pd.journalCode,
-        index: pd.key.split('#')[1],
-        productUuid: pd.value
-    }));
-
-    const journalCodes = [...new Set(targets.map(t => t.code))];
-
-    // 3. Ambil semua detail stok (qty plus, qty min, variant) dari kode-kode jurnal tersebut
-    const relatedDetails = await this.dataSource.getRepository(JournalDetailEntity)
-        .createQueryBuilder('jd')
-        .where("jd.journalCode IN (:...codes)", { codes: journalCodes })
-        .andWhere("jd.key LIKE 'stok_%'")
-        .getMany();
-
-    // 4. Kalkulasi di memory (Cepat & Database Agnostic)
-    const stockMap = new Map<string, number>(); 
-
-    for (const target of targets) {
-        const variantDetail = relatedDetails.find(d => d.journalCode === target.code && d.key === `stok_variant_uuid#${target.index}`);
-        const plusDetail = relatedDetails.find(d => d.journalCode === target.code && d.key === `stok_qty_plus#${target.index}`);
-        const minDetail = relatedDetails.find(d => d.journalCode === target.code && d.key === `stok_qty_min#${target.index}`);
-
-        const variantUuid = variantDetail?.value && variantDetail.value !== 'null' ? variantDetail.value : 'null';
-        const qtyPlus = plusDetail ? Number(plusDetail.value) : 0;
-        const qtyMin = minDetail ? Number(minDetail.value) : 0;
-        const netQty = qtyPlus - qtyMin;
-
-        // Key map format: "productUuid_variantUuid"
-        const mapKey = `${target.productUuid}_${variantUuid}`;
-        const currentStock = stockMap.get(mapKey) || 0;
-        stockMap.set(mapKey, currentStock + netQty);
-    }
-
-    return stockMap;
-  }
-
   // --- FUNGSI CREATE, UPDATE, DELETE ---
   async create(dto: CreateProductDto, storeUuid: string, userId: string) {
     return await this.dataSource.transaction(async (manager) => {
@@ -300,7 +248,7 @@ export class ProductService {
 
     // 1. Ambil Data Stok dari Jurnal
     const productUuids = data.map(p => p.uuid);
-    const stockMap = await this.calculateStockFromJournal(productUuids, storeUuid);
+    const stockMap = await this.journalStokService.calculateStockFromJournal(productUuids, storeUuid);
 
     // 2. Gabungkan stok ke dalam response data
     data.forEach(product => {
@@ -350,7 +298,7 @@ export class ProductService {
     }
 
     // Kalkulasi Stok untuk 1 produk ini
-    const stockMap = await this.calculateStockFromJournal([uuid], storeUuid);
+    const stockMap = await this.journalStokService.calculateStockFromJournal([uuid], storeUuid);
 
     if (product.variants && product.variants.length > 0) {
         let totalVariantStock = 0;

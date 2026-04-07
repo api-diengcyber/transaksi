@@ -526,4 +526,12 @@ export class StoreService {
     // Disini kita return object Tree langsung
     return tree.branches || [];
   }
+
+  async findAllPublic() {
+    return await this.storeRepository.find({
+      relations: ['settings'],
+      order: { createdAt: 'DESC' },
+      take: 1,
+    });
+  }
 }

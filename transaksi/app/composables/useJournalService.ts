@@ -147,6 +147,32 @@ export const useJournalService = () => {
         });
     };
 
+    const createStockMutation = async (payload: any) => {
+        return await useApi(`${API_BASE}/mutation`, {
+            method: 'POST',
+            body: payload,
+        });
+    };
+
+    const createOpnameDraft = async (payload: any) => {
+        return await useApi(`${API_BASE}/opname/draft`, {
+            method: 'POST',
+            body: payload,
+        });
+    };
+
+    const getUnverifiedOpnames = async (warehouseUuid: string) => {
+        return await useApi(`${API_BASE}/opname/unverified/${warehouseUuid}`, {
+            method: 'GET',
+        });
+    };
+
+    const verifyOpnameJournal = async (journalUuid: string) => {
+        return await useApi(`${API_BASE}/opname/verify/${journalUuid}`, {
+            method: 'PUT',
+        });
+    };
+
     return {
         createSaleTransaction,
         createBuyTransaction,
@@ -166,5 +192,9 @@ export const useJournalService = () => {
         breakStock,
         combineStock,
         getTransactionById,
+        createStockMutation,
+        createOpnameDraft,
+        getUnverifiedOpnames,
+        verifyOpnameJournal,
     };
 };

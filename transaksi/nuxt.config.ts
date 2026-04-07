@@ -1,5 +1,6 @@
 // nuxt.config.ts
 import Aura from '@primeuix/themes/aura';
+import pkg from './package.json'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-12-01',
@@ -21,7 +22,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: 'http://127.0.0.1:3000'
+      apiBase: 'http://127.0.0.1:3000',
+      appVersion: pkg.version || '1.0.0'
     }
   },
   modules: [

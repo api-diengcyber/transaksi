@@ -20,34 +20,40 @@ export class UserService {
     private readonly dataSource: DataSource,
   ) {}
 
-  // ... (Create method tetap sama, pastikan storeUuid wajib) ...
   async create(dto: CreateUserDto, creatorId: string, storeUuid: string) {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
     
-    // Cek username global (bisa disesuaikan jika ingin unique per store)
+    // 1. Cek ketersediaan username
     const existingUser = await this.userRepo.findOne({ where: { username: dto.username } });
     if (existingUser) throw new BadRequestException('Username/No. HP sudah terdaftar.');
     
     return this.dataSource.transaction(async (manager: EntityManager) => {
         const hashedPassword = await bcrypt.hash(dto.password, 10);
         
-        // Cari Role, jika tidak dikirim, default ke MEMBER (opsional logic)
-        const roleNames = dto.roles && dto.roles.length > 0 ? dto.roles : [UserRole.MEMBER];
-        const roles = await manager.findBy(UserRoleEntity, { role: In(roleNames) });
+        // 2. Cari Role berdasarkan UUID (Karena dto.roles berisi UUID)
+        // Kita mencari di kolom 'uuid' sesuai data yang dikirim frontend
+        const roles = await manager.find(UserRoleEntity, { 
+            where: { uuid: In(dto.roles) } 
+        });
         
-        if (roles.length === 0) throw new BadRequestException('Role tidak valid.');
+        if (roles.length === 0) {
+            throw new BadRequestException('Role tidak ditemukan atau ID Role tidak valid.');
+        }
 
+        // 3. Cari Store
         const currentStore = await manager.findOne(StoreEntity, { where: { uuid: storeUuid } });
         if (!currentStore) throw new NotFoundException('Store not found.');
 
+        // 4. Generate UUID User Baru
         const customUserUuid = generateUserUuid(storeUuid);
 
+        // 5. Create Entity
         const newUser = manager.create(UserEntity, {
             uuid: customUserUuid,
             username: dto.username,
             email: dto.email,
             password: hashedPassword,
-            roles: roles,
+            roles: roles, // Berisi array entity role yang ditemukan
             defaultStore: currentStore,
             stores: [currentStore],
             createdBy: creatorId,
@@ -55,6 +61,27 @@ export class UserService {
 
         return await manager.save(newUser);
     });
+  }
+
+  // Perbaiki juga method update agar menggunakan UUID untuk pencarian role
+  async update(uuid: string, dto: UpdateUserDto, updaterId: string, storeUuid: string) {
+      return this.dataSource.transaction(async (manager: EntityManager) => {
+          const user = await this.findOne(uuid, storeUuid);
+
+          if (dto.username) user.username = dto.username;
+          if (dto.email) user.email = dto.email;
+
+          if (dto.roles && dto.roles.length > 0) {
+              // Cari berdasarkan UUID
+              const roles = await manager.find(UserRoleEntity, { 
+                  where: { uuid: In(dto.roles) } 
+              });
+              if (roles.length > 0) user.roles = roles;
+          }
+
+          user.updatedBy = updaterId;
+          return await manager.save(user);
+      });
   }
 
   // [PERBAIKAN] Menambahkan fitur Search
@@ -100,24 +127,6 @@ export class UserService {
 
       if (!user) throw new NotFoundException(`User tidak ditemukan.`);
       return user;
-  }
-  
-  async update(uuid: string, dto: UpdateUserDto, updaterId: string, storeUuid: string) {
-      return this.dataSource.transaction(async (manager: EntityManager) => {
-          const user = await this.findOne(uuid, storeUuid);
-
-          if (dto.username) user.username = dto.username;
-          if (dto.email) user.email = dto.email;
-
-          // Update Roles jika ada
-          if (dto.roles && dto.roles.length > 0) {
-              const roles = await manager.findBy(UserRoleEntity, { role: In(dto.roles) });
-              user.roles = roles;
-          }
-
-          user.updatedBy = updaterId;
-          return await manager.save(user);
-      });
   }
 
   async softDelete(uuid: string, deleterId: string, storeUuid: string) {

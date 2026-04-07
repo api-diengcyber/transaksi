@@ -2,8 +2,12 @@
 import { ref, computed, onMounted, reactive, watch, nextTick, defineAsyncComponent } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useAuthStore } from '~/stores/auth.store';
+import { useProductService } from '~/composables/useProductService';
+import { useJournalService } from '~/composables/useJournalService';
+import { useCategoryService } from '~/composables/useCategoryService';
 import { useWarehouseService } from '~/composables/useWarehouseService'; 
 import { useSupplierService } from '~/composables/useSupplierService';   
+import { useUserService } from '~/composables/useUserService';
 
 // --- COMPONENT IMPORTS ---
 const ProductCreateModal = defineAsyncComponent(() => import('~/components/product/ProductCreateModal.vue'));
@@ -14,6 +18,7 @@ const journalService = useJournalService();
 const categoryService = useCategoryService(); 
 const warehouseService = useWarehouseService();
 const supplierService = useSupplierService();
+const userService = useUserService();
 const authStore = useAuthStore();
 const toast = useToast();
 
@@ -32,6 +37,7 @@ const isScanMode = ref(false);
 const categories = ref([]); 
 const warehouses = ref([]);
 const suppliers = ref([]);
+const users = ref([]);
 
 // --- MODAL STATES ---
 const showCreateModal = ref(false); 
@@ -52,10 +58,12 @@ const totalProducts = ref(0);
 
 // --- STATE TRANSAKSI ---
 const purchaseInfo = reactive({
+    transactionDate: new Date(), 
+    cashierUuid: authStore.user?.uuid || null,
     referenceNo: '',
     notes: '',
-    paymentMethod: 'CASH', // CASH atau CREDIT
-    dueDate: null,         // Tanggal jatuh tempo
+    paymentMethod: 'CASH',
+    dueDate: null,
 });
 const cashAmount = ref(0); 
 
@@ -75,6 +83,7 @@ const remainingBalance = computed(() => {
 
 const canCheckout = computed(() => {
     if (cart.value.length === 0 || grandTotal.value <= 0) return false;
+    if (!purchaseInfo.cashierUuid) return false; 
     if (processing.value) return false;
     
     if (isCreditPurchase.value) {
@@ -85,10 +94,6 @@ const canCheckout = computed(() => {
 });
 
 const canProcessTransaction = computed(() => !processing.value);
-
-const currentDate = computed(() => {
-    return new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-});
 
 const gridContainerClass = computed(() => {
     if (viewMode.value === 'list') return 'flex flex-col gap-2';
@@ -129,17 +134,17 @@ const getStockColor = (qty) => {
 // --- FOKUS SCANNER ---
 const focusScanner = () => {
     const input = document.getElementById('search-input-buy');
-    if (input) {
-        input.focus();
-        toast.add({ severity: 'info', summary: 'Mode Scan Aktif', detail: 'Silakan scan barcode produk fisik Anda.', life: 2000 });
-    }
+    if (input) input.focus();
 };
 
 const toggleScanMode = () => {
     isScanMode.value = !isScanMode.value;
     searchQuery.value = '';
     if (isScanMode.value) {
-        nextTick(() => focusScanner());
+        nextTick(() => {
+            focusScanner();
+            toast.add({ severity: 'info', summary: 'Mode Scan Aktif', detail: 'Silakan scan barcode produk fisik Anda.', life: 2000 });
+        });
     } else {
         handleLocalFiltering(false);
     }
@@ -150,28 +155,28 @@ const fetchMasterData = async () => {
     try {
         const cData = await categoryService.getAllCategories();
         categories.value = Array.isArray(cData) ? cData : (cData?.data || []);
-    } catch (e) {
-        categories.value = [];
-    }
+    } catch (e) { categories.value = []; }
 
     try {
         const wData = await warehouseService.getAllWarehouses();
         let wList = wData?.data?.data || wData?.data || wData || [];
         warehouses.value = Array.isArray(wList) ? wList : [];
-    } catch (e) {
-        warehouses.value = [];
-    }
+    } catch (e) { warehouses.value = []; }
 
     try {
         let sData = null;
         if (supplierService.getSuppliers) sData = await supplierService.getSuppliers();
         else if (supplierService.getAllSuppliers) sData = await supplierService.getAllSuppliers();
-        
         let sList = sData?.data?.data || sData?.data || sData || [];
         suppliers.value = Array.isArray(sList) ? sList : [];
-    } catch (e) {
-        suppliers.value = [];
-    }
+    } catch (e) { suppliers.value = []; }
+
+    try {
+        let uData = null;
+        if (userService.getAllUsers) uData = await userService.getAllUsers();
+        else if (userService.fetchUsers) uData = await userService.fetchUsers();
+        users.value = uData?.data?.data || uData?.data || uData || [];
+    } catch (e) { users.value = []; }
 };
 
 const loadProducts = async () => {
@@ -189,7 +194,7 @@ const loadProducts = async () => {
         
         products.value = data.map(p => ({
             ...p,
-            isManageStock: p.isManageStock !== false, // Memastikan properti ini ada (default true)
+            isManageStock: p.isManageStock !== false, 
             prices: p.prices || p.price || [],
             variants: p.variants || [],
             unit: p.unit || null,
@@ -221,7 +226,6 @@ const processBarcodeScan = async () => {
         const data = response?.data || response;
         
         if (data && data.uuid) {
-            // CEK STOK SEBELUM DIMASUKKAN VIA SCANNER
             if (data.isManageStock === false) {
                 toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk non-fisik/tanpa stok tidak dapat dibeli.', life: 2000 });
                 searchQuery.value = '';
@@ -245,10 +249,9 @@ const processBarcodeScan = async () => {
         toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Barcode tidak terdaftar', life: 2000 });
     } finally {
         searchQuery.value = '';
-        nextTick(() => {
-            const input = document.getElementById('search-input-buy');
-            if (input) input.focus();
-        });
+        if (isScanMode.value) {
+             nextTick(() => focusScanner());
+        }
     }
 };
 
@@ -275,7 +278,6 @@ const handleLocalFiltering = (isApiLoad = false) => {
         }
 
         if (exactMatch) {
-            // CEK STOK SEBELUM DIMASUKKAN VIA SCANNER EXACT MATCH
             if (exactMatch.isManageStock === false) {
                 toast.add({ severity: 'warn', summary: 'Gagal', detail: 'Produk tanpa stok tidak bisa dibeli.', life: 2000 });
                 searchQuery.value = '';
@@ -309,14 +311,13 @@ const handleLocalFiltering = (isApiLoad = false) => {
 // --- WATCHERS ---
 watch(selectedCategoryUuids, () => { currentPage.value = 1; loadProducts(); });
 
-const onSearchKeydown = async (event) => {
-    if (event.key === 'Enter') {
-        if (isScanMode.value) {
-            await processBarcodeScan();
-        } else {
-            currentPage.value = 1;
-            loadProducts();
-        }
+// PENGENDALI EVENT KEYDOWN
+const onSearchKeydown = async () => {
+    if (isScanMode.value) {
+        await processBarcodeScan();
+    } else {
+        currentPage.value = 1;
+        loadProducts();
     }
 };
 
@@ -326,6 +327,10 @@ const openPurchaseModal = () => {
         toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk terlebih dahulu', life: 2000 });
         return;
     }
+    if (!purchaseInfo.cashierUuid) {
+        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Pilih Operator / Kasir terlebih dahulu', life: 2000 });
+        return;
+    }
     if (purchaseInfo.paymentMethod === 'CASH') {
         cashAmount.value = grandTotal.value;
     }
@@ -333,7 +338,6 @@ const openPurchaseModal = () => {
 };
 
 const addToCart = (prod) => {
-    // CEK STOK SEBELUM DIMASUKKAN VIA KLIK KARTU
     if (prod.isManageStock === false) {
         toast.add({ severity: 'warn', summary: 'Peringatan', detail: 'Produk Jasa/Non-Fisik tidak memerlukan input stok pembelian.', life: 2500 });
         return;
@@ -350,7 +354,6 @@ const addToCart = (prod) => {
 const pushToCart = (prod, variant) => {
     try {
         const variantUuid = variant ? variant.uuid : null;
-        
         const existingItemIndex = cart.value.findIndex(i => i.productUuid === prod.uuid && i.variantUuid === variantUuid);
 
         if (existingItemIndex !== -1) {
@@ -380,6 +383,7 @@ const pushToCart = (prod, variant) => {
                 qty: 1,
                 warehouseUuid: defaultWarehouse,
                 supplierUuid: defaultSupplier,
+                expanded: false // <-- Tambahkan properti expanded untuk UI
             };
 
             cart.value = [...cart.value, newItem];
@@ -456,6 +460,10 @@ const processPurchase = async () => {
                 reference_no: purchaseInfo.referenceNo || '-',
                 notes: purchaseInfo.notes,
                 payment_method: purchaseInfo.paymentMethod,
+                
+                transaction_date: purchaseInfo.transactionDate ? purchaseInfo.transactionDate.toISOString() : new Date().toISOString(),
+                cashier_uuid: purchaseInfo.cashierUuid,
+
                 is_credit: isCreditPurchase.value ? 'true' : 'false',
                 due_date: purchaseInfo.dueDate ? purchaseInfo.dueDate.toISOString().split('T')[0] : null,
                 amount_cash: cashAmount.value, 
@@ -486,6 +494,8 @@ const resetState = () => {
     purchaseInfo.notes = '';
     purchaseInfo.paymentMethod = 'CASH';
     purchaseInfo.dueDate = null;
+    purchaseInfo.transactionDate = new Date();
+    purchaseInfo.cashierUuid = authStore.user?.uuid || null;
     cashAmount.value = 0;
     showPurchaseModal.value = false;
 };
@@ -510,7 +520,7 @@ defineExpose({ refreshData });
         
         <div class="flex-1 flex flex-col bg-surface-0 rounded-xl shadow-sm border border-surface-200 overflow-hidden">
             
-            <div class="px-4 py-3 border-b border-surface-100 flex justify-between items-center bg-surface-0">
+            <div class="px-4 py-3 border-b border-surface-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-surface-0">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
                         <i class="pi pi-download text-xl"></i>
@@ -519,14 +529,21 @@ defineExpose({ refreshData });
                         <h1 class="text-lg font-bold leading-tight">
                             {{ authStore.activeStore?.name || 'Stok Masuk / Pembelian' }}
                         </h1>
-                        <p class="text-xs text-surface-500">
-                            Operator: <span class="font-medium">{{ authStore.user?.name || 'Admin' }}</span>
-                        </p>
                     </div>
                 </div>
-                <div class="hidden md:block text-right">
-                    <div class="text-xs font-medium text-surface-500 uppercase tracking-wider mb-0.5">Hari ini</div>
-                    <div class="text-sm font-bold">{{ currentDate }}</div>
+                
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center bg-surface-50 border border-surface-200 rounded-lg px-2 h-10 shadow-sm">
+                        <i class="pi pi-calendar text-surface-400 mr-2 text-sm"></i>
+                        <Calendar 
+                            v-model="purchaseInfo.transactionDate" 
+                            dateFormat="dd M yy" 
+                            showTime 
+                            hourFormat="24"
+                            class="!border-0 !w-44 !bg-transparent"
+                            inputClass="!border-0 !bg-transparent !p-0 !text-sm !font-semibold !text-surface-700 focus:!ring-0 cursor-pointer"
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -562,7 +579,8 @@ defineExpose({ refreshData });
                             type="text" 
                             :placeholder="isScanMode ? 'Tunggu scan barcode alat...' : 'Cari Manual Nama/SKU...'" 
                             class="w-full pl-9 pr-3 py-2 text-sm border rounded-lg h-10 focus:ring-emerald-500 focus:border-emerald-500" 
-                            @keydown="onSearchKeydown" 
+                            @keydown.enter.prevent="onSearchKeydown" 
+                            @keydown.tab.prevent="onSearchKeydown"
                             autocomplete="off" 
                         />
                     </div>
@@ -693,12 +711,30 @@ defineExpose({ refreshData });
         </div>
 
         <div class="w-full lg:w-[450px] xl:w-[500px] flex flex-col bg-surface-0 rounded-xl shadow-sm border border-surface-200 overflow-hidden shrink-0 h-[600px] lg:h-auto">
-            <div class="p-3 border-b border-surface-100 bg-surface-50/50 flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div>
-                    <span class="font-bold text-sm">List Item Pembelian</span>
+            
+            <div class="p-3 border-b border-surface-100 flex flex-col gap-3 bg-surface-50/50 flex-shrink-0">
+                <div class="flex items-center gap-2 bg-white rounded border border-surface-200 px-2 py-1 shadow-sm">
+                    <i class="pi pi-user text-emerald-500 text-xs"></i>
+                    <span class="text-[10px] font-bold text-surface-500 uppercase tracking-wider w-16">Operator:</span>
+                    <Dropdown 
+                        v-model="purchaseInfo.cashierUuid" 
+                        :options="users" 
+                        optionLabel="name" 
+                        optionValue="uuid" 
+                        filter
+                        placeholder="Pilih PIC / Operator..." 
+                        class="w-full !h-7 !border-0 bg-transparent"
+                        :pt="{ input: { class: '!py-0 !px-1 !text-xs !font-bold text-surface-700 flex items-center' }, trigger: { class: '!w-6' } }"
+                    />
                 </div>
-                <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
+
+                <div class="flex justify-between items-center px-1">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><span class="font-bold text-xs">{{ totalItems }}</span></div>
+                        <span class="font-bold text-sm">List Item Pembelian</span>
+                    </div>
+                    <Button icon="pi pi-trash" text severity="danger" size="small" class="!w-8 !h-8" v-tooltip.left="'Kosongkan'" @click="cart = []" :disabled="cart.length === 0" />
+                </div>
             </div>
 
             <div id="cart-items-container-buy" class="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin bg-surface-50/30">
@@ -715,56 +751,59 @@ defineExpose({ refreshData });
                 </div>
                 
                 <div v-for="(item, index) in cart" :key="index" class="group border border-surface-200 rounded-xl p-2.5 hover:border-emerald-300 transition-all shadow-sm relative bg-surface-0">
-                    <button class="absolute -top-2 -right-2 shadow border border-surface-200 bg-surface-0 text-surface-400 hover:text-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
+                    <button class="absolute -top-2 -right-2 shadow border border-surface-200 bg-red-50 text-red-500 hover:text-white hover:bg-red-500 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10" @click="removeFromCart(index)">
                         <i class="pi pi-times text-[10px] font-bold"></i>
                     </button>
                     
-                    <div class="mb-2 pr-4 flex justify-between items-start">
-                        <div class="text-sm font-bold line-clamp-2" :title="item.name">{{ item.name }}</div>
-                        <span class="bg-surface-100 text-surface-600 text-[9px] font-bold px-2 py-1 rounded ml-2 shrink-0">{{ item.unitName }}</span>
+                    <div class="flex justify-between items-start gap-2 cursor-pointer select-none group pr-4" @click="item.expanded = !item.expanded">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-bold leading-tight truncate flex items-center gap-1 group-hover:text-emerald-600 transition-colors" :title="item.name">
+                                <i class="pi text-[8px] text-surface-400 transition-transform" :class="item.expanded ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
+                                {{ item.name }}
+                            </div>
+                            <div class="flex items-center gap-1 mt-1 pl-3 flex-wrap">
+                                <span class="bg-surface-100 text-surface-600 text-[8px] font-bold px-1 rounded border border-surface-200">{{ item.unitName }}</span>
+                                <span class="text-[9px] font-mono text-surface-500">@ {{ formatCurrency(item.buyPrice) }}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0" @click.stop>
+                            <div class="flex items-center bg-white rounded border border-surface-200 h-6 overflow-hidden shadow-sm">
+                                <button class="w-6 h-full flex items-center justify-center text-surface-500 hover:bg-surface-200 transition" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)">
+                                    <i class="pi text-[8px] font-bold" :class="item.qty > 1 ? 'pi-minus text-surface-500' : 'pi-trash text-red-500'"></i>
+                                </button>
+                                <input v-model.number="item.qty" type="number" class="w-8 text-center text-[10px] font-bold border-0 p-0 h-full focus:ring-0 bg-transparent" min="1" />
+                                <button class="w-6 h-full flex items-center justify-center text-surface-500 hover:text-emerald-600 hover:bg-emerald-50 transition border-l border-surface-100" @click="item.qty++">
+                                    <i class="pi pi-plus text-[8px] font-bold"></i>
+                                </button>
+                            </div>
+                            <div class="text-sm font-black text-emerald-600 w-16 text-right">{{ formatCurrency(item.buyPrice * item.qty) }}</div>
+                        </div>
                     </div>
                     
-                    <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-surface-100">
+                    <div v-show="item.expanded" class="flex flex-col gap-2 mt-2 pt-2 border-t border-dashed border-surface-200 pl-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[9px] font-bold text-surface-500 w-12">Gudang:</span>
+                            <Dropdown v-model="item.warehouseUuid" :options="warehouses" optionLabel="name" optionValue="uuid" placeholder="Pilih..." class="w-full !h-6 !text-[9px]" :pt="{ root: { class: '!bg-surface-50 !border-surface-200' }, input: { class: '!py-0 !px-1.5 !text-[9px] flex items-center' }, trigger: { class: '!w-5' } }" />
+                        </div>
                         
-                        <div class="flex gap-2">
-                            <div class="flex-1">
-                                <label class="text-[9px] font-bold text-surface-500 mb-0.5 block uppercase">Gudang Penyimpanan</label>
-                                <Dropdown v-model="item.warehouseUuid" :options="warehouses" optionLabel="name" optionValue="uuid" placeholder="Pilih..." class="w-full !h-7 !text-[10px]" :pt="{ root: { class: '!bg-surface-50 !border-surface-200' }, input: { class: '!py-1 !px-2' }, trigger: { class: '!w-6' } }" />
-                            </div>
-                            <div class="flex-1">
-                                <label class="text-[9px] font-bold text-surface-500 mb-0.5 block uppercase">Supplier</label>
-                                <Dropdown v-model="item.supplierUuid" :options="suppliers" optionLabel="username" optionValue="uuid" placeholder="Pilih..." class="w-full !h-7 !text-[10px]" :pt="{ root: { class: '!bg-surface-50 !border-surface-200' }, input: { class: '!py-1 !px-2' }, trigger: { class: '!w-6' } }" />
-                            </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[9px] font-bold text-surface-500 w-12">Supplier:</span>
+                            <Dropdown v-model="item.supplierUuid" :options="suppliers" optionLabel="username" optionValue="uuid" placeholder="Pilih..." class="w-full !h-6 !text-[9px]" :pt="{ root: { class: '!bg-surface-50 !border-surface-200' }, input: { class: '!py-0 !px-1.5 !text-[9px] flex items-center' }, trigger: { class: '!w-5' } }" />
                         </div>
 
-                        <div class="flex items-center justify-between gap-3 mt-1">
-                            <div class="flex-1">
-                                <label class="text-[9px] font-bold text-surface-500 mb-0.5 block">Harga Beli (Modal)</label>
-                                <div class="relative">
-                                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-surface-400">Rp</span>
-                                    <InputNumber v-model="item.buyPrice" mode="decimal" locale="id-ID" class="!h-7 w-full" inputClass="!text-xs !h-7 !py-0 !pl-7 !pr-2 !font-mono !font-bold !text-emerald-600 !rounded-lg !bg-surface-50 !border-surface-200 focus:!border-emerald-500 focus:!ring-1" :min="0" />
-                                </div>
-                            </div>
-                            <div class="shrink-0 w-24">
-                                <label class="text-[9px] font-bold text-surface-500 mb-0.5 block text-center">Kuantitas (Qty)</label>
-                                <div class="flex items-center bg-surface-100 rounded-lg border border-surface-200 h-7 w-full">
-                                    <button class="w-7 h-full flex items-center justify-center hover:bg-surface-200 rounded-l-lg transition text-surface-600 hover:text-red-500" @click="item.qty > 1 ? item.qty-- : removeFromCart(index)"><i class="pi pi-minus text-[9px] font-bold"></i></button>
-                                    <input v-model="item.qty" type="number" class="w-full h-full bg-transparent text-center text-xs font-bold border-none outline-none appearance-none m-0 p-0 focus:ring-0" min="1" />
-                                    <button class="w-7 h-full flex items-center justify-center hover:bg-surface-200 rounded-r-lg transition text-emerald-600" @click="item.qty++"><i class="pi pi-plus text-[9px] font-bold"></i></button>
-                                </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[9px] font-bold text-surface-500 w-12">Hrg Mdl:</span>
+                            <div class="relative flex items-center h-6 flex-1">
+                                <span class="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] text-surface-400">Rp</span>
+                                <InputNumber v-model="item.buyPrice" mode="decimal" locale="id-ID" class="w-full !h-6" inputClass="!pl-5 !pr-1 !py-0 !text-[10px] !h-6 !bg-white !border focus:!ring-emerald-500 font-mono font-bold text-right rounded" :min="0" />
                             </div>
                         </div>
-
-                        <div class="text-right mt-1">
-                            <div class="text-[9px] text-surface-400 uppercase tracking-widest">Subtotal Barang</div>
-                            <div class="text-sm font-black text-surface-800">{{ formatCurrency((item.buyPrice || 0) * (item.qty || 1)) }}</div>
-                        </div>
-
                     </div>
                 </div>
             </div>
 
-            <div class="p-4 border-t border-surface-200 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 bg-surface-0">
+            <div class="p-4 border-t border-surface-200 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 bg-surface-0 flex-shrink-0">
                 <div class="flex justify-between items-end">
                     <span class="text-sm text-surface-500 uppercase font-bold tracking-wider mb-1">Total Modal</span>
                     <span class="text-2xl font-black text-surface-900">{{ formatCurrency(grandTotal) }}</span>

@@ -44,6 +44,10 @@ export const useStoreService = () => {
         });
     };
 
+    const getSetupStatus = async () => {
+        return await $fetch(`${API_BASE}/public/setup-status`);
+    };
+
     return {
         getMyStore,
         saveStoreSettings,
@@ -51,5 +55,6 @@ export const useStoreService = () => {
         createStore,
         createBranch,
         getBranches,
+        getSetupStatus,
     };
 };

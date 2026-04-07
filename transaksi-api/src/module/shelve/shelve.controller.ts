@@ -12,7 +12,7 @@ export class ShelveController {
   @Post('create')
   create(
         @Body() dto: CreateShelveDto, 
-        @GetUser('uuid') userId: string,
+        @GetUser('sub') userId: string,
         @GetStore() storeUuid: string,
     ) {
     return this.service.create(dto, storeUuid, userId);

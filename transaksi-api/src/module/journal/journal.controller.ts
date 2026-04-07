@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestException, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestException, Req, Put } from '@nestjs/common';
 import { JournalService } from './journal.service';
 import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
@@ -38,7 +38,7 @@ export class JournalController {
   @ApiResponse({ status: 201, description: 'Sale journal created successfully' })
   async createSale(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalSaleService.createSale(body.details, userId, storeUuid);
@@ -50,7 +50,7 @@ export class JournalController {
   @ApiResponse({ status: 201, description: 'Buy journal created successfully' })
   async createBuy(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalBuyService.createBuy(body.details, userId, storeUuid);
@@ -64,7 +64,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create manual Account Receivable (Piutang) journal' })
   async createArTransaction(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalArService.createAr(body.details, userId, storeUuid);
@@ -74,7 +74,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Process payment for Account Receivable (Pelunasan Piutang)' })
   async createArPaymentTransaction(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalArService.payAr(body.details, userId, storeUuid);
@@ -88,7 +88,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create manual Account Payable (Hutang) journal' })
   async createApTransaction(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalApService.createAp(body.details, userId, storeUuid);
@@ -98,7 +98,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Process payment for Account Payable (Pelunasan Hutang)' })
   async createApPaymentTransaction(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalApService.payAp(body.details, userId, storeUuid);
@@ -108,7 +108,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create return sale journal entry' })
   async createReturnSale(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalReturnSaleService.createReturnSale(body.details, userId, storeUuid);
@@ -118,7 +118,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Create return buy journal entry' })
   async createReturnBuy(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalReturnBuyService.createReturnBuy(body.details, userId, storeUuid);
@@ -160,7 +160,7 @@ export class JournalController {
 
   @Get('report-inventory')
   async getInventoryReport(
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -172,7 +172,7 @@ export class JournalController {
 
   @Get('report-inventory/chart')
   async getInventoryChart(
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -210,7 +210,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Manual stock mutation (IN/OUT)' })
   async createStockMutation(
     @Body() body: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return this.journalStokService.createManualMutation(body, userId, storeUuid);
@@ -224,7 +224,7 @@ export class JournalController {
   @ApiOperation({ summary: 'Manual stock mutation (IN/OUT)' })
   async breakStock(
     @Body() payload: any,
-    @GetUser('uuid') userId: string,
+    @GetUser('sub') userId: string,
     @GetStore() storeUuid: string,
   ) {
     return await this.journalStokService.breakStock(payload, userId, storeUuid);
@@ -233,7 +233,7 @@ export class JournalController {
   @Post('combine-stock')
   async combineStock(
     @Body() payload: any, 
-    @GetUser('uuid') userId: string, 
+    @GetUser('sub') userId: string, 
     @GetStore() storeUuid: string,
   ) {
     return await this.journalStokService.combineStock(payload, userId, storeUuid);
@@ -242,5 +242,68 @@ export class JournalController {
   @Get(':uuid')
   async getJournalByUuid(@Param('uuid') uuid: string) {
     return await this.journalService.getJournalByUuid(uuid);
+  }
+
+  @Post('opname/draft')
+  @ApiOperation({ summary: 'Membuat Draft Stok Opname (Stok Belum Berubah)' })
+  async createOpnameDraft(
+    @Body() payload: any, // Pastikan di-mapping ke DTO CreateOpnameDraftDto jika Anda menggunakan validasi ketat
+    @GetStore() storeUuid: string
+  ) {
+    return await this.journalStokService.createOpnameDraft(payload, storeUuid);
+  }
+
+  @Get('opname/unverified/:warehouseUuid')
+  @ApiOperation({ summary: 'Mendapatkan Daftar Dokumen Opname yang Menunggu Verifikasi' })
+  async getUnverifiedOpnames(
+    @Param('warehouseUuid') warehouseUuid: string, 
+    @GetStore() storeUuid: string
+  ) {
+    return await this.journalStokService.getUnverifiedOpnames(warehouseUuid, storeUuid);
+  }
+
+  @Put('opname/verify/:uuid')
+  @ApiOperation({ summary: 'Memverifikasi Opname & Menyesuaikan Stok Secara Otomatis' })
+  async verifyOpname(
+    @Param('uuid') journalUuid: string, 
+    @GetUser('sub') adminUuid: string // Menangkap UUID Admin/SPV yang melakukan klik dari Token JWT
+  ) {
+    return await this.journalStokService.verifyOpnameJournal(journalUuid, adminUuid);
+  }
+
+  // ===========================================================================
+  // ENDPOINT MUTASI MANUAL (JIKA BELUM ADA)
+  // ===========================================================================
+
+  @Post('mutation')
+  @ApiOperation({ summary: 'Membuat Mutasi Stok Manual (Masuk / Keluar)' })
+  async createManualMutation(
+    @Body() payload: any,
+    @GetUser('sub') userUuid: string, // Bisa diambil dari token, atau dari payload frontend
+    @GetStore() storeUuid: string
+  ) {
+    // Memanggil _executeStockJournal via stockIn / stockOut
+    const { type, product_uuid, warehouse_uuid, shelve_uuid, qty, note, user_uuid } = payload;
+    
+    // Gunakan user_uuid dari frontend jika dikirim (PIC Mutasi), jika tidak gunakan user login
+    const picUuid = user_uuid || userUuid; 
+
+    const item = {
+        productUuid: product_uuid,
+        warehouseUuid: warehouse_uuid,
+        shelveUuid: shelve_uuid,
+        qty: Number(qty)
+    };
+
+    // Karena bukan draf, isDraft = false, isOpname = false
+    if (type === 'IN') {
+        await this.journalStokService.stockIn([item], picUuid, undefined, storeUuid, note, false, false);
+        return { message: 'Mutasi masuk berhasil' };
+    } else if (type === 'OUT') {
+        await this.journalStokService.stockOut([item], picUuid, undefined, storeUuid, note, false, false);
+        return { message: 'Mutasi keluar berhasil' };
+    } else {
+        throw new Error('Tipe mutasi tidak valid');
+    }
   }
 }

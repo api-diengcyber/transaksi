@@ -12,7 +12,7 @@ export class BrandController {
   @Post()
   create(
     @Body() createBrandDto: any, 
-    @GetUser('uuid') userId: string, 
+    @GetUser('sub') userId: string, 
     @GetStore() storeUuid: string,
     ) {
     return this.brandService.create(createBrandDto, storeUuid);
@@ -20,7 +20,7 @@ export class BrandController {
 
   @Get()
   findAll(
-      @GetUser('uuid') userId: string, 
+      @GetUser('sub') userId: string, 
       @GetStore() storeUuid: string,
     ) {
     return this.brandService.findAll(storeUuid);
