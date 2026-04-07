@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
 // Import Components
@@ -10,11 +10,12 @@ import WarehouseCreateModal from '~/components/warehouse/WarehouseCreateModal.vu
 const warehouseService = useWarehouseService();
 const productService = useProductService(); 
 const shelveService = useShelveService(); 
-const journalService = useJournalService(); // <-- TAMBAHKAN INI
+const journalService = useJournalService();
+const userService = useUserService(); // [BARU] Import User Service
 const toast = useToast();
 
 // --- STATE TABS ---
-const activeIndex = ref(0); // 0: Manajemen, 1: Kelola Stok, 2: Mutasi Stok, 3: Riwayat
+const activeIndex = ref(0); // 0: Manajemen, 1: Kelola Stok, 2: Mutasi Stok, 3: Riwayat, 4: Stok Opname
 
 // --- STATE: MANAJEMEN GUDANG ---
 const warehouseListRef = ref(null);
@@ -29,20 +30,34 @@ const currentWarehouseData = ref(null);
 const historyList = ref([]);
 const dataLoading = ref(false);
 
+// --- STATE: USER LIST ---
+const userList = ref([]); // [BARU] Simpan daftar user
+
 // --- STATE: MUTASI MANUAL ---
 const showMutationModal = ref(false);
-const mutationType = ref('IN'); // 'IN' atau 'OUT'
+const mutationType = ref('IN'); 
 const productList = ref([]); 
-const shelvesList = ref([]); // <-- State untuk menyimpan daftar Rak
+const shelvesList = ref([]); 
 const mutationLoading = ref(false);
 
 const mutationForm = ref({
     productUuid: null,
     warehouseUuid: null,
-    shelveUuid: null, // <-- Tambahan untuk rak (opsional)
+    shelveUuid: null, 
+    userUuid: null, // [BARU] PIC Mutasi
     qty: 1,
     note: ''
 });
+
+// --- STATE: STOK OPNAME & VERIFIKASI ---
+const opnameView = ref('input'); // 'input' atau 'verify'
+const opnameData = ref([]);
+const searchQueryOpname = ref('');
+const opnameLoading = ref(false);
+const selectedOpnameUserUuid = ref(null); // [BARU] PIC Opname
+
+const unverifiedOpnames = ref([]); // Daftar opname yang butuh verifikasi
+const verifyLoading = ref(false);
 
 // =================================================================
 // 1. INITIAL LOAD
@@ -50,8 +65,18 @@ const mutationForm = ref({
 onMounted(async () => {
     await loadAllWarehousesDropdown();
     await loadAllProducts(); 
-    await loadAllShelves(); // <-- Panggil load rak saat komponen dimuat
+    await loadAllShelves(); 
+    await loadAllUsers(); // [BARU] Panggil data user
 });
+
+const loadAllUsers = async () => {
+    try {
+        const res = await userService.getAllUsers();
+        userList.value = res?.data || res || [];
+    } catch (err) {
+        console.error("Gagal load user", err);
+    }
+};
 
 const loadAllWarehousesDropdown = async () => {
     try {
@@ -90,14 +115,26 @@ const loadAllShelves = async () => {
 // =================================================================
 watch(selectedWarehouseUuid, async (newUuid) => {
     if (newUuid) {
-        if (activeIndex.value === 1 || activeIndex.value === 2) await loadWarehouseStock(newUuid);
+        if (activeIndex.value === 1 || activeIndex.value === 2 || activeIndex.value === 4) {
+            await loadWarehouseStock(newUuid);
+            if (activeIndex.value === 4) {
+                initOpnameData();
+                loadUnverifiedOpnames();
+            }
+        }
         if (activeIndex.value === 3) await loadHistory(newUuid);
     }
 });
 
 watch(activeIndex, async (newTab) => {
     if (selectedWarehouseUuid.value) {
-        if (newTab === 1 || newTab === 2) await loadWarehouseStock(selectedWarehouseUuid.value);
+        if (newTab === 1 || newTab === 2 || newTab === 4) {
+            await loadWarehouseStock(selectedWarehouseUuid.value);
+            if (newTab === 4) {
+                initOpnameData();
+                loadUnverifiedOpnames();
+            }
+        }
         if (newTab === 3) await loadHistory(selectedWarehouseUuid.value);
     }
 });
@@ -167,6 +204,7 @@ const openMutationForm = (type) => {
         productUuid: null,
         warehouseUuid: selectedWarehouseUuid.value || (allWarehouses.value.length > 0 ? allWarehouses.value[0].uuid : null),
         shelveUuid: null, 
+        userUuid: null, // Reset input PIC
         qty: 1,
         note: ''
     };
@@ -174,6 +212,12 @@ const openMutationForm = (type) => {
 };
 
 const submitMutation = async () => {
+    // Validasi Pemilihan User
+    if (!mutationForm.value.userUuid) {
+        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Pilih Penanggung Jawab / User terlebih dahulu', life: 3000 });
+        return;
+    }
+
     if (!mutationForm.value.productUuid || mutationForm.value.qty <= 0 || !mutationForm.value.warehouseUuid) {
         toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Pilih produk, gudang, dan masukkan Qty yang valid', life: 3000 });
         return;
@@ -186,11 +230,11 @@ const submitMutation = async () => {
             product_uuid: mutationForm.value.productUuid,
             warehouse_uuid: mutationForm.value.warehouseUuid,
             shelve_uuid: mutationType.value === 'OUT' ? mutationForm.value.shelveUuid : null,
+            user_uuid: mutationForm.value.userUuid, // Kirim User UUID ke API
             qty: mutationForm.value.qty,
             note: mutationForm.value.note
         };
         
-        // Panggil endpoint menggunakan service
         await journalService.createStockMutation(payload);
 
         toast.add({ 
@@ -202,7 +246,6 @@ const submitMutation = async () => {
         
         showMutationModal.value = false;
         
-        // Refresh data di layar
         if (selectedWarehouseUuid.value) {
             await loadWarehouseStock(selectedWarehouseUuid.value);
             await loadHistory(selectedWarehouseUuid.value);
@@ -228,6 +271,107 @@ const loadHistory = async (uuid) => {
         historyList.value = [];
     } finally {
         dataLoading.value = false;
+    }
+};
+
+// =================================================================
+// 7. LOGIC: STOK OPNAME (DENGAN VERIFIKASI)
+// =================================================================
+const initOpnameData = () => {
+    selectedOpnameUserUuid.value = null; // Reset PIC saat pindah gudang
+    if (currentWarehouseData.value && currentWarehouseData.value.products) {
+        // Petakan produk ke format opname (tambahkan atribut actualStock & note)
+        opnameData.value = currentWarehouseData.value.products.map(p => ({
+            uuid: p.uuid, // UUID dari produk
+            name: p.name,
+            barcode: p.barcode,
+            systemStock: p.stock || 0,
+            actualStock: p.stock || 0, // Default disamakan dengan sistem dulu
+            note: 'Penyesuaian Opname Fisik'
+        }));
+    } else {
+        opnameData.value = [];
+    }
+};
+
+// Fitur Pencarian untuk tabel Opname
+const filteredOpnameData = computed(() => {
+    if (!searchQueryOpname.value) return opnameData.value;
+    const query = searchQueryOpname.value.toLowerCase();
+    return opnameData.value.filter(item => 
+        item.name.toLowerCase().includes(query) || 
+        (item.barcode && item.barcode.toLowerCase().includes(query))
+    );
+});
+
+const submitOpnameDraft = async () => {
+    // Validasi Pemilihan User untuk Proses Opname
+    if (!selectedOpnameUserUuid.value) {
+        toast.add({ severity: 'warn', summary: 'Aksi Ditolak', detail: 'Harap pilih PIC / Penanggung Jawab opname terlebih dahulu!', life: 3000 });
+        return;
+    }
+
+    // Cari produk-produk yang mengalami selisih (actualStock tidak sama dengan systemStock)
+    const adjustedItems = opnameData.value.filter(item => item.actualStock !== item.systemStock);
+
+    if (adjustedItems.length === 0) {
+        toast.add({ severity: 'info', summary: 'Selesai', detail: 'Tidak ada selisih stok untuk diproses.', life: 3000 });
+        return;
+    }
+
+    opnameLoading.value = true;
+    try {
+        const payload = {
+            warehouse_uuid: selectedWarehouseUuid.value,
+            user_uuid: selectedOpnameUserUuid.value, // PIC Opname
+            items: adjustedItems.map(item => ({
+                product_uuid: item.uuid,
+                system_stock: item.systemStock,
+                actual_stock: item.actualStock,
+                difference: item.actualStock - item.systemStock,
+                note: item.note || `Opname Fisik. Selisih: ${item.actualStock - item.systemStock}`
+            }))
+        };
+
+        // Buat Jurnal berstatus Draft
+        await journalService.createOpnameDraft(payload); 
+
+        toast.add({ severity: 'success', summary: 'Draft Disimpan', detail: `Opname ${adjustedItems.length} produk dikirim untuk verifikasi.`, life: 4000 });
+        
+        initOpnameData();
+        loadUnverifiedOpnames();
+        opnameView.value = 'verify'; // Pindah tab
+
+    } catch (error) {
+        console.error("Gagal memproses opname:", error);
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Terjadi kesalahan sistem saat memproses stok opname.', life: 4000 });
+    } finally {
+        opnameLoading.value = false;
+    }
+};
+
+const loadUnverifiedOpnames = async () => {
+    try {
+        const res = await journalService.getUnverifiedOpnames(selectedWarehouseUuid.value);
+        unverifiedOpnames.value = res?.data || res || [];
+    } catch (error) {
+        unverifiedOpnames.value = [];
+    }
+};
+
+const verifyOpname = async (journalUuid) => {
+    verifyLoading.value = true;
+    try {
+        await journalService.verifyOpnameJournal(journalUuid); 
+        
+        toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Opname telah diverifikasi dan stok diupdate.', life: 3000 });
+        
+        await loadWarehouseStock(selectedWarehouseUuid.value); 
+        loadUnverifiedOpnames(); 
+    } catch (error) {
+        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Terjadi kesalahan saat memverifikasi.', life: 3000 });
+    } finally {
+        verifyLoading.value = false;
     }
 };
 </script>
@@ -457,6 +601,218 @@ const loadHistory = async (uuid) => {
                 </TabPanel>
 
                 <TabPanel>
+                    <template #header>
+                        <div class="flex items-center gap-2 px-2 py-1">
+                            <i class="pi pi-clipboard text-primary-500"></i>
+                            <span class="font-semibold">Stok Opname</span>
+                        </div>
+                    </template>
+
+                    <div class="p-4 md:p-6 flex flex-col gap-5">
+                        
+                        <div class="flex flex-col sm:flex-row gap-3 border-b border-surface-200 dark:border-surface-700 pb-4">
+                            <Button 
+                                label="Input Opname Fisik" 
+                                icon="pi pi-pencil" 
+                                :severity="opnameView === 'input' ? 'primary' : 'secondary'" 
+                                :outlined="opnameView !== 'input'" 
+                                @click="opnameView = 'input'" 
+                                class="w-full sm:w-auto"
+                            />
+                            <Button 
+                                label="Menunggu Verifikasi" 
+                                icon="pi pi-shield" 
+                                :severity="opnameView === 'verify' ? 'warning' : 'secondary'" 
+                                :outlined="opnameView !== 'verify'" 
+                                :badge="unverifiedOpnames.length > 0 ? unverifiedOpnames.length.toString() : null"
+                                badgeClass="p-badge-danger"
+                                @click="opnameView = 'verify'" 
+                                class="w-full sm:w-auto"
+                            />
+                        </div>
+
+                        <div v-if="opnameView === 'input'" class="animate-fade-in flex flex-col gap-5">
+                            <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-blue-50 dark:bg-blue-900/20 p-5 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <div>
+                                    <h3 class="font-bold text-lg text-blue-800 dark:text-blue-300">Draft Opname Fisik</h3>
+                                    <p class="text-sm text-blue-600 dark:text-blue-400 mt-1">Stok tidak akan berubah sebelum diverifikasi oleh Supervisor/Admin.</p>
+                                </div>
+                                
+                                <div class="flex flex-col md:flex-row gap-3 w-full xl:w-auto items-center">
+                                    <IconField iconPosition="left" class="w-full md:w-56">
+                                        <InputIcon class="pi pi-search" />
+                                        <InputText v-model="searchQueryOpname" placeholder="Cari Barang..." class="w-full bg-white" />
+                                    </IconField>
+
+                                    <Dropdown 
+                                        v-model="selectedOpnameUserUuid" 
+                                        :options="userList" 
+                                        optionLabel="name" 
+                                        optionValue="uuid" 
+                                        filter
+                                        placeholder="Pilih PIC / Penanggung Jawab..." 
+                                        class="w-full md:w-64"
+                                    >
+                                        <template #value="slotProps">
+                                            <div v-if="slotProps.value" class="flex items-center gap-2">
+                                                <i class="pi pi-user text-blue-600"></i>
+                                                <span class="font-semibold">{{ userList.find(u => u.uuid === slotProps.value)?.name }}</span>
+                                            </div>
+                                            <span v-else>{{ slotProps.placeholder }}</span>
+                                        </template>
+                                    </Dropdown>
+
+                                    <Button 
+                                        label="Kirim Draft Opname" 
+                                        icon="pi pi-send" 
+                                        severity="primary" 
+                                        class="w-full md:w-auto shadow-sm" 
+                                        :loading="opnameLoading"
+                                        @click="submitOpnameDraft" 
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="border border-surface-200 dark:border-surface-700 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-surface-900">
+                                <DataTable 
+                                    :value="filteredOpnameData" 
+                                    :loading="dataLoading" 
+                                    stripedRows 
+                                    class="p-datatable-sm"
+                                    responsiveLayout="scroll"
+                                >
+                                    <template #empty>
+                                        <div class="p-8 text-center text-surface-500">
+                                            <i class="pi pi-box text-3xl mb-3 opacity-50 block"></i>
+                                            Pilih gudang terlebih dahulu atau tidak ada produk di gudang ini.
+                                        </div>
+                                    </template>
+
+                                    <Column header="Informasi Produk" style="min-width: 15rem">
+                                        <template #body="{ data }">
+                                            <div class="font-bold text-surface-900 dark:text-surface-100">{{ data.name }}</div>
+                                            <div class="text-xs text-surface-500 mt-1 font-mono">{{ data.barcode || '-' }}</div>
+                                        </template>
+                                    </Column>
+                                    
+                                    <Column header="Stok Sistem" class="text-center">
+                                        <template #body="{ data }">
+                                            <span class="font-black text-lg text-surface-600 dark:text-surface-400 bg-surface-100 dark:bg-surface-800 px-4 py-1.5 rounded-lg border border-surface-200">
+                                                {{ data.systemStock }}
+                                            </span>
+                                        </template>
+                                    </Column>
+
+                                    <Column header="Stok Aktual (Fisik)" class="text-center" style="width: 14rem">
+                                        <template #body="{ data }">
+                                            <InputNumber 
+                                                v-model="data.actualStock" 
+                                                showButtons 
+                                                buttonLayout="horizontal" 
+                                                :min="0"
+                                                class="w-full"
+                                                decrementButtonIcon="pi pi-minus"
+                                                incrementButtonIcon="pi pi-plus"
+                                            />
+                                        </template>
+                                    </Column>
+
+                                    <Column header="Selisih" class="text-center">
+                                        <template #body="{ data }">
+                                            <div v-if="data.actualStock !== data.systemStock">
+                                                <span 
+                                                    class="font-bold text-sm px-3 py-1 rounded-full"
+                                                    :class="(data.actualStock - data.systemStock) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'"
+                                                >
+                                                    {{ (data.actualStock - data.systemStock) > 0 ? '+' : '' }}{{ data.actualStock - data.systemStock }}
+                                                </span>
+                                            </div>
+                                            <div v-else>
+                                                <span class="text-surface-400 text-xs italic">Sesuai</span>
+                                            </div>
+                                        </template>
+                                    </Column>
+
+                                    <Column header="Catatan Penyesuaian" style="min-width: 12rem">
+                                        <template #body="{ data }">
+                                            <InputText 
+                                                v-model="data.note" 
+                                                placeholder="Alasan selisih..." 
+                                                class="w-full text-sm" 
+                                                :disabled="data.actualStock === data.systemStock"
+                                            />
+                                        </template>
+                                    </Column>
+
+                                </DataTable>
+                            </div>
+                        </div>
+
+                        <div v-else-if="opnameView === 'verify'" class="animate-fade-in">
+                            <div class="border border-warning-200 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-surface-900">
+                                <DataTable 
+                                    :value="unverifiedOpnames" 
+                                    :loading="dataLoading" 
+                                    class="p-datatable-sm" 
+                                    responsiveLayout="scroll"
+                                >
+                                    <template #empty>
+                                        <div class="p-16 text-center text-surface-500">
+                                            <i class="pi pi-check-circle text-4xl mb-4 text-emerald-500 block"></i>
+                                            <p class="text-lg font-semibold text-surface-700">Semua Bersih!</p>
+                                            <p class="text-sm">Tidak ada dokumen opname yang menunggu verifikasi saat ini.</p>
+                                        </div>
+                                    </template>
+                                    
+                                    <Column header="Kode Dokumen" style="min-width: 12rem">
+                                        <template #body="{ data }">
+                                            <span class="font-mono font-bold text-primary-700 bg-primary-50 px-3 py-1 rounded">{{ data.code }}</span>
+                                            <div class="text-xs text-surface-500 mt-2">{{ new Date(data.createdAt).toLocaleString('id-ID') }}</div>
+                                        </template>
+                                    </Column>
+
+                                    <Column header="PIC (Pembuat)">
+                                        <template #body="{ data }">
+                                            <div class="flex items-center gap-2">
+                                                <i class="pi pi-user text-surface-400"></i>
+                                                <span class="font-semibold">{{ userList.find(u => u.uuid === data.createdBy)?.name || 'Unknown' }}</span>
+                                            </div>
+                                        </template>
+                                    </Column>
+
+                                    <Column header="Total Item Terdampak">
+                                        <template #body="{ data }">
+                                            <Tag severity="info" :value="`${data.details?.length || 0} Barang Selisih`" rounded />
+                                        </template>
+                                    </Column>
+
+                                    <Column header="Status" alignFrozen="right" class="text-center">
+                                        <template #body="{ data }">
+                                            <Tag severity="warning" value="Menunggu Verifikasi" icon="pi pi-clock" />
+                                        </template>
+                                    </Column>
+
+                                    <Column header="Aksi" alignFrozen="right" class="text-right">
+                                        <template #body="{ data }">
+                                            <Button 
+                                                label="Verifikasi & Sesuaikan Stok" 
+                                                icon="pi pi-check" 
+                                                severity="success" 
+                                                size="small"
+                                                :loading="verifyLoading"
+                                                @click="verifyOpname(data.uuid)" 
+                                            />
+                                        </template>
+                                    </Column>
+
+                                </DataTable>
+                            </div>
+                        </div>
+
+                    </div>
+                </TabPanel>
+
+                <TabPanel>
                      <template #header>
                         <div class="flex items-center gap-2 px-2 py-1">
                             <i class="pi pi-history text-primary-500"></i>
@@ -543,6 +899,22 @@ const loadHistory = async (uuid) => {
             </div>
 
             <div class="flex flex-col gap-4">
+                
+                <div class="flex flex-col gap-1 p-3 bg-surface-50 border border-surface-200 rounded-lg shadow-sm">
+                    <label class="text-sm font-bold text-surface-800">
+                        <i class="pi pi-user mr-1 text-primary-500"></i> Penanggung Jawab
+                    </label>
+                    <Dropdown 
+                        v-model="mutationForm.userUuid" 
+                        :options="userList" 
+                        optionLabel="name" 
+                        optionValue="uuid" 
+                        filter
+                        placeholder="Pilih User / PIC..." 
+                        class="w-full border-primary-200"
+                    />
+                </div>
+
                 <div class="flex flex-col gap-1">
                     <label class="text-sm font-semibold">Produk / Item</label>
                     <Dropdown 
@@ -607,3 +979,13 @@ const loadHistory = async (uuid) => {
 
     </div>
 </template>
+
+<style scoped>
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>

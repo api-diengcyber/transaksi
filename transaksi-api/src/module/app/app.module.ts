@@ -18,6 +18,7 @@ import { PriceGroupModule } from '../price_group/price_group.module';
 import { WarehouseModule } from '../warehouse/warehouse.module';
 import { BrandModule } from '../brand/brand.module';
 import { MediaModule } from '../media/media.module';
+import { IeModule } from '../ie/ie.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { MediaModule } from '../media/media.module';
     WarehouseModule,
     BrandModule,
     MediaModule,
+    IeModule,
   ],
   controllers: [],
   providers: [],

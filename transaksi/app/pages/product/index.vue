@@ -3,46 +3,55 @@ import { ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
-// Import Komponen List yang sudah dipisah
+// Import Komponen List murni (Tanpa tombol IE)
 import ProductList from '~/components/product/ProductList.vue';
 import CategoryList from '~/components/category/CategoryList.vue';
 import ShelveList from '~/components/shelve/ShelveList.vue';
 import UnitList from '~/components/unit/UnitList.vue';
-import BrandList from '~/components/brand/BrandList.vue'; // <-- [BARU] Import Brand List
+import BrandList from '~/components/brand/BrandList.vue';
 
-// Import Modal Form
+// [BARU] Import Komponen Tampilan Utama IE Murni
+import ProductImportExportView from '~/components/product/ProductImportExportView.vue'; 
+
+// Import Modals...
 import ProductCreateModal from '~/components/product/ProductCreateModal.vue';
 import ShelveCreateModal from '~/components/shelve/ShelveCreateModal.vue';
 import UnitCreateModal from '~/components/unit/UnitCreateModal.vue'; 
-import BrandCreateModal from '~/components/brand/BrandCreateModal.vue'; // <-- [BARU] Import Brand Modal
+import BrandCreateModal from '~/components/brand/BrandCreateModal.vue';
 
-// --- STATE ---
-const activeMainTab = ref('products'); // 'products' | 'categories' | 'shelves' | 'units' | 'brands'
-
-// Refs ke Child Components (agar bisa panggil method refresh() mereka)
+// --- STATE TAB ---
+// [BARU] Tambahkan state tab untuk mengontrol refresh tabel Master Produk
 const productListRef = ref(null);
 const categoryListRef = ref(null);
 const shelfListRef = ref(null);
 const unitListRef = ref(null); 
-const brandListRef = ref(null); // <-- [BARU] Ref untuk BrandList
+const brandListRef = ref(null);
 
-// State Modal Produk
+const activeMainTab = ref('products');
+
+// State Modal...
 const showModal = ref(false);
 const selectedProductUuid = ref(null);
-
-// State Modal Rak
 const showShelveModal = ref(false);
 const selectedShelveData = ref(null);
-
-// State Modal Satuan (Unit)
 const showUnitModal = ref(false);
 const selectedUnitData = ref(null);
+const showBrandModal = ref(false);
+const selectedBrandData = ref(null);
 
-// State Modal Merek (Brand)
-const showBrandModal = ref(false); // <-- [BARU]
-const selectedBrandData = ref(null); // <-- [BARU]
+// --- HANDLERS ---
+// [BARU] Fungsi callback untuk me-refresh data Master Produk setelah import sukses
+const onProductImported = () => {
+    // Alihkan kembali ke tab Master Produk agar user melihat hasilnya
+    activeMainTab.value = 'products';
+    // Gunakan nextTick agar tabel di-mount dulu sebelum di-refresh
+    nextTick(() => {
+        if (productListRef.value) {
+            productListRef.value.fetchProducts(); 
+        }
+    });
+};
 
-// --- HANDLERS: PRODUK ---
 const openCreateProduct = () => {
     selectedProductUuid.value = null;
     showModal.value = true;
@@ -54,13 +63,12 @@ const openEditProduct = (product) => {
 };
 
 const onProductSaved = () => {
-    // Refresh data tabel produk tanpa reload halaman
     if (productListRef.value) {
         productListRef.value.fetchProducts(); 
     }
 };
 
-// --- HANDLERS: RAK ---
+// Handlers Rak, Satuan, Merek... (Hapus tombol IE dari tab bar sebelumnya)
 const openCreateShelve = () => {
     selectedShelveData.value = null;
     showShelveModal.value = true;
@@ -78,7 +86,6 @@ const onShelveSaved = () => {
     showShelveModal.value = false;
 };
 
-// --- HANDLERS: SATUAN ---
 const openCreateUnit = () => {
     selectedUnitData.value = null;
     showUnitModal.value = true;
@@ -96,7 +103,6 @@ const onUnitSaved = () => {
     showUnitModal.value = false;
 };
 
-// --- HANDLERS: MEREK (BRAND) [BARU] ---
 const openCreateBrand = () => {
     selectedBrandData.value = null;
     showBrandModal.value = true;
@@ -109,8 +115,6 @@ const openEditBrand = (brand) => {
 
 const onBrandSaved = () => {
     if (brandListRef.value) {
-        // Asumsi di dalam BrandList.vue Anda membuat fungsi expose refresh() atau fetchBrands()
-        // Sesuaikan dengan nama fungsi yang ada di dalam komponen BrandList Anda
         brandListRef.value.fetchBrands ? brandListRef.value.fetchBrands() : brandListRef.value.refresh();
     }
     showBrandModal.value = false;
@@ -132,7 +136,6 @@ definePageMeta({ layout: 'default' });
         <ConfirmDialog />
 
         <div class="flex flex-wrap items-end gap-3 mb-6 border-b border-surface-300">
-
             <button 
                 @click="activeMainTab = 'products'"
                 :class="getTabClass('products')"
@@ -168,11 +171,16 @@ definePageMeta({ layout: 'default' });
                 <i class="pi pi-th-large"></i> Lokasi Rak
             </button>
 
+            <button 
+                @click="activeMainTab = 'import_export'"
+                :class="getTabClass('import_export')"
+            >
+                <i class="pi pi-file-export"></i> Impor / Ekspor
+            </button>
         </div>
 
         <div class="content-area">
             <KeepAlive>
-            
                 <ProductList 
                     v-if="activeMainTab === 'products'"
                     ref="productListRef"
@@ -207,9 +215,13 @@ definePageMeta({ layout: 'default' });
                     @edit="openEditShelve"
                 />
 
+                <ProductImportExportView 
+                    v-else-if="activeMainTab === 'import_export'"
+                    @import-success="onProductImported"
+                />
+
             </KeepAlive>
         </div>
-
 
         <ProductCreateModal 
             v-model:visible="showModal" 
@@ -240,13 +252,7 @@ definePageMeta({ layout: 'default' });
 </template>
 
 <style scoped>
-/* Base style untuk semua tabs */
-button {
-    @apply flex items-center gap-2 cursor-pointer outline-none;
-}
-
 .content-area {
-    /* Mengisi sisa ruang dan memastikan konten child tidak terpotong */
     height: calc(100% - 70px); 
     overflow: hidden;
 }
@@ -258,6 +264,4 @@ button {
     from { opacity: 0; transform: translateY(5px); }
     to { opacity: 1; transform: translateY(0); }
 }
-/* Catatan: Class .global-tab-active dan .global-tab-inactive sudah didefinisikan 
-   di base.css dan menggunakan dukungan Dark Mode pada tombol tab. */
 </style>
