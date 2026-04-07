@@ -12,22 +12,48 @@ const execPromise = promisify(exec);
 @Injectable()
 export class SystemUpdateService {
   private readonly repoUrl = 'https://api.github.com/repos/api-diengcyber/transaksi/releases/latest';
+  
+  // --- VARIABEL CACHING (DELAY 3 JAM) ---
+  private cachedUpdateInfo: any = null;
+  private lastCheckTime: number = 0;
+  private readonly CACHE_DURATION = 3 * 60 * 60 * 1000; // 3 Jam dalam milidetik
 
   async checkLatestVersion() {
+    const now = Date.now();
+
+    // 1. Cek apakah cache masih valid (belum lewat 3 jam)
+    if (this.cachedUpdateInfo && (now - this.lastCheckTime < this.CACHE_DURATION)) {
+      return this.cachedUpdateInfo; // Kembalikan data dari memori
+    }
+
     try {
+      // 2. Jika sudah lewat 3 jam, tembak API GitHub
       const response = await axios.get(this.repoUrl);
       const zipAsset = response.data.assets.find(asset => asset.name.endsWith('.zip'));
-      return {
+      
+      // 3. Simpan ke cache
+      this.cachedUpdateInfo = {
         version: response.data.tag_name, 
         description: response.data.body,
         zipUrl: zipAsset ? zipAsset.browser_download_url : null,
         published_at: response.data.published_at,
       };
+      
+      // 4. Update waktu terakhir pengecekan
+      this.lastCheckTime = now;
+
+      return this.cachedUpdateInfo;
     } catch (error) {
+      // Fallback: Jika GitHub API error (misal kena rate limit) tapi kita punya cache lama, 
+      // kembalikan cache lama tersebut daripada membuat aplikasi error.
+      if (this.cachedUpdateInfo) {
+        return this.cachedUpdateInfo;
+      }
       throw new InternalServerErrorException('Gagal mengambil data rilis GitHub');
     }
   }
 
+  // Helper untuk update versi di file package.json
   private updatePackageVersion(filePath: string, newVersion: string) {
     if (fs.existsSync(filePath)) {
       try {
@@ -79,7 +105,6 @@ export class SystemUpdateService {
       this.updatePackageVersion(path.join(tempDir, 'app', 'package.json'), version);
 
       // 5. Proses Pindahan (Menimpa file lama)
-      // Menggunakan perintah shell agar lebih cepat menangani banyak file/folder
       const isWindows = process.platform === "win32";
 
       // Update API
@@ -105,12 +130,9 @@ export class SystemUpdateService {
       // 6. Cleanup folder temp
       fs.rmSync(tempDir, { recursive: true, force: true });
 
-      // 7. Post-Update (Hanya untuk environment development/self-managed server)
-      // Jika di aplikasi Electron production yang sudah dipackage (.exe/.app), 
-      // perintah ini mungkin tidak diperlukan atau berbeda.
+      // 7. Post-Update (Rebuild & Restart)
       const buildCommand = `cd ${apiPath} && pnpm install && pnpm build && pm2 restart all`;
       
-      // Jalankan tanpa menunggu (detached) agar API bisa kirim response sukses dulu
       exec(buildCommand);
 
       return { 
