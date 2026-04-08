@@ -83,7 +83,6 @@ const getShelveNames = (product) => {
     return '-';
 };
 
-// Perbaikan Harga Utama (Mencari Harga Normal/Bukan Grosir)
 const getBasePrice = (pricesArray) => {
     if (!pricesArray || pricesArray.length === 0) return 0;
     const nonGrosir = pricesArray.find(p => !p.name?.toLowerCase().includes('grosir') && !p.name?.toLowerCase().includes('member'));
@@ -145,7 +144,7 @@ const openBreakModal = (product) => {
 };
 
 const handleBreakSuccess = () => {
-    fetchProducts(); // Refresh data setelah stok berhasil dipecah
+    fetchProducts(); 
 };
 
 defineExpose({ fetchProducts });
@@ -321,6 +320,19 @@ onMounted(async () => {
                                 <div>
                                     <div class="text-[10px] text-surface-500 mb-0.5">Lokasi Rak</div>
                                     <div class="text-sm font-medium text-surface-800">{{ getShelveNames(data) }}</div>
+                                </div>
+
+                                <div class="border-t border-dashed border-surface-200 pt-3 mt-3">
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <div class="text-[10px] text-surface-500 mb-0.5">Sistem HPP</div>
+                                            <Tag :value="data.hppMethod || 'FIFO'" severity="info" class="!text-[9px]" />
+                                        </div>
+                                        <div>
+                                            <div class="text-[10px] text-surface-500 mb-0.5">PPN Jual (%)</div>
+                                            <div class="text-sm font-bold text-orange-600">{{ data.saleTaxPercentage || 0 }} %</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

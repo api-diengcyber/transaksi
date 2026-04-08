@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested, IsBoolean } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, ValidateNested, IsBoolean, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { HppMethod } from 'src/common/entities/product/product.entity';
 
 // 1. DTO Khusus untuk Harga
 export class ProductPriceDto {
@@ -24,7 +25,6 @@ export class ProductPriceDto {
   @IsNumber()
   price?: number;
 
-  // TAMBAHAN: Validasi DTO untuk minQty
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
@@ -122,4 +122,14 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isManageStock?: boolean;
+
+  @ApiProperty({ enum: HppMethod, default: HppMethod.FIFO })
+  @IsEnum(HppMethod)
+  @IsOptional()
+  hppMethod?: HppMethod;
+
+  @ApiProperty({ example: 11 })
+  @IsNumber()
+  @IsOptional()
+  saleTaxPercentage?: number;
 }

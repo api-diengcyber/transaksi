@@ -18,6 +18,12 @@ import { ProductPriceEntity } from '../product_price/product_price.entity';
 import { ShelveEntity } from '../shelve/shelve.entity';
 import { BrandEntity } from '../brand/brand.entity';
 
+export enum HppMethod {
+  FIFO = 'FIFO',
+  LIFO = 'LIFO',
+  AVERAGE = 'AVERAGE',
+}
+
 @Entity('product')
 export class ProductEntity {
   @PrimaryColumn('varchar', { length: 60 })
@@ -114,4 +120,14 @@ export class ProductEntity {
 
   @Column({ nullable: true })
   brandUuid: string;
+
+  @Column({
+    type: 'enum',
+    enum: HppMethod,
+    default: HppMethod.FIFO
+  })
+  hppMethod: HppMethod;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  saleTaxPercentage: number;
 }

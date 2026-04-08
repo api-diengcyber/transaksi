@@ -1,6 +1,6 @@
 // src/module/auth/auth.service.ts
-import { Injectable, Inject, ForbiddenException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { Injectable, Inject, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UserEntity } from 'src/common/entities/user/user.entity';
@@ -14,6 +14,8 @@ export type Tokens = {
 @Injectable()
 export class AuthService {
   constructor(
+    @Inject('DATA_SOURCE') 
+    private dataSource: DataSource,
     @Inject('USER_REPOSITORY')
     private userRepository: Repository<UserEntity>,
     private jwtService: JwtService,
@@ -84,5 +86,29 @@ export class AuthService {
     ]);
 
     return { accessToken: at, refreshToken: rt };
+  }
+
+  // --- [BARU] Logika untuk mengambil data profil ---
+  async getMe(userId: string) {
+    const userRepo = this.dataSource.getRepository(UserEntity);
+    
+    // Cari user berdasarkan ID dan ambil relasi yang penting
+    const user = await userRepo.findOne({
+      where: { uuid: userId },
+      relations: ['roles', 'defaultStore', 'stores'], 
+    });
+
+    if (!user) {
+      throw new NotFoundException('User tidak ditemukan di sistem');
+    }
+
+    // Hilangkan informasi sensitif sebelum dikembalikan ke Frontend
+    const { password, ...result } = user;
+    
+    // Opsional: Sederhanakan format roles (dari array object menjadi array string)
+    // jika frontend membutuhkannya dalam format string array.
+    // result.roles = user.roles.map(r => r.role);
+
+    return result;
   }
 }

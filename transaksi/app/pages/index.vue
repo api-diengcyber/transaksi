@@ -1,13 +1,14 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '~/stores/auth.store';
 import { useRouter } from 'vue-router';
+import { useDashboardService } from '~/composables/useDashboardService';
 
-// Setup Layout & Meta
 definePageMeta({ layout: 'default' });
 
 const router = useRouter();
 const authStore = useAuthStore();
+const dashboardService = useDashboardService();
 
 // --- STATE & DATA ---
 const userName = computed(() => authStore.user?.username || 'Pengguna');
@@ -19,39 +20,48 @@ const greeting = computed(() => {
     return 'Selamat Malam';
 });
 
-// Aksi Cepat (Highlight Top 4)
-const quickMenu = [
-    {
-        title: 'Kasir & Penjualan',
-        desc: 'Buka sistem POS',
-        icon: 'pi pi-shopping-cart',
-        color: 'from-emerald-500 to-teal-600',
-        route: '/sale'
-    },
-    {
-        title: 'Pembelian Stok',
-        desc: 'Input stok masuk',
-        icon: 'pi pi-shopping-bag',
-        color: 'from-blue-500 to-indigo-600',
-        route: '/buy'
-    },
-    {
-        title: 'Data Produk',
-        desc: 'Kelola master barang',
-        icon: 'pi pi-box',
-        color: 'from-violet-500 to-purple-600',
-        route: '/product'
-    },
-    {
-        title: 'Analisa POS',
-        desc: 'Cek grafik & omset',
-        icon: 'pi pi-chart-pie',
-        color: 'from-orange-500 to-amber-600',
-        route: '/report/graph'
-    }
-];
+// State API Dashboard
+const isLoading = ref(true);
+const summaryData = ref({
+    todayRevenue: 0,
+    todayTransactions: 0,
+    todayItemsSold: 0,
+    dueReceivables: 0,
+    lowStockItems: 0,
+    recentActivities: []
+});
 
-// --- MENU SESUAI HEADER ---
+const loadDashboardData = async () => {
+    if (!authStore.activeStore?.uuid) return;
+    isLoading.value = true;
+    try {
+        const res = await dashboardService.getSummary(authStore.activeStore.uuid);
+        summaryData.value = res.data || res;
+    } catch (e) {
+        console.error('Gagal memuat data dashboard', e);
+    } finally {
+        isLoading.value = false;
+    }
+};
+
+onMounted(() => {
+    loadDashboardData();
+});
+
+// Jika user ganti toko dari header, dashboard otomatis ter-refresh
+watch(() => authStore.activeStore?.uuid, () => {
+    loadDashboardData();
+});
+
+const formatCurrency = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+
+// --- MENU DATA ---
+const quickMenu = [
+    { title: 'Kasir & Penjualan', desc: 'Buka sistem POS', icon: 'pi pi-shopping-cart', color: 'from-emerald-500 to-teal-600', route: '/sale' },
+    { title: 'Pembelian Stok', desc: 'Input stok masuk', icon: 'pi pi-shopping-bag', color: 'from-blue-500 to-indigo-600', route: '/buy' },
+    { title: 'Data Produk', desc: 'Kelola master barang', icon: 'pi pi-box', color: 'from-violet-500 to-purple-600', route: '/product' },
+    { title: 'Analisa POS', desc: 'Cek grafik & omset', icon: 'pi pi-chart-pie', color: 'from-orange-500 to-amber-600', route: '/report/graph' }
+];
 
 const transaksiMenu = [
     { label: 'Penjualan', icon: 'pi pi-shopping-cart', route: '/sale', color: 'text-emerald-500 bg-emerald-50' },
@@ -87,14 +97,6 @@ const laporanMenu = [
     { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial', color: 'text-indigo-500 bg-indigo-50' },
 ];
 
-// Mock Data untuk Aktivitas Terbaru (Timeline)
-const recentActivities = ref([
-    { title: 'Penjualan #INV-001', time: 'Baru saja', amount: '+ Rp 150.000', type: 'in' },
-    { title: 'Pembelian Stok Beras', time: '15 menit lalu', amount: '- Rp 2.500.000', type: 'out' },
-    { title: 'Retur Barang Rusak', time: '1 jam lalu', amount: 'Rp 0', type: 'neutral' },
-    { title: 'Penjualan #INV-002', time: '2 jam lalu', amount: '+ Rp 75.000', type: 'in' },
-]);
-
 const navigateTo = (path) => router.push(path);
 </script>
 
@@ -119,7 +121,8 @@ const navigateTo = (path) => router.push(path);
                     </p>
                 </div>
                 <div class="hidden md:block text-right text-white">
-                    <div class="text-4xl font-black mb-1">Rp 12.500.000</div>
+                    <Skeleton v-if="isLoading" width="12rem" height="3rem" class="mb-2 bg-white/20" />
+                    <div v-else class="text-4xl font-black mb-1">{{ formatCurrency(summaryData.todayRevenue) }}</div>
                     <div class="text-sm text-primary-100 font-medium">Omset Hari Ini <i class="pi pi-arrow-up text-emerald-300 ml-1 font-bold"></i></div>
                 </div>
             </div>
@@ -148,9 +151,6 @@ const navigateTo = (path) => router.push(path);
                                     <h4 class="font-bold text-lg text-surface-800 group-hover:text-primary-600 transition-colors">{{ item.title }}</h4>
                                     <p class="text-xs text-surface-500 mt-1 line-clamp-2">{{ item.desc }}</p>
                                 </div>
-                            </div>
-                            <div class="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
-                                <i class="pi pi-arrow-right text-surface-400 text-sm"></i>
                             </div>
                         </div>
                     </div>
@@ -218,7 +218,8 @@ const navigateTo = (path) => router.push(path);
                                 </div>
                                 <span class="text-sm font-bold text-surface-600">Transaksi</span>
                             </div>
-                            <span class="font-black text-surface-800">24 Nota</span>
+                            <Skeleton v-if="isLoading" width="3rem" class="mb-2" />
+                            <span v-else class="font-black text-surface-800">{{ summaryData.todayTransactions }} Nota</span>
                         </div>
                         <div class="flex justify-between items-center p-3 bg-surface-50 rounded-xl border border-surface-100">
                             <div class="flex items-center gap-3">
@@ -227,7 +228,8 @@ const navigateTo = (path) => router.push(path);
                                 </div>
                                 <span class="text-sm font-bold text-surface-600">Item Terjual</span>
                             </div>
-                            <span class="font-black text-surface-800">145 Pcs</span>
+                            <Skeleton v-if="isLoading" width="3rem" class="mb-2" />
+                            <span v-else class="font-black text-surface-800">{{ summaryData.todayItemsSold }} Pcs</span>
                         </div>
                         <div class="flex justify-between items-center p-3 bg-surface-50 rounded-xl border border-surface-100">
                             <div class="flex items-center gap-3">
@@ -236,7 +238,8 @@ const navigateTo = (path) => router.push(path);
                                 </div>
                                 <span class="text-sm font-bold text-surface-600">Piutang Jatuh Tempo</span>
                             </div>
-                            <span class="font-black text-red-600">3 Orang</span>
+                            <Skeleton v-if="isLoading" width="3rem" class="mb-2" />
+                            <span v-else class="font-black text-red-600">{{ summaryData.dueReceivables }} Orang</span>
                         </div>
                     </div>
                 </div>
@@ -247,8 +250,12 @@ const navigateTo = (path) => router.push(path);
                         <button class="text-xs font-bold text-primary-600 hover:underline">Lihat Semua</button>
                     </div>
                     
-                    <div class="relative pl-2 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-200">
-                        <div v-for="(act, idx) in recentActivities" :key="idx" class="relative pl-6">
+                    <div v-if="isLoading" class="space-y-4">
+                        <Skeleton v-for="i in 3" :key="i" height="3rem" borderRadius="16px" />
+                    </div>
+                    
+                    <div v-else-if="summaryData.recentActivities.length > 0" class="relative pl-2 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-200">
+                        <div v-for="(act, idx) in summaryData.recentActivities" :key="idx" class="relative pl-6 animate-fade-in" :style="{animationDelay: `${idx * 0.1}s`}">
                             <div class="absolute left-[-5px] top-1.5 w-3.5 h-3.5 rounded-full border-[3px] border-surface-0"
                                 :class="{
                                     'bg-emerald-500': act.type === 'in',
@@ -272,12 +279,18 @@ const navigateTo = (path) => router.push(path);
                             </div>
                         </div>
                     </div>
+                    
+                    <div v-else class="text-center py-6 text-surface-400 text-sm">
+                        <i class="pi pi-inbox text-3xl mb-2"></i>
+                        <p>Belum ada aktivitas hari ini.</p>
+                    </div>
                 </div>
 
                 <div class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden group cursor-pointer hover:shadow-indigo-500/30 transition-shadow" @click="navigateTo('/inventory')">
                     <div class="relative z-10">
                         <h4 class="font-black text-lg mb-1">Stok Menipis!</h4>
-                        <p class="text-indigo-100 text-xs mb-4 font-medium">Ada 5 barang yang stoknya di bawah batas minimum.</p>
+                        <Skeleton v-if="isLoading" width="8rem" class="mb-4 bg-white/20" />
+                        <p v-else class="text-indigo-100 text-xs mb-4 font-medium">Ada {{ summaryData.lowStockItems }} barang yang stoknya di bawah batas minimum.</p>
                         <button class="bg-white/20 hover:bg-white/30 backdrop-blur-sm font-bold text-xs px-4 py-2 rounded-lg transition-colors border border-white/30">Cek Gudang Sekarang</button>
                     </div>
                     <i class="pi pi-bell text-7xl absolute -bottom-4 -right-4 opacity-20 rotate-12 group-hover:scale-110 transition-transform"></i>

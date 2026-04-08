@@ -73,18 +73,25 @@ const totalPages = ref(1);
 const totalProducts = ref(0);
 
 // --- COMPUTED ---
-const taxEnabled = computed(() => authStore.getSetting('sale_tax_enabled', false));
-const taxRate = computed(() => Number(authStore.getSetting('sale_tax_percentage', 0)));
+// Pajak Global Setting (Bisa digabungkan atau diabaikan jika pakai PPN per produk)
 const taxMethod = computed(() => authStore.getSetting('sale_tax_method', 'exclusive'));
 
 const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
 const cartSubtotal = computed(() => cart.value.reduce((total, item) => total + (item.price * item.qty), 0));
 
+// [BARU] Kalkulasi PPN berdasarkan Produk individual
 const taxAmount = computed(() => {
-    if (!taxEnabled.value || taxRate.value <= 0) return 0;
-    return taxMethod.value === 'exclusive' 
-        ? cartSubtotal.value * (taxRate.value / 100)
-        : cartSubtotal.value - (cartSubtotal.value / (1 + (taxRate.value / 100)));
+    return cart.value.reduce((totalTax, item) => {
+        if (!item.saleTaxPercentage || item.saleTaxPercentage <= 0) return totalTax;
+        
+        const itemSubtotal = item.price * item.qty;
+        // Jika exclusive, pajak ditambahkan dari harga. Jika inclusive, harga sudah termasuk pajak.
+        const tax = taxMethod.value === 'exclusive' 
+            ? itemSubtotal * (item.saleTaxPercentage / 100)
+            : itemSubtotal - (itemSubtotal / (1 + (item.saleTaxPercentage / 100)));
+            
+        return totalTax + tax;
+    }, 0);
 });
 
 const grandTotal = computed(() => {
@@ -195,14 +202,12 @@ const processBarcodeScan = async () => {
         toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Barcode tidak terdaftar', life: 2000 });
     } finally {
         searchQuery.value = ''; 
-        // Mengembalikan fokus ke input agar bisa scan barang selanjutnya
         if (isScanMode.value) {
              nextTick(() => focusScanner());
         }
     }
 };
 
-// --- PENGENDALI EVENT KEYDOWN (ENTER & TAB DARI SCANNER) ---
 const onSearchKeydown = async () => { 
     if (isScanMode.value) {
         await processBarcodeScan();
@@ -236,6 +241,12 @@ const recalculateItemPrice = (item) => {
         item.isGrosirActive = false;
     }
 };
+
+watch(() => authStore.user, (newVal) => {
+    if (newVal && newVal.uuid) {
+        transactionMeta.cashierUuid = newVal.uuid;
+    }
+}, { immediate: true, deep: true });
 
 watch(() => transactionMeta.memberUuid, (newMemberUuid) => {
     cart.value.forEach(item => {
@@ -312,7 +323,10 @@ const pushToCart = (prod, variant) => {
             selectableTiers: selectableTiers,
             allPrices: availablePrices,
             shelveUuid: defaultShelve,
-            expanded: false 
+            expanded: false,
+            // [BARU] Simpan HPP dan PPN ke dalam cart state
+            hppMethod: prod.hppMethod || 'FIFO',
+            saleTaxPercentage: Number(prod.saleTaxPercentage || 0)
         };
 
         recalculateItemPrice(newItem); 
@@ -391,6 +405,12 @@ const processCheckout = async (isPrint = false) => {
             unit_name: item.unitName,
             note: item.note || '',
             price_tier_name: item.activeTierName || 'Manual',
+            
+            // [BARU] Payload untuk HPP & PPN
+            hpp_method: item.hppMethod,
+            tax_percentage: item.saleTaxPercentage,
+            tax_amount: (item.price * item.qty) * (item.saleTaxPercentage / 100),
+
             stok_product_uuid: item.productUuid,
             stok_variant_uuid: item.variantUuid || null,
             stok_unit: item.unitUuid,
@@ -467,14 +487,23 @@ const processCheckout = async (isPrint = false) => {
 // --- DATA FETCHING & FILTERING ---
 const fetchCategoriesAndBrands = async () => { 
     try { 
-        const [catRes, brandRes, userRes] = await Promise.all([
+        const [catRes, brandRes] = await Promise.all([
             categoryService.getAllCategories(),
             brandService.getAllBrands(),
-            userService.fetchUsers() 
         ]);
+        
         categories.value = catRes?.data?.data || catRes?.data || catRes || [];
         brands.value = brandRes?.data?.data || brandRes?.data || brandRes || [];
-        users.value = userRes?.data || userRes || [];
+        
+        let uData = null;
+        if (userService.getAllUsers) uData = await userService.getAllUsers();
+        else if (userService.fetchUsers) uData = await userService.fetchUsers();
+        else if (userService.getUsers) uData = await userService.getUsers();
+        users.value = uData?.data?.data || uData?.data || uData || [];
+
+        if (authStore.user?.uuid && !transactionMeta.cashierUuid) {
+            transactionMeta.cashierUuid = authStore.user.uuid;
+        }
     } catch (e) {} 
 };
 
@@ -492,7 +521,10 @@ const loadProducts = async () => {
             categoryUuid: p.categoryUuid || p.category?.uuid, 
             categoryName: p.category?.name || '',
             brandUuid: p.brandUuid || p.brand?.uuid, 
-            brandName: p.brand?.name || ''
+            brandName: p.brand?.name || '',
+            // [BARU] Mapping HPP dan PPN dari master
+            hppMethod: p.hppMethod || 'FIFO',
+            saleTaxPercentage: Number(p.saleTaxPercentage || 0)
         }));
         totalPages.value = response?.meta?.totalPage || 1; 
         totalProducts.value = response?.meta?.total || 0;
@@ -648,10 +680,12 @@ defineExpose({ refreshData });
                                 </div>
                                 
                                 <div>
-                                    <div class="flex gap-1 mt-2 items-center">
+                                    <div class="flex gap-1 mt-2 items-center flex-wrap">
                                         <span v-if="prod.isManageStock === false" class="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-200">Non-Fisik</span>
                                         <span v-else class="text-[9px] font-semibold px-1.5 py-0.5 rounded border" :class="getStockColor(getTotalStock(prod))">Stok: {{ getTotalStock(prod) }}</span>
                                         
+                                        <span v-if="prod.saleTaxPercentage > 0" class="text-[8px] font-bold px-1.5 py-0.5 rounded border bg-red-50 text-red-600 border-red-200">PPN {{ prod.saleTaxPercentage }}%</span>
+
                                         <Tag v-if="prod.variants && prod.variants.length > 0" value="Multi Varian" severity="info" class="!text-[8px] !px-1.5 !py-0.5" />
                                         <i v-if="prod.prices && prod.prices.some(p => p.minQty > 1)" class="pi pi-tags text-orange-500 text-[10px] ml-1" v-tooltip.top="'Ada Harga Grosir'"></i>
                                     </div>
@@ -670,6 +704,7 @@ defineExpose({ refreshData });
                                         <span class="text-[10px] text-surface-400 font-mono shrink-0"><i class="pi pi-barcode text-[9px] mr-0.5"></i>{{ prod.barcode || 'N/A' }}</span>
                                         <span v-if="prod.isManageStock === false" class="text-[10px] font-medium text-purple-500">Non-Fisik</span>
                                         <span v-else class="text-[10px] font-medium text-surface-500">Stok: {{ getTotalStock(prod) }}</span>
+                                        <span v-if="prod.saleTaxPercentage > 0" class="text-[8px] font-bold px-1 py-0.5 rounded border bg-red-50 text-red-600 border-red-200">PPN {{ prod.saleTaxPercentage }}%</span>
                                     </div>
                                 </div>
                                 <div class="text-sm font-black shrink-0">{{ formatCurrency(getBasePrice(prod)) }}</div>
@@ -696,7 +731,7 @@ defineExpose({ refreshData });
                     <Dropdown 
                         v-model="transactionMeta.cashierUuid" 
                         :options="users" 
-                        optionLabel="username" 
+                        :optionLabel="(opt) => opt.username || opt.name" 
                         optionValue="uuid" 
                         filter
                         placeholder="Pilih Kasir..." 
@@ -726,10 +761,14 @@ defineExpose({ refreshData });
                     <p class="text-sm font-bold text-surface-600">Keranjang Kosong</p>
                 </div>
 
-                <div v-for="(item, index) in cart" :key="index" class="bg-surface-0 rounded-lg p-2.5 shadow-sm border border-surface-200 transition-all duration-200">
+                <div v-for="(item, index) in cart" :key="index" class="bg-surface-0 rounded-lg p-2.5 shadow-sm border border-surface-200 transition-all duration-200 relative">
                     
-                    <div class="flex justify-between items-center gap-2">
-                        <div class="flex-1 min-w-0 cursor-pointer select-none group" @click="item.expanded = !item.expanded">
+                    <button class="absolute -top-2 -right-2 shadow border border-surface-200 bg-red-50 text-red-500 hover:text-white hover:bg-red-500 w-6 h-6 rounded-full flex items-center justify-center z-10 transition-colors" @click="removeFromCart(index)">
+                        <i class="pi pi-times text-[10px] font-bold"></i>
+                    </button>
+
+                    <div class="flex justify-between items-center gap-2 cursor-pointer select-none group pr-4" @click="item.expanded = !item.expanded">
+                        <div class="flex-1 min-w-0">
                             <div class="text-xs font-bold leading-tight truncate flex items-center gap-1 group-hover:text-primary-600 transition-colors">
                                 <i class="pi text-[8px] text-surface-400 transition-transform" :class="item.expanded ? 'pi-chevron-down' : 'pi-chevron-right'"></i>
                                 {{ item.name }}
@@ -739,10 +778,11 @@ defineExpose({ refreshData });
                                 <span class="bg-surface-100 text-surface-600 text-[8px] font-bold px-1 rounded border border-surface-200">{{ item.unitName }}</span>
                                 <span class="text-[9px] font-mono text-surface-500">@ {{ formatCurrency(item.price) }}</span>
                                 <span v-if="item.isGrosirActive" class="text-[8px] font-bold text-orange-600 bg-orange-100 border border-orange-200 px-1 rounded uppercase tracking-wider">Grosir</span>
+                                <span v-if="item.saleTaxPercentage > 0" class="text-[8px] font-bold text-red-600 bg-red-100 border border-red-200 px-1 rounded uppercase tracking-wider">PPN {{ item.saleTaxPercentage }}%</span>
                             </div>
                         </div>
                         
-                        <div class="flex items-center gap-2 shrink-0">
+                        <div class="flex items-center gap-2 shrink-0" @click.stop>
                             <div class="flex items-center bg-white rounded border border-surface-200 h-6 overflow-hidden shadow-sm">
                                 <button class="w-6 h-full flex items-center justify-center text-surface-500 hover:text-red-500 hover:bg-red-50 transition border-r border-surface-100" @click="item.qty > 1 ? changeItemQty(item, -1) : removeFromCart(index)">
                                     <i class="pi text-[8px] font-bold" :class="item.qty > 1 ? 'pi-minus' : 'pi-trash'"></i>
@@ -782,8 +822,13 @@ defineExpose({ refreshData });
 
             <div class="p-3 bg-surface-0 border-t border-surface-200 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-20">
                 <div class="space-y-1.5 mb-3">
-                    <div class="flex justify-between items-center text-xs text-surface-500"><span>Subtotal</span><span class="font-mono">{{ formatCurrency(cartSubtotal) }}</span></div>
-                    <div v-if="taxEnabled" class="flex justify-between items-center text-xs text-surface-500"><span>Pajak ({{ taxRate }}%)</span><span class="font-mono text-red-500">+ {{ formatCurrency(taxAmount) }}</span></div>
+                    <div class="flex justify-between items-center text-xs text-surface-500"><span>Subtotal (Tanpa PPN)</span><span class="font-mono">{{ formatCurrency(cartSubtotal) }}</span></div>
+                    
+                    <div v-if="taxAmount > 0" class="flex justify-between items-center text-xs text-surface-500">
+                        <span>Pajak (PPN)</span>
+                        <span class="font-mono text-red-500">+ {{ formatCurrency(taxAmount) }}</span>
+                    </div>
+
                     <div class="border-t border-dashed border-surface-200 my-1.5"></div>
                     <div class="flex justify-between items-end"><span class="text-sm font-bold text-surface-800 uppercase tracking-wide">Total Bayar</span><span class="text-xl font-black text-primary-600">{{ formatCurrency(grandTotal) }}</span></div>
                 </div>

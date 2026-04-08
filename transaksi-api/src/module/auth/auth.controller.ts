@@ -1,6 +1,6 @@
 // src/module/auth/auth.controller.ts
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { AtGuard } from 'src/common/guards/at.guard';
 import { RtGuard } from 'src/common/guards/rt.guard';
@@ -35,5 +35,14 @@ export class AuthController {
     @GetUser('refreshToken') refreshToken: string,
   ) {
     return this.authService.refreshTokens(userId, refreshToken);
+  }
+
+  @Get('me')
+  @UseGuards(AtGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Dapatkan profil user yang sedang login' })
+  getMe(@GetUser('sub') userId: string) {
+    return this.authService.getMe(userId);
   }
 }

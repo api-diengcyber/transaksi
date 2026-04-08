@@ -17,6 +17,7 @@ import { CategoryEntity } from 'src/common/entities/category/category.entity';
 import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
 import { WarehouseEntity } from 'src/common/entities/warehouse/warehouse.entity';
 import { PriceGroupEntity } from 'src/common/entities/price_group/price_group.entity';
+import { AccountService } from '../account/account.service';
 
 @Injectable()
 export class StoreService {
@@ -30,6 +31,7 @@ export class StoreService {
     @Inject('DATA_SOURCE') private readonly dataSource: DataSource,
     private readonly authService: AuthService,
     private readonly categoryService: CategoryService,
+    private readonly accountService: AccountService,
   ) { }
 
   async installStore(dto: InstallStoreDto, logoPath: string | null = null, originalName: string | null = null) {
@@ -171,6 +173,9 @@ export class StoreService {
           code: generatedCode,
         }));
       }
+
+      // accounts default
+      await this.accountService.createDefaultAccounts(customStoreUuid, manager);
 
       // 5. SETTINGS
       if (dto.settings && dto.settings.length > 0) {

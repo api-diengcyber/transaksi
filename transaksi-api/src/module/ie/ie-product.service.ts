@@ -10,6 +10,7 @@ import { CategoryEntity } from 'src/common/entities/category/category.entity';
 import { BrandEntity } from 'src/common/entities/brand/brand.entity';
 import { UnitEntity } from 'src/common/entities/unit/unit.entity';
 import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
+import { generateCategoryUuid, generateBrandUuid, generateUnitUuid, generateShelveUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class IeProductService {
@@ -28,7 +29,6 @@ export class IeProductService {
       console.log(`[IE Service] Memulai ekspor data menggunakan ExcelJS... Format: ${format}`);
 
       // 1. AMBIL DATA
-      // Hapus 'categories' dari relations karena kita akan menggunakan categoryUuid
       const [products, categories, brands, units, shelves] = await Promise.all([
         this.productRepo.find({ relations: ['brand', 'unit', 'variants', 'shelves'] }), 
         this.categoryRepo.find(),
@@ -38,10 +38,9 @@ export class IeProductService {
       ]);
 
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Dieng Cyber';
+      workbook.creator = 'RetailApp Pro';
       workbook.created = new Date();
 
-      // ... (Bagian 1 sampai 3 tetap sama seperti sebelumnya) ...
       const wsProducts = workbook.addWorksheet('Produk');
       const wsCategories = workbook.addWorksheet('Kategori');
       const wsBrands = workbook.addWorksheet('Merek');
@@ -60,6 +59,7 @@ export class IeProductService {
       wsShelves.columns = [{ header: 'UUID', key: 'uuid', width: 40 }, { header: 'Nama Rak', key: 'name', width: 30 }];
       shelves.forEach(s => wsShelves.addRow({ uuid: s.uuid, name: s.name }));
 
+      // --- [BARU] Tambahkan Kolom HPP dan PPN Jual ---
       wsProducts.columns = [
         { header: 'Nama Produk', key: 'name', width: 35 },     
         { header: 'Barcode', key: 'barcode', width: 20 },      
@@ -68,31 +68,33 @@ export class IeProductService {
         { header: 'Satuan', key: 'unit', width: 20 },          
         { header: 'Lokasi Rak', key: 'shelve', width: 25 },    
         { header: 'Kelola Stok', key: 'manageStock', width: 15 }, 
+        { header: 'Sistem HPP', key: 'hppMethod', width: 15 },       // <-- KOLOM H
+        { header: 'PPN Jual (%)', key: 'saleTax', width: 15 },       // <-- KOLOM I
         { header: 'Total Varian', key: 'variants', width: 15 },   
       ];
 
       wsProducts.getRow(1).font = { bold: true };
       wsProducts.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-      // 4. MASUKKAN DATA PRODUK [DIREVISI]
+      // 4. MASUKKAN DATA PRODUK
       products.forEach(p => {
-        // Cari nama kategori secara manual berdasarkan categoryUuid
         const productCategory = categories.find(c => c.uuid === p.categoryUuid);
 
         wsProducts.addRow({
           name: p.name,
           barcode: p.barcode || '-',
-          // Masukkan nama kategori jika ditemukan, jika tidak kosongkan
           category: productCategory ? productCategory.name : '', 
           brand: p.brand?.name || '',
           unit: p.unit?.name || '',
           shelve: p.shelves && p.shelves.length > 0 ? p.shelves.map(s => s.name).join(', ') : '',
           manageStock: p.isManageStock ? 'Ya' : 'Tidak',
+          hppMethod: p.hppMethod || 'FIFO',                          // <-- [BARU] Masukkan Data HPP
+          saleTax: p.saleTaxPercentage ? Number(p.saleTaxPercentage) : 0, // <-- [BARU] Masukkan Data PPN
           variants: p.variants?.length || 0,
         });
       });
 
-      // ... (Bagian 5 dan 6 Data Validation dan Buffer tetap sama seperti sebelumnya) ...
+      // 5. VALIDASI DROPDOWN EXCEL
       if (format !== 'csv') {
         for (let i = 2; i <= 1000; i++) {
           if (categories.length > 0) {
@@ -115,8 +117,13 @@ export class IeProductService {
               type: 'list', allowBlank: true, formulae: [`Rak!$B$2:$B$${shelves.length + 1}`],
             };
           }
+          // Dropdown Kelola Stok (Kolom G)
           wsProducts.getCell(`G${i}`).dataValidation = {
             type: 'list', allowBlank: true, formulae: ['"Ya,Tidak"'],
+          };
+          // Dropdown Sistem HPP (Kolom H) <-- [BARU]
+          wsProducts.getCell(`H${i}`).dataValidation = {
+            type: 'list', allowBlank: true, formulae: ['"FIFO,LIFO,AVERAGE"'],
           };
         }
       }
@@ -143,7 +150,6 @@ export class IeProductService {
     } catch (error) {
       try {
         const bufferStream = new stream.PassThrough();
-        // [FIXED] Bypass type checking pada Buffer agar cocok dengan stream
         bufferStream.end(fileBuffer as any); 
         await workbook.csv.read(bufferStream);
       } catch (csvError) {
@@ -151,11 +157,9 @@ export class IeProductService {
       }
     }
 
-    // Helper untuk mengubah Worksheet menjadi Array of Object (JSON)
     const parseWorksheet = (worksheet: ExcelJS.Worksheet) => {
       if (!worksheet) return [];
       
-      // [FIXED] Deklarasikan tipe data array of objects
       const rows: Record<string, any>[] = []; 
       const headers: Record<number, string> = {};
       
@@ -165,7 +169,6 @@ export class IeProductService {
             headers[colNumber] = cell.value?.toString().trim() || '';
           });
         } else {
-          // [FIXED] Deklarasikan tipe data object
           const rowData: Record<string, any> = {}; 
           row.eachCell((cell, colNumber) => {
             if (headers[colNumber]) {
@@ -189,7 +192,10 @@ export class IeProductService {
       for (const row of parseWorksheet(wsCategories)) {
         const name = row['Nama Kategori'];
         if (name && !(await this.categoryRepo.findOne({ where: { name } }))) {
-          await this.categoryRepo.save(this.categoryRepo.create({ name }));
+          await this.categoryRepo.save(this.categoryRepo.create({ 
+            uuid: generateCategoryUuid(storeUuid), // <-- Tambahkan UUID
+            name 
+          }));
         }
       }
     }
@@ -199,7 +205,10 @@ export class IeProductService {
       for (const row of parseWorksheet(wsBrands)) {
         const name = row['Nama Merek'];
         if (name && !(await this.brandRepo.findOne({ where: { name } }))) {
-          await this.brandRepo.save(this.brandRepo.create({ name }));
+          await this.brandRepo.save(this.brandRepo.create({ 
+            uuid: generateBrandUuid(storeUuid), // <-- Tambahkan UUID
+            name 
+          }));
         }
       }
     }
@@ -209,7 +218,10 @@ export class IeProductService {
       for (const row of parseWorksheet(wsUnits)) {
         const name = row['Nama Satuan'];
         if (name && !(await this.unitRepo.findOne({ where: { name } }))) {
-          await this.unitRepo.save(this.unitRepo.create({ name }));
+          await this.unitRepo.save(this.unitRepo.create({ 
+            uuid: generateUnitUuid(storeUuid), // <-- Tambahkan UUID
+            name 
+          }));
         }
       }
     }
@@ -219,7 +231,11 @@ export class IeProductService {
       for (const row of parseWorksheet(wsShelves)) {
         const name = row['Nama Rak'];
         if (name && !(await this.shelveRepo.findOne({ where: { name } }))) {
-          await this.shelveRepo.save(this.shelveRepo.create({ name }));
+          // Asumsi Rak butuh relasi ke Gudang (warehouseUuid), sesuaikan jika ada field wajib lainnya
+          await this.shelveRepo.save(this.shelveRepo.create({ 
+            uuid: generateShelveUuid(storeUuid), // <-- Tambahkan UUID
+            name 
+          }));
         }
       }
     }
@@ -233,8 +249,6 @@ export class IeProductService {
 
     let successCount = 0;
     let failedCount = 0;
-    
-    // [FIXED] Deklarasikan array khusus string
     const errors: string[] = []; 
 
     const wsProducts = workbook.getWorksheet('Produk') || workbook.worksheets[0];
@@ -263,21 +277,32 @@ export class IeProductService {
         const brand = allBrands.find(b => b.name === row['Merek']);
         const unit = allUnits.find(u => u.name === row['Satuan']);
         
-        // [FIXED] Deklarasikan union type string | null agar TypeScript mengizinkan pengisian ulang
         let categoryUuid: string | null = null; 
         if (row['Kategori']) {
-          // [FIXED] Konversi eksplisit ke String sebelum split
           const catName = String(row['Kategori']).split(',')[0].trim();
           const cat = allCategories.find(c => c.name === catName);
           if (cat) categoryUuid = cat.uuid;
         }
 
-        // [FIXED] Deklarasikan array of string
         let shelveUuids: string[] = []; 
         if (row['Lokasi Rak']) {
-          // [FIXED] Konversi eksplisit ke String sebelum split
           const shelveNames = String(row['Lokasi Rak']).split(',').map((s: string) => s.trim());
           shelveUuids = allShelves.filter(s => shelveNames.includes(s.name)).map(s => s.uuid);
+        }
+
+        // --- [BARU] Parse HPP dan PPN dari Excel ---
+        const hppMethodRaw = row['Sistem HPP']?.toString().toUpperCase().trim();
+        const validHppMethods = ['FIFO', 'LIFO', 'AVERAGE'];
+        const hppMethod = validHppMethods.includes(hppMethodRaw) ? hppMethodRaw : 'FIFO';
+
+        let saleTaxPercentage = 0;
+        const saleTaxRaw = row['PPN Jual (%)'];
+        if (saleTaxRaw !== undefined && saleTaxRaw !== null) {
+            const strTax = String(saleTaxRaw).replace('%', '').trim();
+            const parsedTax = parseFloat(strTax);
+            if (!isNaN(parsedTax)) {
+                saleTaxPercentage = parsedTax;
+            }
         }
 
         const dto: any = {
@@ -287,6 +312,8 @@ export class IeProductService {
           categoryUuid: categoryUuid,
           brandUuid: brand?.uuid,
           isManageStock: row['Kelola Stok'] === 'Ya' || row['Kelola Stok'] === 'TRUE',
+          hppMethod: hppMethod,                 // <-- [BARU] Simpan HPP
+          saleTaxPercentage: saleTaxPercentage, // <-- [BARU] Simpan PPN
           conversionQty: 1,
           variants: [],
           prices: [],

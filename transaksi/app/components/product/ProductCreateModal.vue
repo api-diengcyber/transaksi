@@ -15,7 +15,7 @@ const shelveService = useShelveService();
 const unitService = useUnitService();
 const categoryService = useCategoryService();
 const priceGroupService = usePriceGroupService();
-const brandService = useBrandService(); // <-- [BARU] Inject Brand Service
+const brandService = useBrandService(); 
 const toast = useToast();
 
 // --- STATE ---
@@ -27,17 +27,19 @@ const shelves = ref([]);
 const units = ref([]);
 const categories = ref([]);
 const priceGroups = ref([]);
-const brands = ref([]); // <-- [BARU] State Brands
+const brands = ref([]); 
 
 // Data Utama Produk
 const product = reactive({ 
     name: '',
     barcode: '',
-    isManageStock: true, // <-- [BARU] True = Dengan Stok, False = Tanpa Stok (Jasa/Dll)
+    isManageStock: true, 
     stock: 0,
     unitUuid: null,
     categoryUuid: null,
-    brandUuid: null,     // <-- [BARU] Merek Opsional
+    brandUuid: null,     
+    hppMethod: 'FIFO',       // <-- [BARU] Default FIFO
+    saleTaxPercentage: 0,    // <-- [BARU] Default 0%
     shelveUuids: [],
     prices: [],
     variants: []
@@ -73,6 +75,8 @@ const initForm = () => {
     product.unitUuid = null;
     product.categoryUuid = null;
     product.brandUuid = null;
+    product.hppMethod = 'FIFO';       // <-- [BARU]
+    product.saleTaxPercentage = 0;    // <-- [BARU]
     product.shelveUuids = [];
     
     product.prices = priceGroups.value.map(pg => {
@@ -113,7 +117,7 @@ const loadDropdowns = async () => {
             unitService.getAllUnits(),
             categoryService.getAllCategories(),
             priceGroupService.getAllPriceGroups(),
-            brandService.getAllBrands() // <-- [BARU] Fetch Brands
+            brandService.getAllBrands() 
         ]);
 
         shelves.value = results[0].status === 'fulfilled' ? extractArray(results[0].value) : [];
@@ -136,11 +140,15 @@ const loadProductData = async (uuid) => {
 
         product.name = data.name || '';
         product.barcode = data.barcode || '';
-        product.isManageStock = data.isManageStock !== false; // Default true jika undefined
+        product.isManageStock = data.isManageStock !== false; 
         product.stock = data.stock || 0;
         product.unitUuid = data.unitUuid || null;
         product.categoryUuid = data.categoryUuid || (data.category ? data.category.uuid : null); 
-        product.brandUuid = data.brandUuid || (data.brand ? data.brand.uuid : null); // <-- [BARU] Set Brand
+        product.brandUuid = data.brandUuid || (data.brand ? data.brand.uuid : null); 
+        
+        // <-- [BARU] Load HPP & PPN
+        product.hppMethod = data.hppMethod || 'FIFO'; 
+        product.saleTaxPercentage = data.saleTaxPercentage ? Number(data.saleTaxPercentage) : 0; 
 
         if (data.shelves && Array.isArray(data.shelves)) {
             product.shelveUuids = data.shelves.map(shelf => shelf.uuid);
@@ -190,7 +198,6 @@ watch(() => props.visible, async (val) => {
 const saveProduct = async () => {
     submitted.value = true;
     
-    // Brand opsional, tidak masuk validasi. isManageStock menentukan apakah shelve wajib.
     if (!product.name || !product.unitUuid || !product.categoryUuid || (product.isManageStock && product.shelveUuids.length === 0)) {
         toast.add({ severity: 'warn', summary: 'Perhatian', detail: 'Nama, kategori, satuan, dan rak (jika kelola stok) wajib diisi' });
         return;
@@ -201,11 +208,13 @@ const saveProduct = async () => {
         const payload = {
             name: product.name,
             barcode: product.barcode,
-            isManageStock: product.isManageStock, // <-- [BARU]
-            stock: product.isManageStock ? product.stock : 0, // Set 0 jika tidak dikelola
+            isManageStock: product.isManageStock, 
+            stock: product.isManageStock ? product.stock : 0, 
             unitUuid: product.unitUuid,
             categoryUuid: product.categoryUuid,
-            brandUuid: product.brandUuid, // <-- [BARU]
+            brandUuid: product.brandUuid, 
+            hppMethod: product.hppMethod,                  // <-- [BARU] Payload HPP
+            saleTaxPercentage: product.saleTaxPercentage,  // <-- [BARU] Payload PPN
             shelveUuids: product.isManageStock ? product.shelveUuids : [],
             
             prices: product.variants.length === 0 ? product.prices.map(p => ({
@@ -215,7 +224,7 @@ const saveProduct = async () => {
 
             variants: product.variants.map(v => ({
                 uuid: v.uuid, name: v.name, barcode: v.barcode, 
-                stock: product.isManageStock ? v.stock : 0, // Sama untuk varian
+                stock: product.isManageStock ? v.stock : 0, 
                 prices: v.prices.map(vp => ({
                     uuid: vp.uuid, priceGroupUuid: vp.priceGroupUuid, name: vp.name, 
                     price: vp.price, minQty: vp.minQty
@@ -273,6 +282,17 @@ const saveProduct = async () => {
                         <InputGroupAddon class="!bg-surface-100"><i class="pi pi-barcode text-surface-500"></i></InputGroupAddon>
                         <InputText id="barcode" v-model="product.barcode" placeholder="Scan atau ketik kode..." />
                     </InputGroup>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-primary-50/50 p-4 border border-primary-100 rounded-lg">
+                <div class="field mb-0">
+                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">Sistem HPP (Harga Pokok)</label>
+                    <SelectButton v-model="product.hppMethod" :options="['FIFO', 'LIFO', 'AVERAGE']" class="!text-xs w-full" />
+                </div>
+                <div class="field mb-0">
+                    <label class="font-semibold text-sm mb-1.5 block text-surface-700">PPN Jual (Opsional)</label>
+                    <InputNumber v-model="product.saleTaxPercentage" placeholder="Contoh: 11" suffix=" %" :min="0" :max="100" class="w-full" />
                 </div>
             </div>
 

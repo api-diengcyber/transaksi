@@ -20,6 +20,7 @@ import { BrandModule } from '../brand/brand.module';
 import { MediaModule } from '../media/media.module';
 import { IeModule } from '../ie/ie.module';
 import { SystemUpdateModule } from '../system/system-update.module';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SystemUpdateModule } from '../system/system-update.module';
     WarehouseModule,
     BrandModule,
     MediaModule,
+    DashboardModule,
     IeModule,
     SystemUpdateModule,
   ],

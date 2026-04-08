@@ -1,11 +1,11 @@
 import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { AccountEntity, AccountCategory } from 'src/common/entities/account/account.entity';
 import { JournalConfigEntity } from 'src/common/entities/journal_config/journal_config.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
-import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateAccountUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class AccountService {
@@ -23,33 +23,45 @@ export class AccountService {
             { value: AccountCategory.EXPENSE, label: 'Beban (EXPENSE)' },
         ];
     }
+    
+    async createDefaultAccounts(storeUuid: string, manager: EntityManager) {
+        const defaultAccounts: Partial<AccountEntity>[] = [
+            // --- ASSET (HARTA) ---
+            { code: '1001', name: 'Kas Tunai / Laci', category: AccountCategory.ASSET, normalBalance: 'DEBIT', isSystem: true },
+            { code: '1002', name: 'Kas Bank / Transfer', category: AccountCategory.ASSET, normalBalance: 'DEBIT', isSystem: true },
+            { code: '1101', name: 'Piutang Usaha (AR)', category: AccountCategory.ASSET, normalBalance: 'DEBIT', isSystem: true },
+            { code: '1201', name: 'Persediaan Barang Dagang', category: AccountCategory.ASSET, normalBalance: 'DEBIT', isSystem: true },
 
-    async initializeStandardAccounts(storeUuid: string) {
-        // ... (kode inisialisasi yang sudah ada biarkan saja) ...
-        const defaults = [
-            { code: '1-1001', name: 'Kas Tunai', category: AccountCategory.ASSET, normal: 'DEBIT' },
-            { code: '1-1002', name: 'Bank BCA', category: AccountCategory.ASSET, normal: 'DEBIT' },
-            { code: '1-2001', name: 'Piutang Usaha', category: AccountCategory.ASSET, normal: 'DEBIT' },
-            { code: '2-1001', name: 'Hutang Usaha', category: AccountCategory.LIABILITY, normal: 'CREDIT' },
-            { code: '3-1001', name: 'Modal Pemilik', category: AccountCategory.EQUITY, normal: 'CREDIT' },
-            { code: '4-1001', name: 'Pendapatan Penjualan', category: AccountCategory.REVENUE, normal: 'CREDIT' },
-            { code: '4-2001', name: 'Pendapatan Lain-lain', category: AccountCategory.REVENUE, normal: 'CREDIT' },
-            { code: '6-1001', name: 'Beban Pembelian Stok', category: AccountCategory.EXPENSE, normal: 'DEBIT' },
-            { code: '6-2001', name: 'Beban Operasional', category: AccountCategory.EXPENSE, normal: 'DEBIT' },
-            { code: '6-2002', name: 'Beban Gaji', category: AccountCategory.EXPENSE, normal: 'DEBIT' },
+            // --- LIABILITY (KEWAJIBAN/HUTANG) ---
+            { code: '2001', name: 'Hutang Usaha (AP)', category: AccountCategory.LIABILITY, normalBalance: 'CREDIT', isSystem: true },
+            { code: '2101', name: 'Hutang PPN (Keluaran)', category: AccountCategory.LIABILITY, normalBalance: 'CREDIT', isSystem: true },
+
+            // --- EQUITY (MODAL) ---
+            { code: '3001', name: 'Modal Awal Pemilik', category: AccountCategory.EQUITY, normalBalance: 'CREDIT', isSystem: true },
+            { code: '3999', name: 'Laba Ditahan', category: AccountCategory.EQUITY, normalBalance: 'CREDIT', isSystem: true },
+
+            // --- REVENUE (PENDAPATAN) ---
+            { code: '4001', name: 'Pendapatan Penjualan', category: AccountCategory.REVENUE, normalBalance: 'CREDIT', isSystem: true },
+            { code: '4002', name: 'Retur Penjualan', category: AccountCategory.REVENUE, normalBalance: 'DEBIT', isSystem: true }, // Kontra Revenue
+
+            // --- EXPENSE (BEBAN/BIAYA) ---
+            { code: '5001', name: 'Harga Pokok Penjualan (HPP)', category: AccountCategory.EXPENSE, normalBalance: 'DEBIT', isSystem: true },
+            { code: '5002', name: 'Retur Pembelian', category: AccountCategory.EXPENSE, normalBalance: 'CREDIT', isSystem: true }, // Kontra Expense/HPP
+            { code: '6001', name: 'Biaya Operasional Umum', category: AccountCategory.EXPENSE, normalBalance: 'DEBIT', isSystem: false },
         ];
 
-        const entities = defaults.map(d => this.accountRepository.create({
-            uuid: `${storeUuid}-ACC-${generateLocalUuid()}-${d.code}`,
-            storeUuid,
-            code: d.code,
-            name: d.name,
-            category: d.category,
-            normalBalance: d.normal as 'DEBIT' | 'CREDIT',
-            isSystem: true
-        }));
-
-        await this.accountRepository.save(entities);
+        for (const acc of defaultAccounts) {
+            const newAccount = manager.create(AccountEntity, {
+                uuid: generateAccountUuid(storeUuid),
+                storeUuid: storeUuid,
+                code: acc.code,
+                name: acc.name,
+                category: acc.category,
+                normalBalance: acc.normalBalance,
+                isSystem: acc.isSystem,
+            });
+            await manager.save(AccountEntity, newAccount);
+        }
     }
 
     async getAllAccounts(storeUuid: string) {

@@ -41,13 +41,16 @@ const checkStoreStatus = async () => {
                     : `#${storeSettings.value.theme_primary_color}`;
                 
                 document.documentElement.style.setProperty('--primary-color', color);
-                // Kita juga set warna hover/600 secara manual jika diperlukan
                 document.documentElement.style.setProperty('--primary-600', color);
             }
         } else {
+            document.documentElement.style.setProperty('--primary-color', "#2563eb");
+            document.documentElement.style.setProperty('--primary-600', "#2563eb");
             storeExists.value = false;
         }
     } catch (error) {
+        document.documentElement.style.setProperty('--primary-color', "#2563eb");
+        document.documentElement.style.setProperty('--primary-600', "#2563eb");
         console.error('Gagal memuat status toko:', error);
         storeExists.value = false;
     }

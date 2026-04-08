@@ -719,7 +719,7 @@ defineExpose({ refreshData });
                     <Dropdown 
                         v-model="purchaseInfo.cashierUuid" 
                         :options="users" 
-                        optionLabel="name" 
+                        optionLabel="username" 
                         optionValue="uuid" 
                         filter
                         placeholder="Pilih PIC / Operator..." 

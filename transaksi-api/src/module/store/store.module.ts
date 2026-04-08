@@ -11,12 +11,14 @@ import { userProvider } from 'src/common/entities/user/user.provider';
 import { categoryProvider } from 'src/common/entities/category/category.provider';
 import { CategoryModule } from '../category/category.module';
 import { StorePublicController } from './store-public.controller';
+import { AccountModule } from '../account/account.module';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
     CategoryModule,
+    AccountModule,
     MulterModule.register({
       dest: './uploads', 
     }),
