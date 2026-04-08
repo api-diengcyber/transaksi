@@ -11,6 +11,7 @@ import { brandProvider } from 'src/common/entities/brand/brand.provider';
 import { unitProvider } from 'src/common/entities/unit/unit.provider';         
 import { shelveProvider } from 'src/common/entities/shelve/shelve.provider';   
 import { DatabaseModule } from 'src/common/db/database.module';
+import { priceGroupProviders } from 'src/common/entities/price_group/price_group.provider';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DatabaseModule } from 'src/common/db/database.module';
     ...brandProvider,   
     ...unitProvider,    
     ...shelveProvider,  
+    ...priceGroupProviders,
   ],
 })
 export class IeModule {}
