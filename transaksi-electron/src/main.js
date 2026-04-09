@@ -27,17 +27,24 @@ function startAPI() {
     console.log('------------------------------------------------');
     console.log('Starting NestJS API...');
     
-    const apiPath = path.join(rootPath, 'resources', 'api', 'main.js');
+    // Sesuaikan path API berdasarkan mode dev/prod
+    const apiPath = isDev 
+        ? path.join(rootPath, '..', 'transaksi-api', 'dist', 'main.js') // Path jika Anda menjalankan Electron saat dev
+        : path.join(rootPath, 'resources', 'api', 'main.js');           // Path saat sudah di-build (.exe / .app)
+        
     const apiDir = path.dirname(apiPath);
     
-    // Konfigurasi Environment agar API konek ke MySQL port 8889
+    // --- KONFIGURASI ENVIRONMENT UNTUK API NESTJS ---
+    // Variabel ini akan ditangkap oleh process.env di NestJS
     const env = Object.assign({}, process.env, {
-        DATABASE_PORT: '8889',
-        DATABASE_HOST: '127.0.0.1', // Paksa IPv4
+        NODE_ENV: isDev ? 'development' : 'production', // Beritahu NestJS mode saat ini
+        PORT: '3000',
+        DATABASE_HOST: '127.0.0.1', 
+        DATABASE_PORT: '34676',      // Pastikan sesuai dengan port MySQL bawaan Electron Anda
         DATABASE_USER: 'root',
         DATABASE_PASSWORD: 'root',
-        PORT: '3000',
-        NO_COLOR: 'true'
+        DATABASE_NAME: 'transaksi',
+        NO_COLOR: 'true' // Menghindari karakter aneh (ANSI color codes) di console log Electron
     });
 
     let options = { env, cwd: apiDir, stdio: 'pipe' };
@@ -47,6 +54,8 @@ function startAPI() {
     if (!isDev) options.env.ELECTRON_RUN_AS_NODE = '1';
 
     console.log('Spawning API with command:', command);
+    
+    // Jalankan API
     apiProcess = spawn(command, [apiPath], options);
 
     apiProcess.stdout.on('data', (data) => console.log(`[API] ${data}`));

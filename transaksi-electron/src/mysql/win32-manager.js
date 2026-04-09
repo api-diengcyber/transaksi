@@ -17,7 +17,7 @@ class Win32MySQLManager extends BaseMySQLManager {
         this.prepareInitSql();
 
         this.dbProcess = spawn(mysqlBin, [
-            '--port=8889',
+            '--port=34676',
             `--datadir=${this.mysqlData}`,
             '--bind-address=127.0.0.1',
             `--init-file=${this.initSqlPath}`,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { JournalModule } from '../journal/journal.module';
 import { ProductModule } from '../product/product.module';
 import { StoreModule } from '../store/store.module';
@@ -24,6 +25,10 @@ import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
     StoreModule,
     AuthModule,
     JournalModule,
