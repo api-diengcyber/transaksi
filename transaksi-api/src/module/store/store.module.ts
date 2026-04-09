@@ -12,6 +12,7 @@ import { categoryProvider } from 'src/common/entities/category/category.provider
 import { CategoryModule } from '../category/category.module';
 import { StorePublicController } from './store-public.controller';
 import { AccountModule } from '../account/account.module';
+import { JournalConfigModule } from '../journal_config/journal_config.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AccountModule } from '../account/account.module';
     AuthModule,
     CategoryModule,
     AccountModule,
+    JournalConfigModule,
     MulterModule.register({
       dest: './uploads', 
     }),

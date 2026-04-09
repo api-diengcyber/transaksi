@@ -125,7 +125,7 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('selectedStoreId');
-    }
+    },
   },
   persist: true // Memastikan state Pinia sendiri tetap tersimpan di localStorage
 });

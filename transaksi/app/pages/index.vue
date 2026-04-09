@@ -79,8 +79,8 @@ const manajemenMenu = [
     { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant', color: 'text-orange-500 bg-orange-50' },
     { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier', color: 'text-cyan-500 bg-cyan-50' },
     { label: 'Bank & Rek.', icon: 'pi pi-building-columns', route: '/bank', color: 'text-indigo-500 bg-indigo-50' },
-    { label: 'Member', icon: 'pi pi-user', route: '/member', color: 'text-pink-500 bg-pink-50' },
-    { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier', color: 'text-rose-500 bg-rose-50' },
+    // { label: 'Member', icon: 'pi pi-user', route: '/member', color: 'text-pink-500 bg-pink-50' },
+    // { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier', color: 'text-rose-500 bg-rose-50' },
     { label: 'Pegawai', icon: 'pi pi-id-card', route: '/user', color: 'text-violet-500 bg-violet-50' },
     { label: 'Media', icon: 'pi pi-image', route: '/media', color: 'text-fuchsia-500 bg-fuchsia-50' },
 ];

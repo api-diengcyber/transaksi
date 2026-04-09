@@ -275,4 +275,81 @@ export class JournalSaleService {
       };
     });
   }
+
+  async getSaleByCode(storeUuid: string, code: string) {
+    // 1. Cari jurnal beserta detailnya berdasarkan kode faktur
+    const journal = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndMapMany(
+        'journal.details', 
+        JournalDetailEntity, 
+        'detail', 
+        'detail.journalCode = journal.code'
+      )
+      .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
+      .andWhere('journal.code = :code', { code })
+      .getOne();
+
+    // Jika tidak ditemukan, kembalikan null
+    if (!journal) return null;
+
+    // 2. Mapping detail ke bentuk object key-value
+    const detailsMap = (journal['details'] || []).reduce((acc: any, curr: any) => {
+      acc[curr.key] = curr.value;
+      return acc;
+    }, {});
+
+    // 3. Ambil data pelanggan
+    let memberName = detailsMap['member'] || detailsMap['member_name'] || detailsMap['customer'] || detailsMap['pelanggan'];
+    if (!memberName) {
+       const itemMemberKey = Object.keys(detailsMap).find(k => (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid'));
+       if (itemMemberKey) memberName = detailsMap[itemMemberKey];
+    }
+
+    // 4. Ekstrak dan rapikan rincian Barang (Items)
+    const items: any[] = [];
+    
+    // Coba parsing jika items disimpan sebagai JSON String
+    if (detailsMap['items']) {
+       try {
+           const parsed = JSON.parse(detailsMap['items']);
+           parsed.forEach((p: any) => items.push({
+               product_uuid: p.product_uuid || p.productUuid || null,
+               variant_uuid: p.variant_uuid || p.variantUuid || null,
+               unit_uuid: p.unit_uuid || p.unitUuid || null,
+               warehouse_uuid: p.warehouse_uuid || p.warehouseUuid || null,
+               name: p.item_name || p.product_name || p.name || 'Barang Tidak Diketahui',
+               unitName: p.unit_name || p.unitName || 'Unit',
+               price: Number(p.sell_price || p.price || 0),
+               qty_bought: Number(p.qty || 1),
+               qty_return: 0 // Siapkan state 0 untuk frontend
+           }));
+       } catch(e) { console.error("Gagal parse items JSON", e); }
+    } else {
+       // Coba parsing jika item disimpan terpisah per-kolom (flat structure)
+       let idx = 0;
+       while (detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`] || detailsMap[`name#${idx}`]) {
+           items.push({
+               product_uuid: detailsMap[`product_uuid#${idx}`] || detailsMap[`id#${idx}`] || null,
+               variant_uuid: detailsMap[`variant_uuid#${idx}`] || null,
+               unit_uuid: detailsMap[`unit_uuid#${idx}`] || null,
+               warehouse_uuid: detailsMap[`warehouse_uuid#${idx}`] || null,
+               name: detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`] || detailsMap[`name#${idx}`],
+               unitName: detailsMap[`unit_name#${idx}`] || 'Unit',
+               price: Number(detailsMap[`sell_price#${idx}`] || detailsMap[`price#${idx}`] || 0),
+               qty_bought: Number(detailsMap[`qty#${idx}`] || 1),
+               qty_return: 0 // Siapkan state 0 untuk frontend
+           });
+           idx++;
+       }
+    }
+
+    // Kembalikan data yang sudah bersih ke Frontend
+    return {
+      uuid: journal.uuid,
+      code: journal.code,
+      date: journal.createdAt,
+      member: memberName || 'Pelanggan Umum',
+      items: items
+    };
+  }
 }

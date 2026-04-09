@@ -6,7 +6,6 @@ const journalService = useJournalService();
 const toast = useToast();
 
 const returns = ref([]); 
-const sales = ref([]); // Untuk modal pencarian nota
 const loading = ref(true);
 const processing = ref(false);
 const filters = ref({ global: { value: null, matchMode: 'contains' } });
@@ -18,7 +17,7 @@ const selectedSale = ref(null);
 const returnCart = ref([]);
 const returnNotes = ref('');
 
-// --- LOAD DATA ---
+// --- LOAD DATA (Hanya Load Histori Retur Saja) ---
 const loadData = async () => {
     loading.value = true;
     try {
@@ -30,16 +29,6 @@ const loadData = async () => {
         returns.value = [];
     } finally {
         loading.value = false;
-    }
-};
-
-const loadSalesForSearch = async () => {
-    try {
-        const response = await journalService.findAllByType('SALE');
-        const dataList = response?.data?.data || response?.data || response || [];
-        sales.value = dataList;
-    } catch (e) {
-        console.error(e);
     }
 };
 
@@ -56,80 +45,38 @@ const isProcessDisabled = computed(() => {
     return !hasReturnQty || processing.value;
 });
 
-// --- ACTIONS ---
-const searchSale = () => {
+// --- ACTIONS (PENCARIAN FAKTUR MELALUI API) ---
+const searchSale = async () => {
     const q = searchQuery.value.trim().toUpperCase();
     if (!q) {
         toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Masukkan kode faktur penjualan!', life: 2000 });
         return;
     }
 
-    const found = sales.value.find(s => s.code.toUpperCase() === q);
-    if (found) {
-        selectedSale.value = found;
-        
-        // 1. PERBAIKAN: Ubah array 'details' menjadi object 'dMap' secara aman di Frontend
-        const dMap = found.detailsMap || (found.details || []).reduce((acc, curr) => {
-            acc[curr.key] = curr.value;
-            return acc;
-        }, {});
+    try {
+        // HIT API PENCARIAN BERDASARKAN KODE
+        const response = await journalService.getSaleByCode(q);
+        const data = response?.data || response;
 
-        // 2. Ekstrak item dari dMap
-        const items = [];
-        let idx = 0;
-        
-        // Deteksi key barang yang lebih fleksibel (item_name, product_name, atau name)
-        while (dMap[`item_name#${idx}`] || dMap[`product_name#${idx}`] || dMap[`name#${idx}`]) {
-            const pName = dMap[`item_name#${idx}`] || dMap[`product_name#${idx}`] || dMap[`name#${idx}`] || 'Barang Tidak Diketahui';
-            const pPrice = Number(dMap[`sell_price#${idx}`] || dMap[`price#${idx}`] || 0);
+        if (data && data.code) {
+            selectedSale.value = data;
             
-            items.push({
-                product_uuid: dMap[`product_uuid#${idx}`] || dMap[`id#${idx}`],
-                variant_uuid: dMap[`variant_uuid#${idx}`] || null,
-                unit_uuid: dMap[`unit_uuid#${idx}`],
-                warehouse_uuid: dMap[`warehouse_uuid#${idx}`],
-                name: pName,
-                unitName: dMap[`unit_name#${idx}`] || 'Unit',
-                price: pPrice,
-                qty_bought: Number(dMap[`qty#${idx}`] || 1),
-                qty_return: 0 // Default qty retur 0
-            });
-            idx++;
-        }
-
-        // 3. FALLBACK: Jika kosong, siapa tau items disimpan sebagai JSON String
-        if (items.length === 0 && dMap['items']) {
-            try {
-                const parsedItems = JSON.parse(dMap['items']);
-                parsedItems.forEach(pi => {
-                    items.push({
-                        product_uuid: pi.product_uuid,
-                        variant_uuid: pi.variant_uuid,
-                        unit_uuid: pi.unit_uuid,
-                        warehouse_uuid: pi.warehouse_uuid,
-                        name: pi.item_name || pi.product_name || pi.name,
-                        unitName: pi.unit_name || 'Unit',
-                        price: Number(pi.sell_price || pi.price || 0),
-                        qty_bought: Number(pi.qty || 1),
-                        qty_return: 0
-                    });
-                });
-            } catch (e) {
-                console.error('Gagal parsing items JSON', e);
+            // Data sudah rapi dari Backend, langsung masukkan ke cart!
+            if (data.items && data.items.length > 0) {
+                returnCart.value = data.items;
+                toast.add({ severity: 'success', summary: 'Ditemukan', detail: 'Faktur Penjualan berhasil dimuat', life: 2000 });
+            } else {
+                toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Faktur ditemukan tapi tidak ada daftar barang.', life: 3000 });
+                selectedSale.value = null;
+                returnCart.value = [];
             }
-        }
-
-        if (items.length > 0) {
-            returnCart.value = items;
-            toast.add({ severity: 'success', summary: 'Ditemukan', detail: 'Faktur Penjualan berhasil dimuat', life: 2000 });
         } else {
-            toast.add({ severity: 'warn', summary: 'Tidak Ada Barang', detail: 'Faktur ditemukan, tetapi rincian barang kosong/rusak.', life: 3000 });
+            toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Faktur tidak ditemukan dalam sistem.', life: 3000 });
             selectedSale.value = null;
             returnCart.value = [];
         }
-        
-    } else {
-        toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Faktur tidak ditemukan dalam sistem.', life: 3000 });
+    } catch (e) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Terjadi kesalahan saat mencari faktur', life: 3000 });
         selectedSale.value = null;
         returnCart.value = [];
     }
@@ -145,15 +92,15 @@ const processReturn = async () => {
         const payload = {
             details: {
                 reference_journal_code: selectedSale.value.code,
-                member: selectedSale.value.member,
+                member: selectedSale.value.member || 'Pelanggan Umum',
                 notes: returnNotes.value || 'Retur Pelanggan',
                 grand_total: totalItemRefund.value,
-                items: itemsToReturn
+                items: itemsToReturn 
             }
         };
 
         // Buat transaksi RET_SALE
-        await journalService.createReturnSaleTransaction({ details: { ...payload.details, transaction_type: 'RET_SALE' }});
+        await journalService.createReturnSaleTransaction(payload.details);
 
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Retur Penjualan Berhasil Diproses', life: 3000 });
         closeModal();
@@ -172,7 +119,6 @@ const openModal = async () => {
     selectedSale.value = null;
     returnCart.value = [];
     returnNotes.value = '';
-    if (sales.value.length === 0) await loadSalesForSearch();
 };
 
 const closeModal = () => { showReturnModal.value = false; };
@@ -270,8 +216,8 @@ onMounted(() => { loadData(); });
                 <Column field="member" header="Pelanggan" sortable style="min-width: 12rem">
                      <template #body="{ data }">
                         <div class="flex items-center gap-2">
-                            <div class="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-xs font-bold text-surface-600 uppercase">{{ data.member.substring(0, 1) }}</div>
-                            <span class="font-bold text-surface-800">{{ data.member }}</span>
+                            <div class="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-xs font-bold text-surface-600 uppercase">{{ data.member?.substring(0, 1) || '?' }}</div>
+                            <span class="font-bold text-surface-800">{{ data.member || 'Umum' }}</span>
                         </div>
                     </template>
                 </Column>

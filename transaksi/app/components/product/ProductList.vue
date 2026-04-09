@@ -204,6 +204,7 @@ onMounted(async () => {
                     <div>
                         <div class="font-bold text-surface-800">{{ data.name }}</div>
                         <div class="text-xs text-surface-500 mt-0.5 flex items-center gap-2">
+                            <span v-if="data.productCode"><i class="pi pi-qrcode text-[10px]"></i> {{ data.productCode }}</span>
                             <span><i class="pi pi-barcode text-[10px]"></i> {{ data.barcode || '-' }}</span>
                         </div>
                     </div>
@@ -298,6 +299,10 @@ onMounted(async () => {
                                 <div>
                                     <div class="text-[10px] text-surface-500 mb-0.5">Nama Produk</div>
                                     <div class="text-sm font-bold text-surface-800">{{ data.name }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] text-surface-500 mb-0.5">Kode Produk</div>
+                                    <div class="text-sm font-medium text-surface-800">{{ data.productCode || '-' }}</div>
                                 </div>
                                 <div>
                                     <div class="text-[10px] text-surface-500 mb-0.5">Barcode / SKU</div>

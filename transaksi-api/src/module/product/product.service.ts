@@ -41,6 +41,7 @@ export class ProductService {
       const newProduct = manager.create(ProductEntity, {
         uuid: productUuid, 
         name: dto.name, 
+        productCode: dto.productCode,
         barcode: dto.barcode, 
         unitUuid: dto.unitUuid, 
         categoryUuid: dto.categoryUuid,
@@ -120,6 +121,7 @@ export class ProductService {
       if (!product) throw new NotFoundException('Produk tidak ditemukan');
 
       product.name = dto.name ?? product.name;
+      product.productCode = dto.productCode ?? product.productCode;
       product.barcode = dto.barcode ?? product.barcode;
       product.unitUuid = dto.unitUuid ?? product.unitUuid;
       product.categoryUuid = dto.categoryUuid ?? product.categoryUuid;

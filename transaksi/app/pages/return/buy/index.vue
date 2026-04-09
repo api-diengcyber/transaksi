@@ -6,7 +6,6 @@ const journalService = useJournalService();
 const toast = useToast();
 
 const returns = ref([]); 
-const purchases = ref([]); // Untuk modal pencarian nota beli
 const loading = ref(true);
 const processing = ref(false);
 const filters = ref({ global: { value: null, matchMode: 'contains' } });
@@ -18,7 +17,7 @@ const selectedPurchase = ref(null);
 const returnCart = ref([]);
 const returnNotes = ref('');
 
-// --- LOAD DATA ---
+// --- LOAD DATA (Hanya Load Histori Retur Saja) ---
 const loadData = async () => {
     loading.value = true;
     try {
@@ -30,16 +29,6 @@ const loadData = async () => {
         returns.value = [];
     } finally {
         loading.value = false;
-    }
-};
-
-const loadPurchasesForSearch = async () => {
-    try {
-        const response = await journalService.findAllByType('BUY');
-        const dataList = response?.data?.data || response?.data || response || [];
-        purchases.value = dataList;
-    } catch (e) {
-        console.error(e);
     }
 };
 
@@ -56,75 +45,38 @@ const isProcessDisabled = computed(() => {
     return !hasReturnQty || processing.value;
 });
 
-// --- ACTIONS ---
-const searchPurchase = () => {
+// --- ACTIONS (PENCARIAN FAKTUR MELALUI API) ---
+const searchPurchase = async () => {
     const q = searchQuery.value.trim().toUpperCase();
     if (!q) {
         toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Masukkan kode faktur pembelian!', life: 2000 });
         return;
     }
 
-    const found = purchases.value.find(p => p.code.toUpperCase() === q);
-    if (found) {
-        selectedPurchase.value = found;
-        
-        const dMap = found.detailsMap || (found.details || []).reduce((acc, curr) => {
-            acc[curr.key] = curr.value; return acc;
-        }, {});
+    try {
+        // HIT API PENCARIAN BERDASARKAN KODE
+        const response = await journalService.getBuyByCode(q);
+        const data = response?.data || response;
 
-        const items = [];
-        let idx = 0;
-        
-        while (dMap[`item_name#${idx}`] || dMap[`product_name#${idx}`] || dMap[`name#${idx}`]) {
-            const pName = dMap[`item_name#${idx}`] || dMap[`product_name#${idx}`] || dMap[`name#${idx}`] || 'Barang Tidak Diketahui';
-            // Ambil harga beli (buy_price)
-            const pPrice = Number(dMap[`buy_price#${idx}`] || dMap[`price#${idx}`] || 0);
+        if (data && data.code) {
+            selectedPurchase.value = data;
             
-            items.push({
-                product_uuid: dMap[`product_uuid#${idx}`] || dMap[`id#${idx}`],
-                variant_uuid: dMap[`variant_uuid#${idx}`] || null,
-                unit_uuid: dMap[`unit_uuid#${idx}`],
-                warehouse_uuid: dMap[`warehouse_uuid#${idx}`],
-                name: pName,
-                unitName: dMap[`unit_name#${idx}`] || 'Unit',
-                price: pPrice,
-                qty_bought: Number(dMap[`qty#${idx}`] || 1),
-                qty_return: 0 
-            });
-            idx++;
-        }
-
-        // Fallback JSON parsing
-        if (items.length === 0 && dMap['items']) {
-            try {
-                const parsedItems = JSON.parse(dMap['items']);
-                parsedItems.forEach(pi => {
-                    items.push({
-                        product_uuid: pi.product_uuid,
-                        variant_uuid: pi.variant_uuid,
-                        unit_uuid: pi.unit_uuid,
-                        warehouse_uuid: pi.warehouse_uuid,
-                        name: pi.item_name || pi.product_name || pi.name,
-                        unitName: pi.unit_name || 'Unit',
-                        price: Number(pi.buy_price || pi.price || 0),
-                        qty_bought: Number(pi.qty || 1),
-                        qty_return: 0
-                    });
-                });
-            } catch (e) {}
-        }
-
-        if (items.length > 0) {
-            returnCart.value = items;
-            toast.add({ severity: 'success', summary: 'Ditemukan', detail: 'Faktur Pembelian berhasil dimuat', life: 2000 });
+            // Data sudah rapi dari Backend, langsung masukkan ke cart!
+            if (data.items && data.items.length > 0) {
+                returnCart.value = data.items;
+                toast.add({ severity: 'success', summary: 'Ditemukan', detail: 'Faktur Pembelian berhasil dimuat', life: 2000 });
+            } else {
+                toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Faktur ditemukan, tetapi rincian barang kosong.', life: 3000 });
+                selectedPurchase.value = null;
+                returnCart.value = [];
+            }
         } else {
-            toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Faktur ditemukan, tetapi rincian barang kosong.', life: 3000 });
+            toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Faktur pembelian tidak ditemukan dalam sistem.', life: 3000 });
             selectedPurchase.value = null;
             returnCart.value = [];
         }
-        
-    } else {
-        toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Faktur pembelian tidak ditemukan.', life: 3000 });
+    } catch (e) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Terjadi kesalahan saat mencari faktur', life: 3000 });
         selectedPurchase.value = null;
         returnCart.value = [];
     }
@@ -140,15 +92,15 @@ const processReturn = async () => {
         const payload = {
             details: {
                 reference_journal_code: selectedPurchase.value.code,
-                supplier: selectedPurchase.value.supplier || selectedPurchase.value.supplier_name,
+                supplier: selectedPurchase.value.supplier || 'Supplier Umum',
                 notes: returnNotes.value || 'Retur ke Supplier',
                 grand_total: totalItemRefund.value,
-                items: itemsToReturn
+                items: itemsToReturn // Format item array utuh
             }
         };
 
-        // Buat transaksi RET_BUY
-        await journalService.createReturnBuyTransaction({ details: { ...payload.details, transaction_type: 'RET_BUY' }});
+        // Buat transaksi RET_BUY (mengirimkan langsung object details)
+        await journalService.createReturnBuyTransaction(payload.details);
 
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Retur Pembelian Berhasil Diproses', life: 3000 });
         closeModal();
@@ -167,7 +119,6 @@ const openModal = async () => {
     selectedPurchase.value = null;
     returnCart.value = [];
     returnNotes.value = '';
-    if (purchases.value.length === 0) await loadPurchasesForSearch();
 };
 
 const closeModal = () => { showReturnModal.value = false; };

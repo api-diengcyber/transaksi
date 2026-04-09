@@ -1,7 +1,9 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { JournalConfigEntity } from 'src/common/entities/journal_config/journal_config.entity';
 import { CreateJournalConfigDto } from './dto/create-journal-config.dto';
+import { AccountEntity } from 'src/common/entities/account/account.entity';
+import { generateJournalConfigUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class JournalConfigService {
@@ -15,10 +17,11 @@ export class JournalConfigService {
     // 1. Update Query: Tambahkan SUM(CAST(jd.value AS DECIMAL))
     let sql = `
       SELECT 
+        ANY_VALUE(j.code) as code,
         SUBSTRING_INDEX(j.code, '-', 1) as transactionType,
         jd.key as detailKey,
         COUNT(jd.uuid) as frequency,
-        SUM(CAST(jd.value AS DECIMAL(20, 2))) as totalValue 
+        SUM(CAST(jd.value AS DECIMAL(20, 2))) as totalValue
       FROM journal_detail jd
       JOIN journal j ON j.code = jd.journal_code
       WHERE j.code LIKE '%-%-%-%' 
@@ -123,4 +126,152 @@ export class JournalConfigService {
     item.deletedAt = new Date();
     return await this.repo.save(item);
   }
+
+  async installJournalConfigs(manager: EntityManager, storeUuid: string, userId: string) {
+    const rawConfigs: any[] = [
+      // ==========================================
+      // TRANSAKSI PENJUALAN (SALE)
+      // ==========================================
+      {
+        "transactionType": "SALE",
+        "detailKey": "grand_total",
+        "description": "Mengakui Total Pendapatan Penjualan",
+        "items": [
+          { "accountCode": "4001", "position": "CREDIT" } // Pendapatan Penjualan
+        ]
+      },
+      {
+        "transactionType": "SALE",
+        "detailKey": "amount_cash",
+        "description": "Kas yang masuk dari Penjualan Tunai",
+        "items": [
+          { "accountCode": "1001", "position": "DEBIT" } // Kas Tunai / Laci
+        ]
+      },
+      {
+        "transactionType": "SALE",
+        "detailKey": "amount_bank_total",
+        "description": "Kas yang masuk dari Transfer/Debit",
+        "items": [
+          { "accountCode": "1002", "position": "DEBIT" } // Kas Bank / Transfer
+        ]
+      },
+      {
+        "transactionType": "SALE",
+        "detailKey": "amount_credit",
+        "description": "Mengakui Piutang jika Penjualan Kredit",
+        "items": [
+          { "accountCode": "1101", "position": "DEBIT" } // Piutang Usaha (AR)
+        ]
+      },
+
+      // ==========================================
+      // TRANSAKSI PEMBELIAN (BUY)
+      // ==========================================
+      {
+        "transactionType": "BUY",
+        "detailKey": "grand_total",
+        "description": "Mengakui penambahan Nilai Persediaan Barang",
+        "items": [
+          { "accountCode": "1201", "position": "DEBIT" } // Persediaan Barang Dagang
+        ]
+      },
+      {
+        "transactionType": "BUY",
+        "detailKey": "amount_cash",
+        "description": "Kas yang keluar untuk Pembelian Tunai",
+        "items": [
+          { "accountCode": "1001", "position": "CREDIT" } // Kas Tunai / Laci
+        ]
+      },
+      {
+        "transactionType": "BUY",
+        "detailKey": "amount_credit",
+        "description": "Mengakui Hutang jika Pembelian Kredit",
+        "items": [
+          { "accountCode": "2001", "position": "CREDIT" } // Hutang Usaha (AP)
+        ]
+      },
+
+      // ==========================================
+      // PEMBAYARAN PIUTANG (PAY_AR)
+      // ==========================================
+      {
+        "transactionType": "PAY_AR",
+        "detailKey": "nominal_ar_paid",
+        "description": "Penerimaan Kas dari Pelunasan Piutang Pelanggan",
+        "items": [
+          { "accountCode": "1001", "position": "DEBIT" },  // Kas Tunai Bertambah
+          { "accountCode": "1101", "position": "CREDIT" }  // Piutang Berkurang
+        ]
+      },
+
+      // ==========================================
+      // PEMBAYARAN HUTANG (PAY_AP)
+      // ==========================================
+      {
+        "transactionType": "PAY_AP",
+        "detailKey": "nominal_ap_paid",
+        "description": "Pengeluaran Kas untuk Pelunasan Hutang Supplier",
+        "items": [
+          { "accountCode": "2001", "position": "DEBIT" },  // Hutang Berkurang
+          { "accountCode": "1001", "position": "CREDIT" }  // Kas Keluar
+        ]
+      },
+
+      // ==========================================
+      // RETUR PENJUALAN (RET_SALE)
+      // ==========================================
+      {
+        "transactionType": "RET_SALE",
+        "detailKey": "grand_total",
+        "description": "Pengembalian Dana ke Pelanggan",
+        "items": [
+          { "accountCode": "4002", "position": "DEBIT" },  // Retur Penjualan (Kontra Revenue)
+          { "accountCode": "1001", "position": "CREDIT" }  // Kas Keluar (Refund)
+        ]
+      },
+
+      // ==========================================
+      // RETUR PEMBELIAN (RET_BUY)
+      // ==========================================
+      {
+        "transactionType": "RET_BUY",
+        "detailKey": "grand_total",
+        "description": "Penerimaan Dana dari Supplier karena Retur",
+        "items": [
+          { "accountCode": "1001", "position": "DEBIT" },  // Kas Masuk (Refund)
+          { "accountCode": "1201", "position": "CREDIT" }  // Persediaan Barang Dagang Berkurang
+          // Catatan: Bisa juga dikreditkan ke 5002 (Retur Pembelian) jika Anda memakai sistem HPP Periodik.
+          // Namun untuk sistem perpetual biasanya langsung mengurangi 1201.
+        ]
+      }
+    ];
+    
+    // Tarik semua akun yang baru terbuat di toko ini
+    const storeAccounts = await manager.find(AccountEntity, { where: { storeUuid } });
+
+    const configEntities: any[] = [];
+    
+    for (const config of rawConfigs) {
+        // Karena satu detailKey bisa pecah ke Debit & Credit sekaligus (seperti PAY_AR)
+        for (const item of config.items) {
+             const matchedAccount = storeAccounts.find(acc => acc.code === item.accountCode);
+             
+             if (matchedAccount) {
+                 configEntities.push(manager.create(JournalConfigEntity, {
+                     uuid: generateJournalConfigUuid(storeUuid),
+                     storeUuid: storeUuid,
+                     transactionType: config.transactionType,
+                     detailKey: config.detailKey,
+                     accountUuid: matchedAccount.uuid,
+                     position: item.position,
+                     createdBy: userId
+                 }));
+             }
+        }
+    }
+    
+    await manager.save(JournalConfigEntity, configEntities);
+}
 }

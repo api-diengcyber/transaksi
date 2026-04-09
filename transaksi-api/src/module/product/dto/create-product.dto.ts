@@ -67,6 +67,11 @@ export class CreateProductDto {
   @IsNotEmpty()
   @IsString()
   name: string;
+  
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  productCode?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

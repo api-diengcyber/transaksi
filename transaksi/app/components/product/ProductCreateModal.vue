@@ -32,6 +32,7 @@ const brands = ref([]);
 // Data Utama Produk
 const product = reactive({ 
     name: '',
+    productCode: '',
     barcode: '',
     isManageStock: true, 
     stock: 0,
@@ -69,6 +70,7 @@ const getPricePairs = (pricesArray) => {
 // --- FORM MANAGEMENT ---
 const initForm = () => {
     product.name = '';
+    product.productCode = '';
     product.barcode = '';
     product.isManageStock = true;
     product.stock = 0;
@@ -139,6 +141,7 @@ const loadProductData = async (uuid) => {
         if (!data) throw new Error("Data produk kosong");
 
         product.name = data.name || '';
+        product.productCode = data.productCode || '';
         product.barcode = data.barcode || '';
         product.isManageStock = data.isManageStock !== false; 
         product.stock = data.stock || 0;
@@ -198,7 +201,7 @@ watch(() => props.visible, async (val) => {
 const saveProduct = async () => {
     submitted.value = true;
     
-    if (!product.name || !product.unitUuid || !product.categoryUuid || (product.isManageStock && product.shelveUuids.length === 0)) {
+    if (!product.name || !product.productCode || !product.unitUuid || !product.categoryUuid || (product.isManageStock && product.shelveUuids.length === 0)) {
         toast.add({ severity: 'warn', summary: 'Perhatian', detail: 'Nama, kategori, satuan, dan rak (jika kelola stok) wajib diisi' });
         return;
     }
@@ -207,6 +210,7 @@ const saveProduct = async () => {
     try {
         const payload = {
             name: product.name,
+            productCode: product.productCode,
             barcode: product.barcode,
             isManageStock: product.isManageStock, 
             stock: product.isManageStock ? product.stock : 0, 
@@ -273,6 +277,14 @@ const saveProduct = async () => {
                     <InputGroup>
                         <InputGroupAddon class="!bg-surface-100"><i class="pi pi-tag text-surface-500"></i></InputGroupAddon>
                         <InputText id="name" v-model="product.name" placeholder="Contoh: Kopi Kapal Api" :class="{'p-invalid': submitted && !product.name}" autofocus />
+                    </InputGroup>
+                </div>
+
+                <div class="field mb-0">
+                    <label for="productCode" class="font-semibold text-sm mb-1.5 block text-surface-700">Kode Produk</label>
+                    <InputGroup>
+                        <InputGroupAddon class="!bg-surface-100"><i class="pi pi-qrcode text-surface-500"></i></InputGroupAddon>
+                        <InputText id="productCode" v-model="product.productCode" placeholder="Kode Produk..." />
                     </InputGroup>
                 </div>
 

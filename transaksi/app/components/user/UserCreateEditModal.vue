@@ -20,6 +20,8 @@ const submitted = ref(false);
 const localRoles = ref([]); // State untuk menyimpan daftar role dari API
 
 const form = reactive({
+    name: '', 
+    phone: '',
     username: '',
     email: '',
     password: '',
@@ -61,6 +63,8 @@ const loadRoles = async () => {
 };
 
 const resetForm = () => {
+    form.name = ''; 
+    form.phone = '';
     form.username = '';
     form.email = '';
     form.password = '';
@@ -71,11 +75,12 @@ const resetForm = () => {
 
 const populateForm = () => {
     if (props.userData) {
+        form.name = props.userData.name || '';  
+        form.phone = props.userData.phone || '';
         form.username = props.userData.username || '';
         form.email = props.userData.email || '';
         form.password = ''; 
         form.confirmPassword = '';
-        // Map roles menangani .name atau .role
         form.roleValues = (props.userData.roles || []).map(r => r.uuid || r.name || r.role); 
     } else {
         resetForm();
@@ -94,8 +99,8 @@ const handleSave = async () => {
     submitted.value = true;
 
     // Validasi Dasar
-    if (!form.username || form.roleValues.length === 0) {
-        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Username dan Role wajib diisi.', life: 3000 });
+    if (!form.username || !form.name || form.roleValues.length === 0) {
+        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Nama, Username, dan Role wajib diisi.', life: 3000 });
         return;
     }
 
@@ -113,6 +118,8 @@ const handleSave = async () => {
     loading.value = true;
     try {
         const payload = {
+            name: form.name,  
+            phone: form.phone,
             username: form.username,
             email: form.email,
             ...(form.password && { password: form.password }), 
@@ -158,6 +165,26 @@ const closeDialog = () => {
         class="p-fluid"
     >
         <div class="flex flex-col gap-6 pt-2">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="field">
+                    <label class="text-sm font-bold mb-1 block">Nama Lengkap <span class="text-red-500">*</span></label>
+                    <InputText 
+                        v-model="form.name" 
+                        placeholder="Contoh: Ujang Kasir" 
+                        :class="{'p-invalid': submitted && !form.name}" 
+                        autofocus 
+                    />
+                </div>
+
+                <div class="field">
+                    <label class="text-sm font-bold mb-1 block">Nomor HP</label>
+                    <InputText 
+                        v-model="form.phone" 
+                        placeholder="081234567..." 
+                    />
+                </div>
+            </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field">

@@ -172,6 +172,18 @@ export const useJournalService = () => {
             method: 'PUT',
         });
     };
+    
+    const getSaleByCode = async (code: string) => {
+        return await useApi(`${API_BASE}/sale/search/${code}`, {
+            method: 'GET'
+        });
+    };
+
+    const getBuyByCode = async (code: string) => {
+        return await useApi(`${API_BASE}/buy/search/${code}`, {
+            method: 'GET'
+        });
+    };
 
     return {
         createSaleTransaction,
@@ -196,5 +208,7 @@ export const useJournalService = () => {
         createOpnameDraft,
         getUnverifiedOpnames,
         verifyOpnameJournal,
+        getSaleByCode,
+        getBuyByCode,
     };
 };

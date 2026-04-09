@@ -5,6 +5,16 @@ import { IsNotEmpty, IsString, MinLength, IsOptional, IsEmail, IsArray, ArrayMin
 import { UserRole } from 'src/common/entities/user_role/user_role.entity';
 
 export class CreateUserDto {
+  @ApiProperty({ example: 'Ujang Kasir' })
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: '081234567890', required: false })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @ApiProperty({ example: 'kasir' })
   @IsNotEmpty()
   @IsString()
@@ -29,6 +39,16 @@ export class CreateUserDto {
 }
 
 export class UpdateUserDto {
+  @ApiProperty({ example: 'Ujang Kasir', required: false })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiProperty({ example: '081234567890', required: false })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @ApiProperty({ example: 'ujangkasir', required: false })
   @IsOptional()
   @IsString()
@@ -39,14 +59,21 @@ export class UpdateUserDto {
   @IsEmail()
   email?: string;
 
-  @ApiProperty({ example: [UserRole.CASHIER], isArray: true, enum: UserRole, description: 'Role pengguna', required: false })
+  // --- TAMBAHKAN INI ---
+  @ApiProperty({ example: 'passwordbaru123', required: false })
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  password?: string;
+  // --------------------
+
+  @ApiProperty({ example: ['role-uuid'], isArray: true, required: false })
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
-  @IsEnum(UserRole, { each: true })
-  roles?: UserRole[];
+  @IsString({ each: true })
+  roles?: string[];
   
-  @ApiProperty({ example: 'newstore-uuid', required: false, description: 'UUID toko default' })
+  @ApiProperty({ example: 'newstore-uuid', required: false })
   @IsOptional()
   @IsUUID()
   defaultStoreUuid?: string; 

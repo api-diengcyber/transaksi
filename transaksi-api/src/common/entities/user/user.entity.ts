@@ -17,6 +17,12 @@ import { UserRoleEntity } from '../user_role/user_role.entity';
 export class UserEntity {
   @PrimaryColumn('varchar', { length: 60 })
   uuid: string;
+  
+  @Column({ length: 500, nullable: true })
+  name: string;
+
+  @Column({ length: 100, nullable: true })
+  phone: string;
 
   @Column({ length: 500, unique: true })
   username: string;

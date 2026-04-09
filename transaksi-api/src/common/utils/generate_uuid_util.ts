@@ -9,6 +9,7 @@ export const generateShelveUuid = (storeUuid: string) => `${storeUuid}-SHL-${gen
 export const generateWarehouseUuid = (storeUuid: string) => `${storeUuid}-WRH-${generateLocalUuid()}`;
 export const generateCategoryUuid = (storeUuid: string) => `${storeUuid}-CAT-${generateLocalUuid()}`;
 export const generateUnitUuid = (storeUuid: string) => `${storeUuid}-UNT-${generateLocalUuid()}`;
+export const generateJournalConfigUuid = (storeUuid: string) => `${storeUuid}-JCG-${generateLocalUuid()}`;
 export const generateJournalDetailUuid = (storeUuid: string) => `${storeUuid}-JDT-${generateLocalUuid()}`;
 export const generateProductionDetailUuid = (storeUuid: string) => `${storeUuid}-PRDN-${generateLocalUuid()}`;
 export const generateRecipeIngredientUuid = (storeUuid: string) => `${storeUuid}-RCI-${generateLocalUuid()}`;

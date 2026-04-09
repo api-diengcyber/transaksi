@@ -18,6 +18,7 @@ import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
 import { WarehouseEntity } from 'src/common/entities/warehouse/warehouse.entity';
 import { PriceGroupEntity } from 'src/common/entities/price_group/price_group.entity';
 import { AccountService } from '../account/account.service';
+import { JournalConfigService } from '../journal_config/journal_config.service';
 
 @Injectable()
 export class StoreService {
@@ -32,6 +33,7 @@ export class StoreService {
     private readonly authService: AuthService,
     private readonly categoryService: CategoryService,
     private readonly accountService: AccountService,
+    private readonly journalConfigService: JournalConfigService,
   ) { }
 
   async installStore(dto: InstallStoreDto, logoPath: string | null = null, originalName: string | null = null) {
@@ -176,6 +178,9 @@ export class StoreService {
 
       // accounts default
       await this.accountService.createDefaultAccounts(customStoreUuid, manager);
+
+      // journal configs
+      await this.journalConfigService.installJournalConfigs(manager, customStoreUuid, savedUser.uuid);
 
       // 5. SETTINGS
       if (dto.settings && dto.settings.length > 0) {

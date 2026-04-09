@@ -59,6 +59,7 @@ export class IeProductService {
       workbook.creator = 'RetailApp Pro';
       
       const wsProducts = workbook.addWorksheet('Produk');
+      const wsVariants = workbook.addWorksheet('Varian Produk'); // <-- TAB VARIAN
       const wsCategories = workbook.addWorksheet('Kategori');
       const wsBrands = workbook.addWorksheet('Merek');
       const wsUnits = workbook.addWorksheet('Satuan');
@@ -76,38 +77,57 @@ export class IeProductService {
       wsShelves.columns = [{ header: 'UUID', key: 'uuid', width: 40 }, { header: 'Nama Rak', key: 'name', width: 30 }];
       shelves.forEach(s => wsShelves.addRow({ uuid: s.uuid, name: s.name }));
 
-      // --- STRUKTUR KOLOM BARU (Mendukung Varian Sub-Baris & Stok) ---
+      // --- STRUKTUR KOLOM PRODUK ---
       wsProducts.columns = [
-        { header: 'Tipe', key: 'tipe', width: 15 },                     // A: Produk / Varian
-        { header: 'Nama Produk/Varian', key: 'name', width: 35 },       // B
-        { header: 'Barcode', key: 'barcode', width: 20 },               // C
-        { header: 'Kategori', key: 'category', width: 25 },             // D
-        { header: 'Merek', key: 'brand', width: 25 },                   // E
-        { header: 'Satuan', key: 'unit', width: 20 },                   // F
-        { header: 'Lokasi Rak', key: 'shelve', width: 25 },             // G
-        { header: 'Kelola Stok', key: 'manageStock', width: 15 },       // H
-        { header: 'Sistem HPP', key: 'hppMethod', width: 15 },          // I
-        { header: 'PPN Jual (%)', key: 'saleTax', width: 15 },          // J
-        { header: 'Stok', key: 'stock', width: 15 },                    // K
-        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },      // L
-        { header: 'Harga Member', key: 'hargaMember', width: 20 },      // M
-        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, // N
-        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, // O
-        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, // P
-        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, // Q
+        { header: 'UUID', key: 'uuid', width: 40 },                     // A
+        { header: 'Kode Produk', key: 'productCode', width: 20 },       // B
+        { header: 'Nama Produk', key: 'name', width: 35 },              // C (Ini yang akan di-lookup)
+        { header: 'Barcode', key: 'barcode', width: 20 },               // D
+        { header: 'Kategori', key: 'category', width: 25 },             // E
+        { header: 'Merek', key: 'brand', width: 25 },                   // F
+        { header: 'Satuan', key: 'unit', width: 20 },                   // G
+        { header: 'Lokasi Rak', key: 'shelve', width: 25 },             // H
+        { header: 'Kelola Stok', key: 'manageStock', width: 15 },       // I
+        { header: 'Sistem HPP', key: 'hppMethod', width: 15 },          // J
+        { header: 'PPN Jual (%)', key: 'saleTax', width: 15 },          // K
+        { header: 'Stok', key: 'stock', width: 15 },                    // L
+        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },      // M
+        { header: 'Harga Member', key: 'hargaMember', width: 20 },      // N
+        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, // O
+        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, // P
+        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, // Q
+        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, // R
+      ];
+
+      // --- STRUKTUR KOLOM VARIAN (Hanya Lookup ke Produk) ---
+      wsVariants.columns = [
+        { header: 'Nama Produk (Pilih)', key: 'productName', width: 35 }, // A (Dropdown Lookup)
+        { header: 'Nama Varian', key: 'name', width: 35 },                // B
+        { header: 'Barcode', key: 'barcode', width: 20 },                 // C
+        { header: 'Stok', key: 'stock', width: 15 },                      // D
+        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },        // E
+        { header: 'Harga Member', key: 'hargaMember', width: 20 },        // F
+        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, // G
+        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, // H
+        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, // I
+        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, // J
       ];
 
       wsProducts.getRow(1).font = { bold: true };
       wsProducts.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+      
+      wsVariants.getRow(1).font = { bold: true };
+      wsVariants.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE0B2' } };
 
-      // 4. MASUKKAN DATA (PRODUK & VARIAN)
+      // 4. MASUKKAN DATA
       products.forEach(p => {
         const productCategory = categories.find(c => c.uuid === p.categoryUuid);
         const pPrices = this.extractPrices(p.prices);
 
         // Baris Induk (Produk)
-        const rowProduk = wsProducts.addRow({
-          tipe: 'Produk',
+        wsProducts.addRow({
+          uuid: p.uuid,
+          productCode: (p as any).productCode || '-', 
           name: p.name,
           barcode: p.barcode || '-',
           category: productCategory ? productCategory.name : '', 
@@ -117,7 +137,7 @@ export class IeProductService {
           manageStock: p.isManageStock ? 'Ya' : 'Tidak',
           hppMethod: p.hppMethod || 'FIFO',
           saleTax: p.saleTaxPercentage ? Number(p.saleTaxPercentage) : 0,
-          stock: (p as any).stock || 0, // Asumsi properti stok ada
+          stock: (p as any).stock || 0,
           hargaNormal: pPrices.hn,
           hargaMember: pPrices.hm,
           minGrosirNormal: pPrices.mgn,
@@ -125,17 +145,15 @@ export class IeProductService {
           minGrosirMember: pPrices.mgm,
           hargaGrosirMember: pPrices.hgm,
         });
-        rowProduk.font = { bold: true }; // Produk ditebalkan agar jelas pemisahnya
 
-        // Baris Anak (Varian) di bawah Produk
+        // Baris Anak (Varian) diletakkan di Tab Varian menggunakan referensi Nama
         if (p.variants && p.variants.length > 0) {
           p.variants.forEach(v => {
             const vPrices = this.extractPrices(v.prices);
-            const rowVarian = wsProducts.addRow({
-              tipe: 'Varian',
-              name: `  ↳ ${v.name}`, // Indentasi visual
+            wsVariants.addRow({
+              productName: p.name, // Otomatis mengisi lookup nama produk
+              name: v.name,
               barcode: (v as any).barcode || '-',
-              category: '', brand: '', unit: '', shelve: '', manageStock: '', hppMethod: '', saleTax: '', // Dikosongkan karena ikut induk
               stock: (v as any).stock || 0,
               hargaNormal: vPrices.hn,
               hargaMember: vPrices.hm,
@@ -144,21 +162,28 @@ export class IeProductService {
               minGrosirMember: vPrices.mgm,
               hargaGrosirMember: vPrices.hgm,
             });
-            rowVarian.font = { color: { argb: 'FF4F4F4F' } }; // Varian sedikit abu-abu
           });
         }
       });
 
-      // 5. VALIDASI DROPDOWN EXCEL (Pergeseran kolom D ke H)
+      // 5. VALIDASI DROPDOWN EXCEL
       if (format !== 'csv') {
         for (let i = 2; i <= 1000; i++) {
-          wsProducts.getCell(`A${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Produk,Varian"'] };
-          if (categories.length > 0) wsProducts.getCell(`D${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Kategori!$B$2:$B$${categories.length + 1}`] };
-          if (brands.length > 0) wsProducts.getCell(`E${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Merek!$B$2:$B$${brands.length + 1}`] };
-          if (units.length > 0) wsProducts.getCell(`F${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Satuan!$B$2:$B$${units.length + 1}`] };
-          if (shelves.length > 0) wsProducts.getCell(`G${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Rak!$B$2:$B$${shelves.length + 1}`] };
-          wsProducts.getCell(`H${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Ya,Tidak"'] };
-          wsProducts.getCell(`I${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"FIFO,LIFO,AVERAGE"'] };
+          // Dropdown untuk Master di Sheet Produk
+          if (categories.length > 0) wsProducts.getCell(`E${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Kategori!$B$2:$B$${categories.length + 1}`] };
+          if (brands.length > 0) wsProducts.getCell(`F${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Merek!$B$2:$B$${brands.length + 1}`] };
+          if (units.length > 0) wsProducts.getCell(`G${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Satuan!$B$2:$B$${units.length + 1}`] };
+          if (shelves.length > 0) wsProducts.getCell(`H${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Rak!$B$2:$B$${shelves.length + 1}`] };
+          wsProducts.getCell(`I${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Ya,Tidak"'] };
+          wsProducts.getCell(`J${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"FIFO,LIFO,AVERAGE"'] };
+
+          // --- DROPDOWN LOOKUP PRODUK DI SHEET VARIAN ---
+          // Mengambil range dari Sheet "Produk", Kolom C (Nama Produk)
+          wsVariants.getCell(`A${i}`).dataValidation = { 
+            type: 'list', 
+            allowBlank: true, 
+            formulae: [`Produk!$C$2:$C$1000`] 
+          };
         }
       }
 
@@ -173,7 +198,7 @@ export class IeProductService {
     }
   }
 
-  // --- FUNGSI IMPORT PRODUK (Dengan Grouping Varian) ---
+  // --- FUNGSI IMPORT PRODUK ---
   async importProductData(fileBuffer: Buffer, storeUuid: string, userId: string) {
     const workbook = new ExcelJS.Workbook();
     
@@ -216,7 +241,6 @@ export class IeProductService {
       return rows;
     };
 
-    // [Bagian Import Kategori, Merek, Satuan, Rak Disingkat namun tetap berjalan]
     const ensureRef = async (sheetName: string, repo: any, generateUuid: any) => {
       const ws = workbook.getWorksheet(sheetName);
       if (ws) {
@@ -234,7 +258,6 @@ export class IeProductService {
     await ensureRef('Satuan', this.unitRepo, generateUnitUuid);
     await ensureRef('Rak', this.shelveRepo, generateShelveUuid);
 
-    // Ambil Referensi Price Group
     let allPriceGroups = await this.priceGroupRepo.find();
     let normalGroup = allPriceGroups.find(g => g.name.toLowerCase() === 'normal' || g.name.toLowerCase() === 'umum');
     if (!normalGroup) {
@@ -252,34 +275,46 @@ export class IeProductService {
     ]);
 
     const wsProducts = workbook.getWorksheet('Produk') || workbook.worksheets[0];
+    const wsVariants = workbook.getWorksheet('Varian Produk');
+    
     if (!wsProducts) return { message: 'Gagal', success: 0, failed: 0, errors: ['Sheet "Produk" tidak ditemukan.'] };
 
     const productsData = parseWorksheet(wsProducts);
+    const variantsData = wsVariants ? parseWorksheet(wsVariants) : [];
 
-    // --- STEP 1: GROUPING BARIS (Kumpulkan Varian ke Induknya) ---
+    // --- STEP 1: GROUPING BARIS ---
     const groupedProducts: any[] = [];
     let currentProd: any = null;
 
     for (const [index, row] of productsData.entries()) {
-      const tipe = row['Tipe']?.toString().toUpperCase();
-      let name = row['Nama Produk/Varian'];
+      const tipe = row['Tipe']?.toString().toUpperCase(); 
+      let name = row['Nama Produk'] || row['Nama Produk/Varian']; 
       if (!name) continue;
 
-      // Bersihkan simbol indentasi "↳" jika ada
       name = name.replace('↳', '').trim();
 
-      if (tipe === 'PRODUK' || (!tipe && row['Kategori'])) {
-        if (currentProd) groupedProducts.push(currentProd);
-        currentProd = { rowNumber: index + 2, row, variants: [] };
+      // Jika baris adalah Induk Produk
+      if (tipe === 'PRODUK' || (!tipe && row['Kategori']) || (row['Nama Produk'] && !row['Nama Produk/Varian'])) {
+        
+        // Tarik Varian yang Lookup ke Nama Produk Ini
+        const myVariantsFromTab = variantsData.filter((v: any) => {
+           const variantProductName = v['Nama Produk (Pilih)'] || v['Nama Produk (Referensi)'];
+           if (name && variantProductName === name) return true;
+           return false;
+        }).map((v: any) => ({ row: v, nameCleaned: v['Nama Varian'] }));
+
+        currentProd = { rowNumber: index + 2, row, variants: myVariantsFromTab };
+        groupedProducts.push(currentProd);
+
       } else if (tipe === 'VARIAN' || (!tipe && !row['Kategori'])) {
+        // Fallback untuk Excel format sub-baris lama (jika user masih pakai yang lama)
         if (currentProd) {
           currentProd.variants.push({ row, nameCleaned: name });
         }
       }
     }
-    if (currentProd) groupedProducts.push(currentProd);
 
-    // --- STEP 2: PROSES DATA GROUPED KE DALAM DATABASE ---
+    // --- STEP 2: PROSES KE DATABASE ---
     let successCount = 0;
     let failedCount = 0;
     const errors: string[] = []; 
@@ -295,16 +330,22 @@ export class IeProductService {
 
     for (const item of groupedProducts) {
       const row = item.row;
-      let name = row['Nama Produk/Varian'].replace('↳', '').trim();
+      let name = (row['Nama Produk'] || row['Nama Produk/Varian']).replace('↳', '').trim();
+      
       const barcode = row['Barcode'] && row['Barcode'] !== '-' ? row['Barcode'] : undefined;
+      const productCode = row['Kode Produk'] && row['Kode Produk'] !== '-' ? row['Kode Produk'] : undefined;
 
       try {
-        const whereCondition = barcode ? [{ name }, { barcode }] : [{ name }];
+        const whereCondition: any[] = [];
+        if (productCode) whereCondition.push({ productCode });
+        if (barcode) whereCondition.push({ barcode });
+        whereCondition.push({ name });
+
         const existingProduct = await this.productRepo.findOne({ where: whereCondition });
 
         if (existingProduct) {
           failedCount++;
-          errors.push(`Baris ${item.rowNumber}: Produk "${name}" sudah ada di sistem.`);
+          errors.push(`Baris ${item.rowNumber}: Produk "${name}" sudah ada di sistem (Lewati).`);
           continue; 
         }
 
@@ -329,7 +370,6 @@ export class IeProductService {
             if (!isNaN(parsedTax)) saleTaxPercentage = parsedTax;
         }
 
-        // Susun DTO Varian
         const variantsDto = item.variants.map(v => {
            return {
              name: v.nameCleaned,
@@ -339,9 +379,9 @@ export class IeProductService {
            };
         });
 
-        // DTO Utama Produk
         const dto: any = {
           name: name,
+          productCode: productCode, 
           barcode: barcode,
           unitUuid: unit?.uuid,
           categoryUuid: categoryUuid,
@@ -350,9 +390,9 @@ export class IeProductService {
           hppMethod: ['FIFO', 'LIFO', 'AVERAGE'].includes(row['Sistem HPP']?.toString().toUpperCase()) ? row['Sistem HPP'].toUpperCase() : 'FIFO',
           saleTaxPercentage: saleTaxPercentage, 
           conversionQty: 1,
-          stock: Number(row['Stok'] || 0), // Memasukkan nilai stok ke DTO Produk
+          stock: Number(row['Stok'] || 0),
           prices: parsePricesDto(row),
-          variants: variantsDto, // <--- VARIAN DISISIPKAN DI SINI
+          variants: variantsDto,
           shelveUuids: shelveUuids,
         };
 

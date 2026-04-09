@@ -45,6 +45,9 @@ const accounts = ref<Account[]>([]);
 const loading = ref(false);
 const isDialogVisible = ref(false);
 
+// State Baru untuk Raw Data Modal
+const isRawDataVisible = ref(false);
+
 // Form State
 const currentKey = ref('');
 const currentType = ref('');
@@ -89,16 +92,7 @@ const openMappingDialog = (item: DiscoveredItem) => {
             position: c.position
         }));
         
-        // Deteksi mode berdasarkan apakah detailKey source berbeda dengan detailKey item (indikasi wildcard)
-        // Atau gunakan flag isWildcard jika backend mengirimnya
         mappingMode.value = item.isWildcard ? 'PATTERN' : 'EXACT';
-        
-        // Jika wildcard, kita tampilkan source key-nya (misal: "sale_") bukan item key-nya ("sale_123")
-        if (item.isWildcard && item.configs[0]) {
-             // Asumsi backend mengirim source key di salah satu property config, atau kita edit manual
-             // Di sini kita biarkan user mengedit jika perlu
-             // currentKey.value = (item.configs[0] as any).detailKeySource || item.detailKey;
-        }
     } else {
         // Default baru
         formItems.value = [{ accountUuid: '', position: 'DEBIT' }];
@@ -124,7 +118,6 @@ const saveConfig = async () => {
     // Logic Wildcard
     let finalKey = currentKey.value;
     if (mappingMode.value === 'PATTERN') {
-        // Pastikan diakhiri underscore jika user lupa (opsional, tergantung preferensi)
         if (!finalKey.endsWith('_')) finalKey += '_';
     }
 
@@ -202,13 +195,22 @@ onMounted(loadData);
                         class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     >
                 </div>
-                <button 
-                    @click="loadData" 
-                    class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-surface-0 border border-surface-200 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors"
-                >
-                    <i class="pi pi-refresh" :class="{'animate-spin': loading}"></i>
-                    <span>Scan Ulang</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button 
+                        @click="isRawDataVisible = true" 
+                        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-surface-0 border border-surface-200 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                    >
+                        <i class="pi pi-code"></i>
+                        <span class="hidden sm:inline">Raw JSON</span>
+                    </button>
+                    <button 
+                        @click="loadData" 
+                        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-surface-0 border border-surface-200 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                    >
+                        <i class="pi pi-refresh" :class="{'animate-spin': loading}"></i>
+                        <span>Scan Ulang</span>
+                    </button>
+                </div>
             </div>
 
             <DataTable 
@@ -312,7 +314,6 @@ onMounted(loadData);
             class="font-sans"
         >
             <div class="flex flex-col gap-5">
-                
                 <div class="bg-slate-50 p-3 rounded-lg border border-surface-200 flex justify-between items-center shadow-sm">
                     <div>
                         <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Tipe Transaksi</div>
@@ -374,7 +375,7 @@ onMounted(loadData);
                         </button>
                     </div>
 
-                    <div class="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-1">
+                    <div class="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
                         <div v-for="(item, index) in formItems" :key="index" class="flex gap-2 items-start animate-fade-in-down group">
                             <div class="flex-1">
                                 <Dropdown 
@@ -452,6 +453,32 @@ onMounted(loadData);
                 </div>
             </template>
         </Dialog>
+
+        <Dialog 
+            v-model:visible="isRawDataVisible" 
+            header="Raw JSON Discovery Data" 
+            modal 
+            :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
+            :style="{ width: '800px' }"
+            :draggable="false"
+            class="font-sans"
+        >
+            <div class="bg-slate-900 rounded-lg p-4 overflow-auto max-h-[60vh] custom-scrollbar shadow-inner">
+                <pre class="text-emerald-400 text-xs font-mono whitespace-pre-wrap break-all">{{ JSON.stringify(discoveryItems, null, 2) }}</pre>
+            </div>
+            
+            <template #footer>
+                <div class="pt-4 border-t border-slate-100 flex justify-end mt-2">
+                    <button 
+                        @click="isRawDataVisible = false" 
+                        class="px-5 py-2 text-sm font-medium text-slate-700 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors"
+                    >
+                        Tutup
+                    </button>
+                </div>
+            </template>
+        </Dialog>
+
     </div>
 </template>
 
@@ -465,6 +492,7 @@ onMounted(loadData);
 }
 
 /* Custom Scrollbar for better UI inside modal */
+.custom-scrollbar::-webkit-scrollbar,
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -478,5 +506,13 @@ onMounted(loadData);
 }
 ::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
+}
+
+/* Scrollbar khusus dark mode area raw json */
+.bg-slate-900.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569; 
+}
+.bg-slate-900.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b; 
 }
 </style>

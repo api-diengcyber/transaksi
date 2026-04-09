@@ -42,6 +42,9 @@ const checkStoreStatus = async () => {
                 
                 document.documentElement.style.setProperty('--primary-color', color);
                 document.documentElement.style.setProperty('--primary-600', color);
+            } else {
+                document.documentElement.style.setProperty('--primary-color', "#2563eb");
+                document.documentElement.style.setProperty('--primary-600', "#2563eb");
             }
         } else {
             document.documentElement.style.setProperty('--primary-color', "#2563eb");

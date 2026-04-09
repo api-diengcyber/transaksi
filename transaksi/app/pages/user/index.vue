@@ -72,7 +72,9 @@ const filteredUsers = computed(() => {
     if (filters.value.global.value) {
         const keyword = filters.value.global.value.toLowerCase();
         result = result.filter(user => 
-            user.username.toLowerCase().includes(keyword) || 
+            (user.username && user.username.toLowerCase().includes(keyword)) || 
+            (user.name && user.name.toLowerCase().includes(keyword)) ||  
+            (user.phone && user.phone.toLowerCase().includes(keyword)) ||
             (user.email && user.email.toLowerCase().includes(keyword))
         );
     }
@@ -233,16 +235,29 @@ onMounted(() => {
                     </div>
                 </template>
 
-                <Column field="username" header="Pengguna" sortable style="width: 25%">
+                <Column field="name" header="Pengguna" sortable style="width: 25%">
                     <template #body="{ data }">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                                {{ data.username.charAt(0).toUpperCase() }}
+                                {{ (data.name || data.username).charAt(0).toUpperCase() }}
                             </div>
                             <div>
-                                <div class="font-bold text-gray-800 text-sm">{{ data.username }}</div>
-                                <div class="text-xs text-gray-500 ">{{ data.email || 'No Email' }}</div>
+                                <div class="font-bold text-gray-800 text-sm">{{ data.name || data.username }}</div>
+                                <div class="text-xs text-gray-500 font-mono">@{{ data.username }}</div>
                             </div>
+                        </div>
+                    </template>
+                </Column>
+
+                <Column header="Kontak" style="width: 20%">
+                    <template #body="{ data }">
+                        <div class="flex flex-col gap-0.5">
+                            <span class="text-xs text-gray-700 font-medium">
+                                <i class="pi pi-phone text-[10px] mr-1 text-gray-400"></i> {{ data.phone || '-' }}
+                            </span>
+                            <span class="text-xs text-gray-500">
+                                <i class="pi pi-envelope text-[10px] mr-1 text-gray-400"></i> {{ data.email || '-' }}
+                            </span>
                         </div>
                     </template>
                 </Column>
@@ -278,7 +293,7 @@ onMounted(() => {
 
                 <Column header="" style="width: 15%" alignFrozen="right">
                     <template #body="{ data }">
-                        <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div class="flex justify-end gap-1">
                             <Button 
                                 icon="pi pi-pencil" 
                                 text 

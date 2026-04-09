@@ -306,4 +306,20 @@ export class JournalController {
         throw new Error('Tipe mutasi tidak valid');
     }
   }
+
+  @Get('sale/search/:code')
+  async getSaleByCode(
+    @Param('code') code: string, 
+    @GetStore() storeUuid: string
+  ) {
+    return await this.journalSaleService.getSaleByCode(storeUuid, code);
+  }
+
+  @Get('buy/search/:code')
+  async getBuyByCode(
+    @Param('code') code: string, 
+    @GetStore() storeUuid: string
+  ) {
+    return await this.journalBuyService.getBuyByCode(storeUuid, code);
+  }
 }

@@ -46,16 +46,6 @@ export class UserController {
     return this.userService.findOne(uuid, storeUuid);
   }
 
-  @Put('update/:uuid')
-  async update(
-    @Param('uuid') uuid: string,
-    @Body() dto: UpdateUserDto,
-    @GetUser('sub') updaterId: string,
-    @GetStore() storeUuid: string,
-  ) {
-    return this.userService.update(uuid, dto, updaterId, storeUuid);
-  }
-  
   @Put('update-password/:uuid')
   async updatePassword(
     @Param('uuid') uuid: string,
@@ -65,9 +55,23 @@ export class UserController {
   ) {
     return this.userService.updatePassword(uuid, password, updaterId, storeUuid);
   }
+  
+  @Put(':uuid')
+  async update(
+    @Param('uuid') uuid: string,
+    @Body() dto: UpdateUserDto,
+    @GetUser('uuid') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return await this.userService.update(uuid, dto, userId, storeUuid);
+  }
 
-  @Delete('delete/:uuid')
-  async remove(@Param('uuid') uuid: string, @GetUser('sub') deleterId: string, @GetStore() storeUuid: string) {
-    return this.userService.softDelete(uuid, deleterId, storeUuid);
+  @Delete(':uuid')
+  async remove(
+    @Param('uuid') uuid: string,
+    @GetUser('uuid') userId: string,    
+    @GetStore() storeUuid: string,
+  ) {
+    return await this.userService.softDelete(uuid, userId, storeUuid);
   }
 }

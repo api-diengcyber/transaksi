@@ -50,6 +50,8 @@ export class UserService {
         // 5. Create Entity
         const newUser = manager.create(UserEntity, {
             uuid: customUserUuid,
+            name: dto.name,  
+            phone: dto.phone,
             username: dto.username,
             email: dto.email,
             password: hashedPassword,
@@ -63,16 +65,22 @@ export class UserService {
     });
   }
 
-  // Perbaiki juga method update agar menggunakan UUID untuk pencarian role
   async update(uuid: string, dto: UpdateUserDto, updaterId: string, storeUuid: string) {
       return this.dataSource.transaction(async (manager: EntityManager) => {
           const user = await this.findOne(uuid, storeUuid);
 
+          if (dto.name) user.name = dto.name;
+          if (dto.phone !== undefined) user.phone = dto.phone;
           if (dto.username) user.username = dto.username;
           if (dto.email) user.email = dto.email;
 
+          // --- TAMBAHKAN LOGIKA UPDATE PASSWORD INI ---
+          if (dto.password) {
+              user.password = await bcrypt.hash(dto.password, 10);
+          }
+          // --------------------------------------------
+
           if (dto.roles && dto.roles.length > 0) {
-              // Cari berdasarkan UUID
               const roles = await manager.find(UserRoleEntity, { 
                   where: { uuid: In(dto.roles) } 
               });
@@ -100,7 +108,9 @@ export class UserService {
     if (search) {
       query = query.andWhere(new Brackets(qb => {
         qb.where('user.username LIKE :search', { search: `%${search}%` })
-          .orWhere('user.email LIKE :search', { search: `%${search}%` });
+          .orWhere('user.email LIKE :search', { search: `%${search}%` })
+          .orWhere('user.name LIKE :search', { search: `%${search}%` })
+          .orWhere('user.phone LIKE :search', { search: `%${search}%` });
       }));
     }
 
@@ -108,6 +118,8 @@ export class UserService {
         .orderBy('user.createdAt', 'DESC')
         .select([
           'user.uuid', 
+          'user.name', 
+          'user.phone',
           'user.username', 
           'user.email', 
           'user.createdAt', 

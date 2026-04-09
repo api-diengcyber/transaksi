@@ -72,6 +72,7 @@ const applyPrimaryColor = (hexColor) => {
 watch(primaryColorSetting, (newColor) => applyPrimaryColor(newColor), { immediate: true }); 
 
 onMounted(async () => {
+    await authService.checkUserSession();
     await authStore.fetchUserStores();
     if (process.client) {
         const theme = localStorage.getItem('theme');
@@ -94,8 +95,8 @@ const items = ref([
             { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, 
             { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, 
             { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, 
-            { label: 'Member', icon: 'pi pi-user', route: '/member' }, 
-            { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, 
+            // { label: 'Member', icon: 'pi pi-user', route: '/member' }, 
+            // { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, 
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
             { label: 'Media', icon: 'pi pi-image', route: '/media' }, 
         ]

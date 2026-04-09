@@ -31,6 +31,9 @@ export class ProductEntity {
 
   @Column({ length: 500 })
   name: string;
+  
+  @Column({ name: 'product_code', length: 100, nullable: true })
+  productCode: string;
 
   @Column({ length: 100, nullable: true })
   barcode: string;

@@ -84,6 +84,12 @@ export const useAuthService = () => {
         }
     };
 
+    const checkUserSession = async () => {
+        if (authStore.user == false || authStore.user == null) {
+            await fetchMe();
+        }
+    }
+
     // Export fetchMe agar bisa dipanggil di tempat lain (contoh: saat reload halaman)
-    return { login, logout, fetchMe };
+    return { login, logout, fetchMe, checkUserSession };
 };
