@@ -10,9 +10,10 @@ import { SaveSettingDto } from './dto/save-setting.dto';
 import { UserRoleEntity, UserRole } from 'src/common/entities/user_role/user_role.entity';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
-import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateUnitUuid, generateCategoryUuid, generateWarehouseUuid, generateShelveUuid, generatePriceGroupUuid } from 'src/common/utils/generate_uuid_util'; // <-- Tambahkan generateUuid
+// --- Hapus import Supplier & Member, cukup gunakan UserEntity ---
+import { generateStoreUuid, generateUserUuid, generateUserRoleUuid, generateStoreSettingUuid, generateUnitUuid, generateCategoryUuid, generateWarehouseUuid, generateShelveUuid, generatePriceGroupUuid } from 'src/common/utils/generate_uuid_util'; 
 import { CategoryService } from '../category/category.service';
-import { UnitEntity } from 'src/common/entities/unit/unit.entity'; // <-- Tambahkan import UnitEntity
+import { UnitEntity } from 'src/common/entities/unit/unit.entity'; 
 import { CategoryEntity } from 'src/common/entities/category/category.entity';
 import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
 import { WarehouseEntity } from 'src/common/entities/warehouse/warehouse.entity';
@@ -41,8 +42,7 @@ export class StoreService {
     const customUserUuid = generateUserUuid(customStoreUuid);
 
     return await this.dataSource.transaction(async (manager) => {
-      // 0. PREPARE ALL ROLES (Menjamin semua role di enum ada di database)
-
+      // 0. PREPARE ALL ROLES
       const allRoles = Object.values(UserRole);
       let adminUserRole: UserRoleEntity | null = null;
 
@@ -60,19 +60,19 @@ export class StoreService {
         }
 
         if (roleValue === UserRole.ADMIN) {
-          adminUserRole = roleEntity; // Simpan role ADMIN untuk user pertama
+          adminUserRole = roleEntity; 
         }
       }
 
-      // Pastikan role admin ditemukan/terbuat
       if (!adminUserRole) {
         throw new Error('Admin role preparation failed.');
       }
 
-      // 1. CREATE USER
+      // 1. CREATE USER (ADMIN TOKO)
       const hashedPassword = await bcrypt.hash(dto.password, 10);
       const newUser = manager.create(UserEntity, {
         uuid: customUserUuid,
+        name: 'Administrator', // Pastikan kolom name diisi
         username: dto.username,
         password: hashedPassword,
         email: dto.email,
@@ -96,20 +96,17 @@ export class StoreService {
       await manager.save(savedUser);
 
       // =======================================================
-      // 4. GENERATE DEFAULT WAREHOUSE & SHELVE (OTOMATIS)
+      // 4. GENERATE DEFAULT WAREHOUSE & SHELVE
       // =======================================================
-      
-      // Buat Gudang Utama
       const warehouseUuid = generateWarehouseUuid(customStoreUuid);
       const defaultWarehouse = manager.create(WarehouseEntity, {
         uuid: warehouseUuid,
         name: 'Gudang Utama',
-        address: dto.address, // Menggunakan alamat toko sebagai default
+        address: dto.address, 
         createdBy: savedUser.uuid,
       });
       await manager.save(defaultWarehouse);
 
-      // Buat Rak Utama di dalam Gudang Utama tersebut
       const defaultShelve = manager.create(ShelveEntity, {
         uuid: generateShelveUuid(customStoreUuid),
         name: 'Rak Utama (A1)',
@@ -119,12 +116,11 @@ export class StoreService {
       await manager.save(defaultShelve);
 
       // =======================================================
-      // 4. GENERATE DEFAULT CATEGORIES (KATEGORI OTOMATIS)
+      // 4.1. GENERATE DEFAULT CATEGORIES
       // =======================================================
       const defaultCategories = ['Makanan', 'Minuman', 'Snack', 'Bahan Baku', 'Lain-lain'];
       
       for (const catName of defaultCategories) {
-        // Cek agar tidak duplikat jika kategori bersifat global
         const existingCat = await manager.findOne(CategoryEntity, {
           where: { name: catName },
         });
@@ -140,13 +136,11 @@ export class StoreService {
       }
 
       // =======================================================
-      // 4.5. GENERATE DEFAULT UNITS (SATUAN OTOMATIS)
+      // 4.2. GENERATE DEFAULT UNITS
       // =======================================================
       const defaultUnits = ['Pcs', 'Dus', 'Pack', 'Karton', 'Botol', 'Kg', 'Gram', 'Liter'];
       
       for (const unitName of defaultUnits) {
-        // Cek apakah satuan sudah ada untuk menghindari duplikat 
-        // (Berjaga-jaga jika UnitEntity bersifat global dan pernah di-generate sebelumnya)
         const existingUnit = await manager.findOne(UnitEntity, {
           where: { name: unitName },
         });
@@ -161,7 +155,9 @@ export class StoreService {
         }
       }
 
-      // Di dalam manager.transaction installStore:
+      // =======================================================
+      // 4.3. GENERATE DEFAULT PRICE GROUPS
+      // =======================================================
       const defaultPriceGroups = ['Harga Normal', 'Harga Member', 'Harga Grosir Normal', 'Harga Grosir Member'];
       for (const pgName of defaultPriceGroups) {
         const generatedCode = pgName
@@ -176,11 +172,59 @@ export class StoreService {
         }));
       }
 
+      // =======================================================
+      // 4.4. GENERATE DEFAULT SUPPLIER (Sebagai UserEntity)
+      // =======================================================
+      const supplierRole = await manager.findOne(UserRoleEntity, { where: { role: 'SUPPLIER' as any }});
+      if (supplierRole) {
+          // Buat username unik dengan mengambil 6 karakter pertama dari store UUID
+          const uniqueSupplierUsername = `supplier_umum_${customStoreUuid.substring(0, 6)}`;
+          const existingSupplier = await manager.findOne(UserEntity, { where: { username: uniqueSupplierUsername }});
+          
+          if (!existingSupplier) {
+             const defaultSupplier = manager.create(UserEntity, {
+               uuid: generateUserUuid(customStoreUuid),
+               name: 'Supplier Umum',
+               username: uniqueSupplierUsername,
+               password: hashedPassword, // Menggunakan password yang sama (dummy)
+               roles: [supplierRole],
+               defaultStore: savedStore,
+               stores: [savedStore],
+               createdBy: savedUser.uuid,
+             });
+             await manager.save(defaultSupplier);
+          }
+      }
+
+      // =======================================================
+      // 4.5. GENERATE DEFAULT MEMBER (Sebagai UserEntity)
+      // =======================================================
+      const memberRole = await manager.findOne(UserRoleEntity, { where: { role: 'MEMBER' as any }});
+      if (memberRole) {
+          // Buat username unik dengan mengambil 6 karakter pertama dari store UUID
+          const uniqueMemberUsername = `pelanggan_umum_${customStoreUuid.substring(0, 6)}`;
+          const existingMember = await manager.findOne(UserEntity, { where: { username: uniqueMemberUsername }});
+          
+          if (!existingMember) {
+             const defaultMember = manager.create(UserEntity, {
+               uuid: generateUserUuid(customStoreUuid),
+               name: 'Pelanggan Umum',
+               username: uniqueMemberUsername,
+               password: hashedPassword, // Menggunakan password yang sama (dummy)
+               roles: [memberRole],
+               defaultStore: savedStore,
+               stores: [savedStore],
+               createdBy: savedUser.uuid,
+             });
+             await manager.save(defaultMember);
+          }
+      }
+
       // accounts default
       await this.accountService.createDefaultAccounts(customStoreUuid, manager);
 
       // journal configs
-      await this.journalConfigService.installJournalConfigs(manager, customStoreUuid, savedUser.uuid);
+      // await this.journalConfigService.installJournalConfigs(manager, customStoreUuid, savedUser.uuid);
 
       // 5. SETTINGS
       if (dto.settings && dto.settings.length > 0) {
@@ -222,7 +266,7 @@ export class StoreService {
 
       await manager.save(initialSettings);
 
-      // 6. TOKEN (Bawa storeUuid)
+      // 6. TOKEN 
       const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username);
       const rtHash = await bcrypt.hash(tokens.refreshToken, 10);
       savedUser.refreshToken = rtHash;

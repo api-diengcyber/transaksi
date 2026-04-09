@@ -3,7 +3,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
     const accessToken = localStorage.getItem('accessToken');
     const refreshToken = localStorage.getItem('refreshToken');
 
-    const publicRoutes = ['/login', '/install'];
+    const publicRoutes = ['/login', '/install', '/system/status', '/system/db-check'];
     const isPublicRoute = publicRoutes.includes(to.path);
 
     // Jika tidak ada akses token DAN tidak ada refresh token (User Londo/Kosong)

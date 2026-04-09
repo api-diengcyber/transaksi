@@ -40,7 +40,7 @@ function startAPI() {
         NODE_ENV: isDev ? 'development' : 'production', // Beritahu NestJS mode saat ini
         PORT: '3000',
         DATABASE_HOST: '127.0.0.1', 
-        DATABASE_PORT: '34676',      // Pastikan sesuai dengan port MySQL bawaan Electron Anda
+        DATABASE_PORT: '8867',      // Pastikan sesuai dengan port MySQL bawaan Electron Anda
         DATABASE_USER: 'root',
         DATABASE_PASSWORD: 'root',
         DATABASE_NAME: 'transaksi',

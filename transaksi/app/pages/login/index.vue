@@ -16,6 +16,26 @@ const storeSettings = ref({});
 const latestStore = ref(null);
 const storeExists = ref(true);
 
+// --- STATE UNTUK MENU FAB ---
+const systemMenu = ref();
+const systemMenuItems = ref([
+    {
+        label: 'Cek Status Sistem',
+        icon: 'pi pi-server',
+        command: () => router.push('/system/status')
+    },
+    {
+        label: 'Cek Database MySQL',
+        icon: 'pi pi-database',
+        command: () => router.push('/system/db-check')
+    }
+]);
+
+const toggleSystemMenu = (event) => {
+    systemMenu.value.toggle(event);
+};
+// ----------------------------
+
 const checkStoreStatus = async () => {
     try {
         const response = await storeService.getSetupStatus();
@@ -92,8 +112,22 @@ const getThemeColor = (fallback) => {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col lg:flex-row bg-surface-0 overflow-hidden">
+    <div class="min-h-screen flex flex-col lg:flex-row bg-surface-0 overflow-hidden relative">
         <Toast />
+
+        <div class="fixed top-6 right-6 z-50">
+            <Button 
+                icon="pi pi-cog" 
+                rounded 
+                raised 
+                severity="secondary" 
+                aria-haspopup="true" 
+                aria-controls="system_menu" 
+                @click="toggleSystemMenu"
+                class="!w-12 !h-12 shadow-lg hover:rotate-90 transition-transform duration-300 bg-surface-0 text-surface-600 border border-surface-200"
+            />
+            <Menu ref="systemMenu" id="system_menu" :model="systemMenuItems" :popup="true" class="!text-sm" />
+        </div>
 
         <div 
             class="hidden lg:flex w-1/2 relative items-center justify-center p-12 overflow-hidden transition-colors duration-700"
@@ -181,22 +215,22 @@ const getThemeColor = (fallback) => {
                     />
                 </form>
 
-                <div v-if="!storeExists" class="mt-8 text-center border-t border-surface-100 pt-8">
-                    <p class="text-sm text-surface-500">
+                <div v-if="!storeExists" class="mt-8 text-center border-t border-surface-100 pt-8 relative z-20">
+                    <p class="text-sm text-surface-500 flex flex-wrap items-center justify-center gap-1">
                         Belum punya akun atau toko? 
-                        <NuxtLink 
-                            to="/install" 
-                            class="font-bold hover:underline cursor-pointer ml-1"
+                        <button 
+                            @click="router.push('/install')" 
+                            class="font-bold hover:underline cursor-pointer bg-transparent border-none p-0 m-0 transition-all"
                             :style="{ color: getThemeColor('var(--primary-600)') }"
                         >
                             Buat Toko Sekarang
-                        </NuxtLink>
+                        </button>
                     </p>
                 </div>
 
-                <div v-else class="mt-8 text-center">
+                <div v-else class="mt-8 text-center border-t border-surface-100 pt-6 relative z-20">
                     <p class="text-xs text-surface-400">
-                        Belum punya akun? <span class="font-medium">Hubungi Administrator</span>
+                        Belum punya akun? <span class="font-medium text-surface-600">Hubungi Administrator</span>
                     </p>
                 </div>
             </div>

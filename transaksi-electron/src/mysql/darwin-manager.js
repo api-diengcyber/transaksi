@@ -40,12 +40,12 @@ class DarwinMySQLManager extends BaseMySQLManager {
 
     async start() {
         console.log('------------------------------------------------');
-        console.log('Checking MariaDB Engine on port 34676...');
+        console.log('Checking MariaDB Engine on port 8867...');
 
         // 1. Cek apakah engine sudah berjalan
-        const isPortUsed = await this.checkPort(34676);
+        const isPortUsed = await this.checkPort(8867);
         if (isPortUsed) {
-            console.log('✅ MariaDB Engine is already running on port 34676.');
+            console.log('✅ MariaDB Engine is already running on port 8867.');
             console.log('🚀 Skipping initialization and start process.');
             return null; // Keluar dari fungsi, tidak perlu start lagi
         }
@@ -93,7 +93,7 @@ class DarwinMySQLManager extends BaseMySQLManager {
 
         this.dbProcess = spawn(mysqlBin, [
             '--no-defaults',
-            '--port=34676',
+            '--port=8867',
             `--datadir=${this.mysqlData}`,
             `--basedir=${this.mysqlBaseDir}`,
             '--bind-address=127.0.0.1',
