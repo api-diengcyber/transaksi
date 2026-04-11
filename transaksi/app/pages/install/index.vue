@@ -2,6 +2,8 @@
 import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
+// Import color mode dari Nuxt
+const colorMode = useColorMode();
 
 definePageMeta({ layout: 'blank' });
 
@@ -35,6 +37,11 @@ const form = reactive({
 });
 
 // --- LOGIC ---
+
+// Fungsi Toggle Theme
+const toggleTheme = () => {
+    colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark';
+};
 
 const handleFileSelect = (event) => {
     const file = event.files ? event.files[0] : null;
@@ -99,12 +106,10 @@ const handleInstall = async () => {
 
         const response = await installService.installStore(payload, logoFile.value);
 
-        // --- PERUBAHAN: Simpan Token ke localStorage ---
         if (process.client) {
             localStorage.setItem('accessToken', response.tokens.accessToken);
             localStorage.setItem('refreshToken', response.tokens.refreshToken);
             
-            // Simpan juga Store ID jika ada di response agar langsung sinkron
             if (response.store?.uuid) {
                 localStorage.setItem('selectedStoreId', response.store.uuid);
             }
@@ -123,27 +128,43 @@ const handleInstall = async () => {
 };
 
 const goToLogin = () => {
-    // --- PERUBAHAN: Bersihkan localStorage saat pindah ke Login ---
     if (process.client) {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('selectedStoreId');
     }
-
     router.push('/login');
 };
 </script>
 
 <template>
-    <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-600 to-primary-900 p-4">
+    <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-600 to-primary-900 p-4 relative transition-colors duration-300">
         <Toast />
 
-        <div class="bg-surface-0 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
+        <div class="absolute top-4 right-4 md:top-8 md:right-8 z-50 flex items-center gap-3">
+             <Button 
+                :icon="colorMode.value === 'dark' ? 'pi pi-sun' : 'pi pi-moon'" 
+                class="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20 backdrop-blur-sm transition-all" 
+                rounded
+                v-tooltip.bottom="colorMode.value === 'dark' ? 'Mode Terang' : 'Mode Gelap'"
+                @click="toggleTheme" 
+            />
             
-            <div class="w-full md:w-1/3 bg-surface-50 p-8 flex flex-col justify-between border-r border-surface-200 ">
+             <Button 
+                label="Kembali ke Login" 
+                icon="pi pi-sign-in" 
+                class="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20 backdrop-blur-sm transition-all" 
+                size="small" 
+                @click="goToLogin" 
+            />
+        </div>
+
+        <div class="bg-surface-0 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row relative z-10 border border-surface-200/50">
+            
+            <div class="w-full md:w-1/3 bg-surface-50 p-8 flex flex-col justify-between border-r border-surface-200">
                 <div>
                     <div class="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-6 shadow-lg">R</div>
-                    <h1 class="text-2xl font-bold  mb-2">Setup Wizard</h1>
+                    <h1 class="text-2xl font-bold mb-2 text-surface-900">Setup Wizard</h1>
                     <p class="text-surface-500 text-sm leading-relaxed">
                         Selamat datang! Mari siapkan Toko dan Akun Admin Anda.
                     </p>
@@ -162,10 +183,10 @@ const goToLogin = () => {
                     <div class="flex flex-col gap-4">
                         <div class="field">
                             <label class="font-semibold text-sm mb-1 block text-surface-700">Logo Toko (Opsional)</label>
-                            <div class="flex items-center gap-4 p-3 border border-surface-200  rounded-xl bg-surface-50">
+                            <div class="flex items-center gap-4 p-3 border border-surface-200 rounded-xl bg-surface-50">
                                 
                                 <div class="relative shrink-0">
-                                    <img :src="logoPreviewUrl || 'https://placehold.co/70x70/FFFFFF/4c51bf?text=LOGO'" alt="Logo Preview" class="w-[70px] h-[70px] object-cover rounded-full border-4 border-white  shadow-md" />
+                                    <img :src="logoPreviewUrl || 'https://placehold.co/70x70/FFFFFF/4c51bf?text=LOGO'" alt="Logo Preview" class="w-[70px] h-[70px] object-cover rounded-full border-4 border-surface-0 shadow-md" />
                                     <Button v-if="logoFile" icon="pi pi-times" severity="danger" rounded text size="small" class="absolute top-0 right-0 !w-6 !h-6" @click="handleRemoveLogo" />
                                 </div>
 
@@ -240,10 +261,10 @@ const goToLogin = () => {
                     <div class="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 animate-bounce shadow-sm">
                         <i class="pi pi-check text-5xl font-bold"></i>
                     </div>
-                    <h2 class="text-3xl font-bold  mb-3">Instalasi Berhasil!</h2>
+                    <h2 class="text-3xl font-bold mb-3 text-surface-900">Instalasi Berhasil!</h2>
                     <p class="text-surface-500 mb-8 max-w-md leading-relaxed">
                         Toko <strong>{{ form.name }}</strong> telah dibuat.<br>
-                        Silakan login menggunakan akun <strong>{{ form.username }}</strong> yang telah dibuat.
+                        Silakan login menggunakan akun <strong class="text-surface-900">{{ form.username }}</strong> yang telah dibuat.
                     </p>
                     <Button label="Masuk Halaman Login" icon="pi pi-sign-in" size="large" @click="goToLogin" class="px-8 py-3 shadow-lg shadow-primary-500/30" />
                 </div>

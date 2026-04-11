@@ -62,6 +62,8 @@ const transactionMeta = reactive({
     customerName: '', 
     paymentMethod: 'CASH',
     dueDate: null,
+    // [BARU] State untuk nomor faktur manual
+    manualInvoiceCode: ''
 });
 
 const cashAmount = ref(0); 
@@ -73,23 +75,24 @@ const totalPages = ref(1);
 const totalProducts = ref(0);
 
 // --- COMPUTED ---
-// Pajak Global Setting (Bisa digabungkan atau diabaikan jika pakai PPN per produk)
+// Pajak Global Setting
 const taxMethod = computed(() => authStore.getSetting('sale_tax_method', 'exclusive'));
+
+// [BARU] Computed untuk pengaturan tipe Faktur
+const invoiceType = computed(() => authStore.getSetting('invoice_number_type', 'system'));
+const isManualInvoice = computed(() => invoiceType.value === 'manual');
 
 const totalItems = computed(() => cart.value.reduce((a, b) => a + b.qty, 0));
 const cartSubtotal = computed(() => cart.value.reduce((total, item) => total + (item.price * item.qty), 0));
 
-// [BARU] Kalkulasi PPN berdasarkan Produk individual
+// Kalkulasi PPN berdasarkan Produk individual
 const taxAmount = computed(() => {
     return cart.value.reduce((totalTax, item) => {
         if (!item.saleTaxPercentage || item.saleTaxPercentage <= 0) return totalTax;
-        
         const itemSubtotal = item.price * item.qty;
-        // Jika exclusive, pajak ditambahkan dari harga. Jika inclusive, harga sudah termasuk pajak.
         const tax = taxMethod.value === 'exclusive' 
             ? itemSubtotal * (item.saleTaxPercentage / 100)
             : itemSubtotal - (itemSubtotal / (1 + (item.saleTaxPercentage / 100)));
-            
         return totalTax + tax;
     }, 0);
 });
@@ -121,6 +124,9 @@ const canCheckout = computed(() => {
     if (!transactionMeta.cashierUuid) return false;
     if (processing.value) return false;
     
+    // [BARU] Validasi nomor faktur manual tidak boleh kosong jika tipenya manual
+    if (isManualInvoice.value && !transactionMeta.manualInvoiceCode.trim()) return false;
+
     if (isCreditSale.value) {
         const hasCustomer = transactionMeta.memberUuid || transactionMeta.customerName.trim() !== '';
         return hasCustomer && transactionMeta.dueDate;
@@ -138,6 +144,7 @@ const resetState = () => {
     transactionMeta.dueDate = null;
     transactionMeta.transactionDate = new Date();
     transactionMeta.cashierUuid = authStore.user?.uuid || null;
+    transactionMeta.manualInvoiceCode = ''; // [BARU] Reset manual code
 };
 
 const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
@@ -217,7 +224,6 @@ const onSearchKeydown = async () => {
     }
 };
 
-// --- LOGIKA HARGA GROSIR OTOMATIS & CUSTOM ---
 const recalculateItemPrice = (item) => {
     if (item.isCustomPrice) return;
     const allPrices = item.allPrices || [];
@@ -324,7 +330,6 @@ const pushToCart = (prod, variant) => {
             allPrices: availablePrices,
             shelveUuid: defaultShelve,
             expanded: false,
-            // [BARU] Simpan HPP dan PPN ke dalam cart state
             hppMethod: prod.hppMethod || 'FIFO',
             saleTaxPercentage: Number(prod.saleTaxPercentage || 0)
         };
@@ -361,6 +366,31 @@ const changeCartItemPriceTier = (item, newBaseObj) => {
 const removeFromCart = (index) => { cart.value.splice(index, 1); };
 
 // --- PAYMENTS & CHECKOUT ---
+
+// Ganti fungsi lama dengan ini:
+const generateInvoiceNumber = () => {
+    const type = invoiceType.value;
+    if (type === 'system' || type === 'manual') return null;
+
+    // Pastikan fallback nilai string yang aman
+    const prefix = String(authStore.getSetting('invoice_prefix') || 'INV-').toUpperCase();
+    const suffix = String(authStore.getSetting('invoice_suffix') || '').toUpperCase();
+    const length = Number(authStore.getSetting('invoice_length')) || 5;
+    let randomPart = '';
+
+    if (type === 'numeric') {
+        // Generate pseudo-urutan pakai timestamp 
+        randomPart = String(new Date().getTime()).slice(-length);
+    } else if (type === 'alphanumeric') {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        for (let i = 0; i < length; i++) {
+            randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+    }
+    
+    return `${prefix}${randomPart}${suffix}`;
+};
+
 const openPaymentModal = () => {
     if (cart.value.length === 0) {
         toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk dulu', life: 2000 });
@@ -377,6 +407,11 @@ const openPaymentModal = () => {
     
     if (transactionMeta.paymentMethod === 'CASH') {
         cashAmount.value = grandTotal.value; 
+    }
+
+    // Auto-generate invoice number jika custom generator
+    if (!isManualInvoice.value && invoiceType.value !== 'system') {
+        transactionMeta.manualInvoiceCode = generateInvoiceNumber();
     }
     
     showPaymentModal.value = true;
@@ -406,7 +441,6 @@ const processCheckout = async (isPrint = false) => {
             note: item.note || '',
             price_tier_name: item.activeTierName || 'Manual',
             
-            // [BARU] Payload untuk HPP & PPN
             hpp_method: item.hppMethod,
             tax_percentage: item.saleTaxPercentage,
             tax_amount: (item.price * item.qty) * (item.saleTaxPercentage / 100),
@@ -440,6 +474,10 @@ const processCheckout = async (isPrint = false) => {
             amount_cash: cashAmount.value,
             transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
             cashier_uuid: transactionMeta.cashierUuid, 
+            
+            // [BARU] Kirim custom_journal_code jika bukan dari system
+            ...(invoiceType.value !== 'system' && { custom_journal_code: transactionMeta.manualInvoiceCode }),
+
             ...(isCreditSale.value && {
                 is_credit: 'true',
                 due_date: transactionMeta.dueDate ? transactionMeta.dueDate.toISOString().split('T')[0] : null
@@ -522,7 +560,6 @@ const loadProducts = async () => {
             categoryName: p.category?.name || '',
             brandUuid: p.brandUuid || p.brand?.uuid, 
             brandName: p.brand?.name || '',
-            // [BARU] Mapping HPP dan PPN dari master
             hppMethod: p.hppMethod || 'FIFO',
             saleTaxPercentage: Number(p.saleTaxPercentage || 0)
         }));
@@ -731,7 +768,7 @@ defineExpose({ refreshData });
                     <Dropdown 
                         v-model="transactionMeta.cashierUuid" 
                         :options="users" 
-                        :optionLabel="(opt) => opt.username || opt.name" 
+                        :optionLabel="(opt) => opt.name || opt.name" 
                         optionValue="uuid" 
                         filter
                         placeholder="Pilih Kasir..." 
@@ -779,6 +816,7 @@ defineExpose({ refreshData });
                                 <span class="text-[9px] font-mono text-surface-500">@ {{ formatCurrency(item.price) }}</span>
                                 <span v-if="item.isGrosirActive" class="text-[8px] font-bold text-orange-600 bg-orange-100 border border-orange-200 px-1 rounded uppercase tracking-wider">Grosir</span>
                                 <span v-if="item.saleTaxPercentage > 0" class="text-[8px] font-bold text-red-600 bg-red-100 border border-red-200 px-1 rounded uppercase tracking-wider">PPN {{ item.saleTaxPercentage }}%</span>
+                                <span class="text-[8px] font-bold text-blue-600 bg-blue-100 border border-blue-200 px-1 rounded uppercase tracking-wider" v-tooltip.top="'Metode HPP yang digunakan'">HPP: {{ item.hppMethod }}</span>
                             </div>
                         </div>
                         
@@ -889,10 +927,21 @@ defineExpose({ refreshData });
                 </div>
 
                 <div class="space-y-4">
+                    <div class="p-3 bg-surface-100 border border-surface-200 rounded-xl mb-4" v-if="invoiceType !== 'system'">
+                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Nomor Faktur / Invoice</label>
+                        
+                        <InputText v-if="isManualInvoice" v-model="transactionMeta.manualInvoiceCode" placeholder="Ketik No Faktur Manual..." class="w-full !text-sm font-mono font-bold" />
+                        
+                        <div v-else class="flex justify-between items-center bg-white p-2 rounded border border-surface-200 font-mono font-bold text-primary-700 text-sm">
+                            <span>{{ transactionMeta.manualInvoiceCode }}</span>
+                            <Button icon="pi pi-refresh" text rounded size="small" class="!w-6 !h-6 !p-0" @click="transactionMeta.manualInvoiceCode = generateInvoiceNumber()" v-tooltip.top="'Generate Ulang'" />
+                        </div>
+                    </div>
+
                     <div class="flex gap-3">
                         <div class="flex-1">
                             <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Member</label>
-                            <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="username" optionValue="uuid" filter placeholder="Pilih Member..." class="w-full !text-sm" showClear />
+                            <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Member..." class="w-full !text-sm" showClear />
                         </div>
                         <div class="flex-1" v-if="!transactionMeta.memberUuid">
                             <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Pelanggan Umum</label>

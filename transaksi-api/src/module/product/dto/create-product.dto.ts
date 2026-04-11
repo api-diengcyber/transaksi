@@ -137,4 +137,9 @@ export class CreateProductDto {
   @IsNumber()
   @IsOptional()
   saleTaxPercentage?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 }

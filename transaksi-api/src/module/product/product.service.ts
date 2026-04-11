@@ -37,7 +37,7 @@ export class ProductService {
       })) || [];
       const mappedShelves = dto.shelveUuids?.map(uuid => ({ uuid } as ShelveEntity)) || [];
 
-      // [BARU] Tambahkan isManageStock dan brandUuid saat create
+      // [BARU] Tambahkan properti images saat create
       const newProduct = manager.create(ProductEntity, {
         uuid: productUuid, 
         name: dto.name, 
@@ -45,9 +45,10 @@ export class ProductService {
         barcode: dto.barcode, 
         unitUuid: dto.unitUuid, 
         categoryUuid: dto.categoryUuid,
-        brandUuid: dto.brandUuid, // <-- TAMBAHAN BRAND
-        isManageStock: dto.isManageStock !== false, // <-- TAMBAHAN STOK (Default True)
+        brandUuid: dto.brandUuid, 
+        isManageStock: dto.isManageStock !== false, 
         conversionQty: dto.conversionQty || 1, 
+        images: dto.images || [], // <-- [BARU] Simpan array gambar ke database
         variants: mappedVariants, 
         prices: mappedPrices, 
         shelves: mappedShelves, 
@@ -126,11 +127,13 @@ export class ProductService {
       product.unitUuid = dto.unitUuid ?? product.unitUuid;
       product.categoryUuid = dto.categoryUuid ?? product.categoryUuid;
       
-      // [BARU] Update brandUuid dan isManageStock
       product.brandUuid = dto.brandUuid ?? product.brandUuid; 
       product.isManageStock = dto.isManageStock ?? product.isManageStock; 
-
       product.conversionQty = dto.conversionQty ?? product.conversionQty;
+      
+      // [BARU] Update properti images
+      product.images = dto.images ?? product.images; // <-- [BARU] Perbarui array gambar
+
       product.updatedBy = userId;
 
       if (dto.prices) {
@@ -254,7 +257,7 @@ export class ProductService {
 
     // 2. Gabungkan stok ke dalam response data
     data.forEach(product => {
-        // [BARU] Lewati proses injeksi stok jika isManageStock false
+        // Lewati proses injeksi stok jika isManageStock false
         if (product.isManageStock === false) {
             (product as any).stock = 0;
             if (product.variants) {
@@ -292,7 +295,7 @@ export class ProductService {
 
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
 
-    // [BARU] Jika tidak kelola stok, return 0
+    // Jika tidak kelola stok, return 0
     if (product.isManageStock === false) {
         (product as any).stock = 0;
         if (product.variants) product.variants.forEach(v => (v as any).stock = 0);

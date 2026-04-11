@@ -9,7 +9,7 @@ export default defineNuxtConfig({
   app: {
     baseURL: '',
     cdnURL: '',
-    buildAssetsDir: 'assets' // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
+    // buildAssetsDir: 'assets' // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
   },
   router: {
     options: {
@@ -17,12 +17,12 @@ export default defineNuxtConfig({
     }
   },
   devServer: {
-    port: 3001,
-    host: '0.0.0.0'
+    port: parseInt(process.env.PORT || process.env.NITRO_PORT || '3001', 10),
+    host: process.env.NITRO_HOST || '0.0.0.0'
   },
   runtimeConfig: {
     public: {
-      apiBase: 'http://127.0.0.1:3000',
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:3000',
       appVersion: pkg.version || '1.0.0'
     }
   },

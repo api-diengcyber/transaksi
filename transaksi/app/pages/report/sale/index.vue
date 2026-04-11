@@ -153,16 +153,18 @@ onMounted(() => { loadData(); });
 
                 <Column expander style="width: 3rem" />
 
-                <Column field="code" header="Informasi Faktur" sortable style="min-width: 14rem">
+                <Column field="code" header="No Faktur / Transaksi" sortable style="min-width: 14rem">
                     <template #body="{ data }">
                         <div class="flex flex-col gap-1 py-1">
-                            <div class="font-bold font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md inline-block w-max border border-blue-100">
-                                {{ data.code }}
+                            <div class="font-bold font-mono text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md inline-block w-max border border-primary-100 shadow-sm" v-tooltip.top="'Nomor Faktur / Invoice'">
+                                <i class="pi pi-receipt text-[10px] mr-1"></i> {{ data.invoiceCode || data.code }}
                             </div>
-                            <div v-if="data.referenceNo && data.referenceNo !== '-'" class="text-[10px] text-surface-500 flex items-center gap-1 mt-1">
-                                <i class="pi pi-tag text-[9px]"></i> Ref: <span class="font-medium font-mono">{{ data.referenceNo }}</span>
+                            
+                            <div v-if="data.invoice_code && data.invoice_code !== data.code" class="text-[10px] text-surface-400 font-mono mt-1 flex items-center gap-1">
+                                <i class="pi pi-database text-[9px]"></i> Sys: {{ data.code }}
                             </div>
-                            <div class="text-xs text-surface-500 flex items-center gap-1 mt-0.5">
+                            
+                            <div class="text-[10px] text-surface-500 flex items-center gap-1 mt-0.5">
                                 <i class="pi pi-calendar text-[10px]"></i> {{ formatDate(data.date) }}
                             </div>
                         </div>
@@ -204,9 +206,12 @@ onMounted(() => { loadData(); });
                     <div class="p-4 bg-surface-100/50 border-y border-surface-200 grid grid-cols-1 xl:grid-cols-2 gap-4">
                         
                         <div class="bg-white p-4 rounded-xl border border-surface-200 shadow-sm col-span-1 xl:col-span-2">
-                            <h5 class="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
-                                <i class="pi pi-shopping-bag"></i> 1. Rincian Barang Terjual
-                            </h5>
+                            <div class="flex justify-between items-center mb-3 border-b border-surface-100 pb-2">
+                                <h5 class="text-sm font-bold text-blue-800 flex items-center gap-2 m-0">
+                                    <i class="pi pi-shopping-bag"></i> 1. Rincian Barang Terjual
+                                </h5>
+                                <span class="text-xs font-mono font-bold text-surface-400">FAKTUR: {{ slotProps.data.code }}</span>
+                            </div>
 
                             <div v-if="!slotProps.data.items || slotProps.data.items.length === 0" class="p-4 text-center text-surface-400 italic text-xs">
                                 Rincian barang tidak ditemukan.

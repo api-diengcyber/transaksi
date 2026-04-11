@@ -4,6 +4,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
 import * as express from 'express'; 
+import { SystemService } from './module/system/system.service';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -52,6 +55,15 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
 
   SwaggerModule.setup('docs', app, document);
+
+  // Ambil SystemService dari Dependency Injection Container NestJS
+  const systemService = app.get(SystemService);
+  
+  // Pasang interceptor secara global
+  app.useGlobalInterceptors(new LoggingInterceptor(systemService));
+
+  // all error logs
+  app.useGlobalFilters(new AllExceptionsFilter(systemService));
 
   await app.listen(process.env.PORT ?? 3000);
 }

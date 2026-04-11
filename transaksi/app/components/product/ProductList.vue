@@ -199,13 +199,20 @@ onMounted(async () => {
 
             <Column expander style="width: 3rem" />
 
-            <Column field="name" header="Info Produk" style="min-width: 15rem">
+            <Column field="name" header="Info Produk" style="min-width: 18rem">
                 <template #body="{ data }">
-                    <div>
-                        <div class="font-bold text-surface-800">{{ data.name }}</div>
-                        <div class="text-xs text-surface-500 mt-0.5 flex items-center gap-2">
-                            <span v-if="data.productCode"><i class="pi pi-qrcode text-[10px]"></i> {{ data.productCode }}</span>
-                            <span><i class="pi pi-barcode text-[10px]"></i> {{ data.barcode || '-' }}</span>
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 shrink-0 rounded-lg border border-surface-200 overflow-hidden bg-surface-50 flex items-center justify-center">
+                            <img v-if="data.images && data.images.length > 0" :src="data.images[0]" class="w-full h-full object-cover" alt="Product" />
+                            <i v-else class="pi pi-image text-surface-300 text-xl"></i>
+                        </div>
+
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-surface-800 line-clamp-2 leading-tight">{{ data.name }}</div>
+                            <div class="text-[10px] text-surface-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span v-if="data.productCode"><i class="pi pi-qrcode text-[9px] mr-0.5"></i>{{ data.productCode }}</span>
+                                <span><i class="pi pi-barcode text-[9px] mr-0.5"></i>{{ data.barcode || '-' }}</span>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -294,6 +301,21 @@ onMounted(async () => {
                     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         
                         <div class="col-span-1 lg:col-span-4">
+                            <div class="mb-4">
+                                <h5 class="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">Foto Produk</h5>
+                                <div class="bg-surface-0 border border-surface-200 rounded-lg p-3 shadow-sm">
+                                    <div v-if="data.images && data.images.length > 0" class="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                                        <div v-for="(img, idx) in data.images" :key="idx" class="w-20 h-20 shrink-0 border border-surface-200 rounded overflow-hidden">
+                                            <img :src="img" class="w-full h-full object-cover" alt="Product View" />
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-center py-6 text-surface-400 flex flex-col items-center">
+                                        <i class="pi pi-image text-3xl mb-2 opacity-50"></i>
+                                        <span class="text-xs">Belum ada foto</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <h5 class="text-xs font-bold text-surface-500 uppercase tracking-wider mb-3">Informasi Dasar</h5>
                             <div class="bg-surface-0 border border-surface-200 rounded-lg p-4 shadow-sm space-y-3">
                                 <div>
@@ -418,3 +440,11 @@ onMounted(async () => {
         @success="handleBreakSuccess"
     />
 </template>
+
+<style scoped>
+/* Scrollbar khusus untuk galeri foto agar rapi */
+.custom-scrollbar::-webkit-scrollbar { height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+</style>

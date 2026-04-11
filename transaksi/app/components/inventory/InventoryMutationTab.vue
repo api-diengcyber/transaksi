@@ -128,7 +128,7 @@ const submitMutation = async () => {
             <div class="flex flex-col gap-4 mt-2">
                 <div class="flex flex-col gap-1 p-3 bg-surface-50 border border-surface-200 rounded-lg">
                     <label class="text-sm font-bold text-surface-800"><i class="pi pi-user mr-1 text-primary-500"></i> Penanggung Jawab</label>
-                    <Dropdown v-model="mutationForm.userUuid" :options="users" optionLabel="username" optionValue="uuid" filter placeholder="Pilih User / PIC..." class="w-full border-primary-200" />
+                    <Dropdown v-model="mutationForm.userUuid" :options="users" optionLabel="name" optionValue="uuid" filter placeholder="Pilih User / PIC..." class="w-full border-primary-200" />
                 </div>
                 <div class="flex flex-col gap-1">
                     <label class="text-sm font-semibold">Produk / Item</label>

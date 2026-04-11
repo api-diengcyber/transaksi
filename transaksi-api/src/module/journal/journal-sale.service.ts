@@ -5,7 +5,7 @@ import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
 import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 import { JournalStokService } from './journal-stok.service';
-import { JournalArService } from './journal-ar.service'; // <-- IMPORT AR SERVICE
+import { JournalArService } from './journal-ar.service';
 
 @Injectable()
 export class JournalSaleService {
@@ -13,22 +13,140 @@ export class JournalSaleService {
     private readonly journalService: JournalService,
     @Inject(forwardRef(() => JournalStokService))
     private readonly journalStokService: JournalStokService, 
-    @Inject(forwardRef(() => JournalArService)) // <-- INJECT AR SERVICE (Gunakan forwardRef untuk hindari Circular Dependency)
+    @Inject(forwardRef(() => JournalArService))
     private readonly journalArService: JournalArService,
     @Inject('DATA_SOURCE') private dataSource: DataSource,
   ) {}
+
+  // --- LOGIKA PERHITUNGAN HPP ---
+  private async calculateItemHpp(manager: EntityManager, storeUuid: string, productUuid: string, qtyNeeded: number, method: string): Promise<number> {
+    try {
+        const buyDetailsWithProd = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+            .innerJoin(JournalEntity, 'j', 'j.code = d.journalCode')
+            .where('j.code LIKE :buyPattern', { buyPattern: '%BUY%' })
+            .andWhere('j.uuid LIKE :store', { store: `${storeUuid}%` })
+            .andWhere('d.value = :productUuid', { productUuid })
+            .select(['j.code AS code', 'j.createdAt AS created_at', 'd.key AS detail_key'])
+            .getRawMany();
+
+        if (!buyDetailsWithProd || buyDetailsWithProd.length === 0) return 0;
+        const buyCodes = [...new Set(buyDetailsWithProd.map(b => b.code))];
+
+        const allBuyDetails = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+            .where('d.journalCode IN (:...buyCodes)', { buyCodes })
+            .getMany();
+
+        let buyBatches: { qty: number, price: number, date: Date }[] = [];
+
+        for (const code of buyCodes) {
+            const details = allBuyDetails.filter(d => d.journalCode === code);
+            const prodKey = details.find(d => d.value === productUuid)?.key;
+            if (prodKey) {
+                const idx = prodKey.split('#')[1];
+                const q = details.find(d => d.key === `qty#${idx}`)?.value;
+                const p = details.find(d => d.key === `price#${idx}` || d.key === `buy_price#${idx}`)?.value;
+                const journalDateStr = buyDetailsWithProd.find(b => b.code === code)?.created_at;
+                
+                buyBatches.push({ qty: Number(q || 0), price: Number(p || 0), date: new Date(journalDateStr) });
+            }
+        }
+
+        const saleDetailsWithProd = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+            .innerJoin(JournalEntity, 'j', 'j.code = d.journalCode')
+            .where('j.code LIKE :salePattern', { salePattern: '%SALE%' })
+            .andWhere('j.uuid LIKE :store', { store: `${storeUuid}%` })
+            .andWhere('d.value = :productUuid', { productUuid })
+            .select(['j.code AS code', 'd.key AS detail_key'])
+            .getRawMany();
+
+        let totalPastSales = 0;
+        if (saleDetailsWithProd && saleDetailsWithProd.length > 0) {
+            const saleCodes = [...new Set(saleDetailsWithProd.map(s => s.code))];
+            const allSaleDetails = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+                .where('d.journalCode IN (:...saleCodes)', { saleCodes })
+                .getMany();
+
+            for (const code of saleCodes) {
+                const details = allSaleDetails.filter(d => d.journalCode === code);
+                const prodKey = details.find(d => d.value === productUuid)?.key;
+                if (prodKey) {
+                    const idx = prodKey.split('#')[1];
+                    const q = details.find(d => d.key === `qty#${idx}`)?.value;
+                    totalPastSales += Number(q || 0);
+                }
+            }
+        }
+
+        buyBatches.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        let remainingPastSales = totalPastSales;
+        let availableBatches: any[] = [];
+        for (const batch of buyBatches) {
+            if (remainingPastSales >= batch.qty) {
+                remainingPastSales -= batch.qty;
+            } else {
+                availableBatches.push({ qty: batch.qty - remainingPastSales, price: batch.price, date: batch.date });
+                remainingPastSales = 0;
+            }
+        }
+
+        let totalHpp = 0;
+        let needToFulfill = qtyNeeded;
+        const methodUpper = method?.toUpperCase() || 'FIFO';
+
+        if (methodUpper === 'AVERAGE') {
+            let sumVal = 0;
+            let sumQty = 0;
+            for (const b of availableBatches) {
+                sumVal += b.qty * b.price;
+                sumQty += b.qty;
+            }
+            const avg = sumQty > 0 ? sumVal / sumQty : 0;
+            totalHpp = avg * qtyNeeded;
+        } else {
+            if (methodUpper === 'LIFO') availableBatches.reverse(); 
+            for (const b of availableBatches) {
+                if (needToFulfill <= 0) break;
+                const take = Math.min(needToFulfill, b.qty);
+                totalHpp += take * b.price;
+                needToFulfill -= take;
+            }
+        }
+        return totalHpp;
+    } catch (error) {
+        console.error('Error calculating HPP:', error);
+        return 0; 
+    }
+  }
 
   async createSale(payload: any, userId: string, storeUuid: string, externalManager?: EntityManager) {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
         const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
+        
+        // 1. Selalu generate 'code' bawaan sistem (Default System)
         const code = await this.journalService.generateCode('SALE', storeUuid);
         
-        // 1. Simpan Header Jurnal Penjualan (Bisa Tunai atau Kredit)
+        // 2. Ambil nilai custom invoice dari payload kasir
+        const customInvoiceCode = payload.custom_journal_code;
+
+        // 3. Validasi: Jangan sampai kasir memasukkan No Faktur Manual yang sudah pernah ada
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            const existingInvoice = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+                .where('d.key = :key', { key: 'invoice_code' })
+                .andWhere('d.value = :val', { val: customInvoiceCode })
+                .getOne();
+
+            if (existingInvoice) {
+                throw new BadRequestException(`Nomor Faktur/Invoice "${customInvoiceCode}" sudah pernah digunakan. Silakan gunakan nomor lain.`);
+            }
+        }
+
+        // 4. Simpan ke Journal Utama MENGGUNAKAN CODE SYSTEM
         const journal = manager.create(JournalEntity, {
           uuid: customJournalUuid,
-          code,
+          code: code, // <-- Tetap aman menggunakan SALE-...
           createdBy: userId,
           verifiedBy: userId,
           verifiedAt: new Date(),
@@ -36,15 +154,26 @@ export class JournalSaleService {
         await manager.save(JournalEntity, journal);
 
         const detailEntities: JournalDetailEntity[] = [];
+
+        // 5. Simpan CUSTOM INVOICE CODE ke tabel Journal Detail
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            detailEntities.push(manager.create(JournalDetailEntity, {
+                uuid: generateJournalDetailUuid(storeUuid),
+                key: 'invoice_code', // <-- Disimpan sebagai key terpisah
+                value: customInvoiceCode,
+                journalCode: code,
+                createdBy: userId,
+            }));
+        }
+
         const dataDetails = payload.details ? payload.details : payload;
 
-        // 2. Insert Detail Global (Menyimpan is_credit, due_date, customer_name, dll)
         Object.entries(dataDetails).forEach(([key, value]) => {
-          if (key === 'items') return; 
+          // Abaikan field yang tidak perlu masuk detail lagi
+          if (key === 'items' || key === 'custom_journal_code') return; 
           if (value === null || value === undefined) return;
   
           let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-
           if (valStr.length > 250) valStr = valStr.substring(0, 250);
 
           detailEntities.push(manager.create(JournalDetailEntity, {
@@ -56,18 +185,17 @@ export class JournalSaleService {
           }));
         });
 
-        // 3. Ekstrak Items & Parsing Stok Keluar (Stock Out)
         if (dataDetails.items && Array.isArray(dataDetails.items)) {
             const stockItemsToDeduct: any[] = [];
+            let globalTotalHpp = 0; 
 
             for (let index = 0; index < dataDetails.items.length; index++) {
                 const item = dataDetails.items[index];
                 
                 let finalWarehouseUuid = item.warehouse_uuid || item.stok_warehouse_uuid;
                 if (!finalWarehouseUuid && (item.shelve_uuid || item.stok_shelve_uuid)) {
-                    const shelveId = item.shelve_uuid || item.stok_shelve_uuid;
                     const shelveData: any = await manager.getRepository('ShelveEntity').findOne({ 
-                        where: { uuid: shelveId },
+                        where: { uuid: item.shelve_uuid || item.stok_shelve_uuid },
                         relations: ['warehouse'] 
                     });
                     if (shelveData && shelveData.warehouse) finalWarehouseUuid = shelveData.warehouse.uuid;
@@ -77,13 +205,20 @@ export class JournalSaleService {
                     finalWarehouseUuid = defaultWh ? defaultWh.uuid : storeUuid;
                 }
 
+                const productUuid = item.product_uuid || item.stok_product_uuid;
+                const qtyBought = Number(item.qty || item.stok_qty_min || 1);
+                const hppMethod = item.hpp_method || 'FIFO';
+                const itemTotalHpp = await this.calculateItemHpp(manager, storeUuid, productUuid, qtyBought, hppMethod);
+                
+                globalTotalHpp += itemTotalHpp;
+
                 stockItemsToDeduct.push({
-                    productUuid: item.product_uuid || item.stok_product_uuid,
+                    productUuid: productUuid,
                     variantUuid: item.variant_uuid || item.stok_variant_uuid,
                     unitUuid: item.unit_uuid || item.stok_unit,
                     shelveUuid: item.shelve_uuid || item.stok_shelve_uuid,
                     warehouseUuid: finalWarehouseUuid,
-                    qty: Number(item.qty || item.stok_qty_min || 1) 
+                    qty: qtyBought 
                 });
 
                 const keysToDelete = [
@@ -92,6 +227,21 @@ export class JournalSaleService {
                     'shelve_uuid', 'warehouse_uuid'
                 ];
                 keysToDelete.forEach(k => delete item[k]);
+
+                detailEntities.push(manager.create(JournalDetailEntity, {
+                    uuid: generateJournalDetailUuid(storeUuid),
+                    key: `hpp_total#${index}`,
+                    value: String(itemTotalHpp),
+                    journalCode: code,
+                    createdBy: userId,
+                }));
+                detailEntities.push(manager.create(JournalDetailEntity, {
+                    uuid: generateJournalDetailUuid(storeUuid),
+                    key: `hpp_unit#${index}`,
+                    value: String(qtyBought > 0 ? itemTotalHpp / qtyBought : 0),
+                    journalCode: code,
+                    createdBy: userId,
+                }));
 
                 Object.entries(item).forEach(([itemKey, itemValue]) => {
                     if (itemValue === null || itemValue === undefined) return;
@@ -111,7 +261,14 @@ export class JournalSaleService {
                 });
             }
 
-            // 4. JALANKAN PEMOTONGAN STOK
+            detailEntities.push(manager.create(JournalDetailEntity, {
+                uuid: generateJournalDetailUuid(storeUuid),
+                key: 'global_hpp_total',
+                value: String(globalTotalHpp),
+                journalCode: code,
+                createdBy: userId,
+            }));
+
             if (stockItemsToDeduct.length > 0) {
                 await this.journalStokService.stockOut(
                     stockItemsToDeduct, 
@@ -127,27 +284,21 @@ export class JournalSaleService {
             await manager.save(JournalDetailEntity, detailEntities);
         }
 
-        // ==================================================================
-        // 5. OTOMATISASI PIUTANG (AR) JIKA TRANSAKSI ADALAH KREDIT/HUTANG
-        // ==================================================================
         const isCredit = dataDetails.is_credit === 'true' || dataDetails.is_credit === true || dataDetails.payment_method === 'CREDIT';
 
         if (isCredit) {
-            // Hitung Piutang Murni (Total Belanja dikurangi Uang Muka / DP)
             const amountCredit = Number(dataDetails.amount_credit) || (Number(dataDetails.grand_total) - Number(dataDetails.amount_cash || 0));
 
             if (amountCredit > 0) {
                 const arPayload = {
-                    amount: amountCredit, // Sisa piutang bersih
-                    dp_amount: Number(dataDetails.amount_cash || 0), // DP (Uang tunai yang dibayar di awal)
+                    amount: amountCredit,
+                    dp_amount: Number(dataDetails.amount_cash || 0),
                     due_date: dataDetails.due_date,
                     notes: `Piutang otomatis dari Nota Penjualan: ${code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
                     customer_name: dataDetails.customer_name || 'Pelanggan Umum',
                     member_uuid: dataDetails.member_uuid || null,
-                    reference_journal_code: code, // Tautkan piutang ini ke Nota SALE
+                    reference_journal_code: code,
                 };
-
-                // Panggil service AR di dalam transaksi (manager) yang sama agar jika gagal, SALE ikut di-rollback
                 await this.journalArService.createAr(arPayload, userId, storeUuid, manager);
             }
         }
@@ -250,6 +401,7 @@ export class JournalSaleService {
       const isCredit = main.detailsMap['is_credit'] === 'true' || main.detailsMap['is_credit'] === true;
       const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || 0);
       const dp = Number(main.detailsMap['amount_cash'] || 0);
+      const invoiceCode = main.detailsMap['invoice_code'] || main.code;
       
       // Jika tunai, otomatis lunas. Jika kredit, hitung total yg sudah dibayar
       const totalPaid = isCredit ? (dp + salePayments.reduce((sum, p) => sum + p.amount, 0)) : total;
@@ -257,6 +409,7 @@ export class JournalSaleService {
       return {
         uuid: main.uuid,
         code: main.code,
+        invoiceCode: invoiceCode,
         date: main.createdAt,
         type: 'SALE',
         total: total,

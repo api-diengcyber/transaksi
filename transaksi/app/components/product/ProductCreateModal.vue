@@ -1,6 +1,8 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
+// [BARU] Import komponen Media Picker
+import MediaPickerDialog from '~/components/media/MediaPickerDialog.vue'; 
 
 const props = defineProps({
     visible: Boolean,
@@ -29,6 +31,9 @@ const categories = ref([]);
 const priceGroups = ref([]);
 const brands = ref([]); 
 
+// [BARU] State untuk kontrol dialog Media Picker
+const showMediaPicker = ref(false);
+
 // Data Utama Produk
 const product = reactive({ 
     name: '',
@@ -39,8 +44,9 @@ const product = reactive({
     unitUuid: null,
     categoryUuid: null,
     brandUuid: null,     
-    hppMethod: 'FIFO',       // <-- [BARU] Default FIFO
-    saleTaxPercentage: 0,    // <-- [BARU] Default 0%
+    hppMethod: 'FIFO',
+    saleTaxPercentage: 0,
+    images: [],              // <-- [BARU] Array untuk menyimpan link multi-gambar
     shelveUuids: [],
     prices: [],
     variants: []
@@ -77,8 +83,9 @@ const initForm = () => {
     product.unitUuid = null;
     product.categoryUuid = null;
     product.brandUuid = null;
-    product.hppMethod = 'FIFO';       // <-- [BARU]
-    product.saleTaxPercentage = 0;    // <-- [BARU]
+    product.hppMethod = 'FIFO';
+    product.saleTaxPercentage = 0;
+    product.images = [];              // <-- [BARU] Reset array gambar
     product.shelveUuids = [];
     
     product.prices = priceGroups.value.map(pg => {
@@ -102,6 +109,17 @@ const addVariant = () => {
 
 const removeVariant = (index) => {
     product.variants.splice(index, 1);
+};
+
+// --- [BARU] MEDIA FUNCTIONS ---
+const handleMediaSelected = (selectedUrls) => {
+    // Gabungkan gambar yang sudah ada dengan yang baru dipilih (hindari duplikat)
+    const merged = [...product.images, ...selectedUrls];
+    product.images = [...new Set(merged)]; 
+};
+
+const removeImage = (index) => {
+    product.images.splice(index, 1);
 };
 
 const loadDropdowns = async () => {
@@ -149,9 +167,9 @@ const loadProductData = async (uuid) => {
         product.categoryUuid = data.categoryUuid || (data.category ? data.category.uuid : null); 
         product.brandUuid = data.brandUuid || (data.brand ? data.brand.uuid : null); 
         
-        // <-- [BARU] Load HPP & PPN
         product.hppMethod = data.hppMethod || 'FIFO'; 
         product.saleTaxPercentage = data.saleTaxPercentage ? Number(data.saleTaxPercentage) : 0; 
+        product.images = data.images || []; // <-- [BARU] Load data gambar dari database
 
         if (data.shelves && Array.isArray(data.shelves)) {
             product.shelveUuids = data.shelves.map(shelf => shelf.uuid);
@@ -217,8 +235,9 @@ const saveProduct = async () => {
             unitUuid: product.unitUuid,
             categoryUuid: product.categoryUuid,
             brandUuid: product.brandUuid, 
-            hppMethod: product.hppMethod,                  // <-- [BARU] Payload HPP
-            saleTaxPercentage: product.saleTaxPercentage,  // <-- [BARU] Payload PPN
+            hppMethod: product.hppMethod,                  
+            saleTaxPercentage: product.saleTaxPercentage,  
+            images: product.images,                        // <-- [BARU] Kirim array gambar ke backend
             shelveUuids: product.isManageStock ? product.shelveUuids : [],
             
             prices: product.variants.length === 0 ? product.prices.map(p => ({
@@ -271,6 +290,28 @@ const saveProduct = async () => {
     >
         <div class="flex flex-col gap-4">
             
+            <div class="field mb-0 bg-surface-50 p-4 border border-surface-200 rounded-lg">
+                <label class="font-semibold text-sm mb-2 block text-surface-700">Foto Produk (Bisa Pilih Banyak)</label>
+                
+                <div class="flex flex-wrap gap-3 mb-3" v-if="product.images && product.images.length > 0">
+                    <div v-for="(img, idx) in product.images" :key="idx" class="relative w-24 h-24 border border-surface-200 rounded-lg overflow-hidden group shadow-sm bg-surface-0">
+                        <img :src="img" class="w-full h-full object-cover" alt="Preview" />
+                        <button @click.prevent="removeImage(idx)" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
+                            <i class="pi pi-times text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <Button 
+                    label="Pilih / Upload Gambar dari Media" 
+                    icon="pi pi-images" 
+                    outlined 
+                    severity="secondary"
+                    class="w-full md:w-auto text-sm bg-surface-0"
+                    @click="showMediaPicker = true" 
+                />
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="field mb-0">
                     <label for="name" class="font-semibold text-sm mb-1.5 block text-surface-700">Nama Produk <span class="text-red-500">*</span></label>
@@ -281,10 +322,10 @@ const saveProduct = async () => {
                 </div>
 
                 <div class="field mb-0">
-                    <label for="productCode" class="font-semibold text-sm mb-1.5 block text-surface-700">Kode Produk</label>
+                    <label for="productCode" class="font-semibold text-sm mb-1.5 block text-surface-700">Kode Produk <span class="text-red-500">*</span></label>
                     <InputGroup>
                         <InputGroupAddon class="!bg-surface-100"><i class="pi pi-qrcode text-surface-500"></i></InputGroupAddon>
-                        <InputText id="productCode" v-model="product.productCode" placeholder="Kode Produk..." />
+                        <InputText id="productCode" v-model="product.productCode" placeholder="Kode Produk..." :class="{'p-invalid': submitted && !product.productCode}"/>
                     </InputGroup>
                 </div>
 
@@ -431,4 +472,10 @@ const saveProduct = async () => {
             </div>
         </template>
     </Dialog>
+
+    <MediaPickerDialog 
+        v-model="showMediaPicker" 
+        :multiple="true" 
+        @select="handleMediaSelected" 
+    />
 </template>

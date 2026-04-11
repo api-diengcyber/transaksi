@@ -5,7 +5,7 @@ import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
 import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 import { JournalStokService } from './journal-stok.service';
-import { JournalApService } from './journal-ap.service'; // <-- IMPORT AP SERVICE
+import { JournalApService } from './journal-ap.service'; 
 
 @Injectable()
 export class JournalBuyService {
@@ -13,7 +13,7 @@ export class JournalBuyService {
     private readonly journalService: JournalService,
     @Inject(forwardRef(() => JournalStokService))
     private readonly journalStokService: JournalStokService, 
-    @Inject(forwardRef(() => JournalApService)) // <-- INJECT AP SERVICE
+    @Inject(forwardRef(() => JournalApService)) 
     private readonly journalApService: JournalApService,
     @Inject('DATA_SOURCE') private dataSource: DataSource,
   ) {}
@@ -23,31 +23,56 @@ export class JournalBuyService {
 
     const work = async (manager: EntityManager) => {
         const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
+        
+        // 1. Selalu generate 'code' bawaan sistem (Default System)
         const code = await this.journalService.generateCode('BUY', storeUuid);
         
-        // 1. Simpan Header Jurnal Pembelian (BUY)
+        // 2. Ambil nilai custom invoice dari payload (Nomor PO Internal)
+        const customInvoiceCode = payload.custom_journal_code;
+
+        // 3. Validasi Custom Invoice
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            const existingInvoice = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+                .where('d.key = :key', { key: 'invoice_code' })
+                .andWhere('d.value = :val', { val: customInvoiceCode })
+                .getOne();
+
+            if (existingInvoice) {
+                throw new BadRequestException(`Nomor PO / Faktur Internal "${customInvoiceCode}" sudah pernah digunakan. Silakan gunakan nomor lain.`);
+            }
+        }
+
+        // 4. Simpan ke Journal Utama MENGGUNAKAN CODE SYSTEM
         const journal = manager.create(JournalEntity, {
           uuid: customJournalUuid,
-          code,
+          code: code, // Tetap aman menggunakan BUY-...
           createdBy: userId,
           verifiedBy: userId,
-          verifiedAt: new Date(),
+          verifiedAt: new Date(), 
         });
         await manager.save(JournalEntity, journal);
 
         const detailEntities: JournalDetailEntity[] = [];
+
+        // 5. Simpan CUSTOM INVOICE CODE ke tabel Journal Detail
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            detailEntities.push(manager.create(JournalDetailEntity, {
+                uuid: generateJournalDetailUuid(storeUuid),
+                key: 'invoice_code', 
+                value: customInvoiceCode,
+                journalCode: code,
+                createdBy: userId,
+            }));
+        }
+
         const dataDetails = payload.details ? payload.details : payload;
 
-        // 2. Insert Detail Parameter Global
         Object.entries(dataDetails).forEach(([key, value]) => {
-          if (key === 'items') return; 
+          if (key === 'items' || key === 'custom_journal_code') return; 
           if (value === null || value === undefined) return;
   
           let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-
-          if (valStr.length > 250) {
-              valStr = valStr.substring(0, 250);
-          }
+          if (valStr.length > 250) valStr = valStr.substring(0, 250);
 
           detailEntities.push(manager.create(JournalDetailEntity, {
             uuid: generateJournalDetailUuid(storeUuid),
@@ -58,59 +83,26 @@ export class JournalBuyService {
           }));
         });
 
-        // Map untuk mengkalkulasi total hutang per supplier
-        const supplierTotalsMap = new Map<string, number>();
-
-        // 3. Ekstrak Items & Parsing Stok (Stock In)
         if (dataDetails.items && Array.isArray(dataDetails.items)) {
-            
             const stockItemsToAdd: any[] = [];
 
-            for (let index = 0; index < dataDetails.items.length; index++) {
-                const item = dataDetails.items[index];
-
-                // === LOGIKA AKUMULASI HUTANG PER SUPPLIER ===
-                const supplierId = item.supplier_uuid || item.stok_supplier_uuid || 'Unknown';
-                const subtotal = Number(item.subtotal || (item.qty * item.buy_price) || 0);
+            dataDetails.items.forEach((item, index) => {
                 
-                if (!supplierTotalsMap.has(supplierId)) {
-                    supplierTotalsMap.set(supplierId, 0);
-                }
-                supplierTotalsMap.set(supplierId, (supplierTotalsMap.get(supplierId) ?? 0) + subtotal);
-                // ============================================
-
                 let finalWarehouseUuid = item.warehouse_uuid || item.stok_warehouse_uuid;
-                
-                if (!finalWarehouseUuid && (item.shelve_uuid || item.stok_shelve_uuid)) {
-                    const shelveId = item.shelve_uuid || item.stok_shelve_uuid;
-                    const shelveData: any = await manager.getRepository('ShelveEntity').findOne({ 
-                        where: { uuid: shelveId },
-                        relations: ['warehouse'] 
-                    });
-                    if (shelveData && shelveData.warehouse) {
-                        finalWarehouseUuid = shelveData.warehouse.uuid;
-                    }
-                }
-
-                if (!finalWarehouseUuid) {
-                    const defaultWh: any = await manager.getRepository('WarehouseEntity').findOne({ where: {} });
-                    finalWarehouseUuid = defaultWh ? defaultWh.uuid : storeUuid;
-                }
+                if (!finalWarehouseUuid) finalWarehouseUuid = storeUuid;
 
                 stockItemsToAdd.push({
                     productUuid: item.product_uuid || item.stok_product_uuid,
                     variantUuid: item.variant_uuid || item.stok_variant_uuid,
                     unitUuid: item.unit_uuid || item.stok_unit,
-                    shelveUuid: item.shelve_uuid || item.stok_shelve_uuid,
+                    qty: item.qty || item.stok_qty_plus,
                     warehouseUuid: finalWarehouseUuid,
-                    supplierUuid: item.supplier_uuid || item.stok_supplier_uuid,
-                    qty: Number(item.qty || item.stok_qty_plus || 1)
+                    shelveUuid: null 
                 });
 
                 const keysToDelete = [
-                    'stok_product_uuid', 'stok_unit', 'stok_qty_plus', 'stok_qty_min', 
-                    'stok_shelve_uuid', 'stok_warehouse_uuid', 'stok_variant_uuid',
-                    'shelve_uuid', 'warehouse_uuid', 'supplier_uuid'
+                    'stok_product_uuid', 'stok_unit', 'stok_qty_plus', 
+                    'stok_warehouse_uuid', 'stok_variant_uuid', 'warehouse_uuid'
                 ];
                 keysToDelete.forEach(k => delete item[k]);
 
@@ -130,15 +122,15 @@ export class JournalBuyService {
                         }));
                     }
                 });
-            }
+            });
 
             if (stockItemsToAdd.length > 0) {
                 await this.journalStokService.stockIn(
                     stockItemsToAdd, 
                     userId, 
-                    manager,
+                    manager, 
                     storeUuid, 
-                    `Otomatis dari Pembelian/Stok Masuk: ${code}`
+                    `Otomatis dari Pembelian: ${code}`
                 );
             }
         }
@@ -147,38 +139,26 @@ export class JournalBuyService {
             await manager.save(JournalDetailEntity, detailEntities);
         }
 
-        // ==================================================================
-        // 4. OTOMATISASI HUTANG (AP) BERDASARKAN SUPPLIER
-        // ==================================================================
         const isCredit = dataDetails.is_credit === 'true' || dataDetails.is_credit === true || dataDetails.payment_method === 'CREDIT';
 
         if (isCredit) {
-            const totalGrand = Number(dataDetails.grand_total) || 0;
-            const totalDp = Number(dataDetails.amount_cash || 0);
+            const amountCredit = Number(dataDetails.amount_credit) || (Number(dataDetails.grand_total) - Number(dataDetails.amount_cash || 0));
 
-            // Buat entri hutang (AP) untuk masing-masing supplier di keranjang belanja
-            for (const [supplierId, supplierSubtotal] of supplierTotalsMap.entries()) {
+            if (amountCredit > 0) {
+                const apPayload = {
+                    amount: amountCredit,
+                    dp_amount: Number(dataDetails.amount_cash || 0),
+                    due_date: dataDetails.due_date,
+                    notes: `Hutang otomatis dari Nota Pembelian: ${code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
+                    supplier_name: dataDetails.supplier || 'Supplier Umum', 
+                    reference_journal_code: code,
+                };
                 
-                // DP didistribusikan secara proporsional sesuai besaran belanja ke masing-masing supplier
-                const proporsionalDp = (totalGrand > 0 ? (supplierSubtotal / totalGrand) * totalDp : 0);
-                const amountCreditPerSupplier = supplierSubtotal - proporsionalDp;
-
-                if (amountCreditPerSupplier > 0) {
-                    const apPayload = {
-                        amount: amountCreditPerSupplier, 
-                        dp_amount: proporsionalDp, 
-                        due_date: dataDetails.due_date,
-                        notes: `Hutang otomatis dari Pembelian: ${code} ${dataDetails.reference_no ? '(Ref: ' + dataDetails.reference_no + ')' : ''}`,
-                        supplier_uuid: supplierId !== 'Unknown' ? supplierId : null,
-                        reference_journal_code: code, 
-                    };
-
-                    await this.journalApService.createAp(apPayload, userId, storeUuid, manager);
-                }
+                await this.journalApService.createAp(apPayload, userId, storeUuid, manager);
             }
         }
 
-        return { message: 'BUY journal created and Stock/AP properly updated', journal, details: detailEntities };
+        return { message: 'BUY journal created successfully', journal, details: detailEntities };
     };
 
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
@@ -264,6 +244,7 @@ export class JournalBuyService {
       const isCredit = main.detailsMap['is_credit'] === 'true' || main.detailsMap['is_credit'] === true;
       const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || 0);
       const dp = Number(main.detailsMap['amount_cash'] || 0);
+      const invoiceCode = main.detailsMap['invoice_code'] || main.code;
       
       // Kalkulasi Lunas/Belum
       const totalPaid = isCredit ? (dp + purchasePayments.reduce((sum, p) => sum + p.amount, 0)) : total;
@@ -271,6 +252,7 @@ export class JournalBuyService {
       return {
         uuid: main.uuid,
         code: main.code,
+        invoiceCode: invoiceCode,
         date: main.createdAt,
         type: 'BUY',
         total: total,

@@ -114,9 +114,9 @@ const verifyOpname = async (journalUuid) => {
                 </div>
                 <div class="flex flex-col md:flex-row gap-3 w-full xl:w-2/3 items-center xl:justify-end">
                     <Dropdown :modelValue="modelValue" @update:modelValue="emit('update:modelValue', $event)" :options="warehouses" optionLabel="name" optionValue="uuid" filter placeholder="1. Pilih Gudang..." class="w-full md:w-48" showClear />
-                    <Dropdown v-model="selectedOpnameUserUuid" :options="users" optionLabel="username" optionValue="uuid" filter placeholder="2. Pilih PIC..." class="w-full md:w-56">
+                    <Dropdown v-model="selectedOpnameUserUuid" :options="users" optionLabel="name" optionValue="uuid" filter placeholder="2. Pilih PIC..." class="w-full md:w-56">
                         <template #value="slotProps">
-                            <div v-if="slotProps.value" class="flex items-center gap-2"><i class="pi pi-user text-blue-600"></i><span class="font-semibold">{{ users.find(u => u.uuid === slotProps.value)?.username }}</span></div>
+                            <div v-if="slotProps.value" class="flex items-center gap-2"><i class="pi pi-user text-blue-600"></i><span class="font-semibold">{{ users.find(u => u.uuid === slotProps.value)?.name }}</span></div>
                             <span v-else>{{ slotProps.placeholder }}</span>
                         </template>
                     </Dropdown>
@@ -180,7 +180,7 @@ const verifyOpname = async (journalUuid) => {
                         <template #body="{ data }"><span class="font-mono font-bold text-primary-700 bg-primary-50 px-3 py-1 rounded">{{ data.code }}</span></template>
                     </Column>
                     <Column header="PIC (Pembuat)">
-                        <template #body="{ data }"><span class="font-semibold">{{ users.find(u => u.uuid === data.createdBy)?.username || 'Unknown' }}</span></template>
+                        <template #body="{ data }"><span class="font-semibold">{{ users.find(u => u.uuid === data.createdBy)?.name || 'Unknown' }}</span></template>
                     </Column>
                     <Column header="Aksi" alignFrozen="right" class="text-right">
                         <template #body="{ data }">

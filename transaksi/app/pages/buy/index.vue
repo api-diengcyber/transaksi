@@ -60,14 +60,20 @@ const totalProducts = ref(0);
 const purchaseInfo = reactive({
     transactionDate: new Date(), 
     cashierUuid: authStore.user?.uuid || null,
-    referenceNo: '',
+    referenceNo: '', // Nomor referensi nota asli dari supplier (Optional)
     notes: '',
     paymentMethod: 'CASH',
     dueDate: null,
+    // [BARU] State untuk nomor faktur internal (Purchase Order/Invoice dari sistem kita)
+    manualInvoiceCode: ''
 });
 const cashAmount = ref(0); 
 
 // --- COMPUTED ---
+// [BARU] Computed untuk pengaturan tipe Faktur Pembelian (PO)
+const invoiceType = computed(() => authStore.getSetting('purchase_invoice_number_type', 'system'));
+const isManualInvoice = computed(() => invoiceType.value === 'manual');
+
 const grandTotal = computed(() => {
     return cart.value.reduce((total, item) => total + ((item.buyPrice || 0) * (item.qty || 1)), 0);
 });
@@ -86,6 +92,9 @@ const canCheckout = computed(() => {
     if (!purchaseInfo.cashierUuid) return false; 
     if (processing.value) return false;
     
+    // [BARU] Validasi faktur manual tidak boleh kosong
+    if (isManualInvoice.value && !purchaseInfo.manualInvoiceCode.trim()) return false;
+
     if (isCreditPurchase.value) {
         return purchaseInfo.dueDate !== null; 
     } else {
@@ -322,6 +331,29 @@ const onSearchKeydown = async () => {
 };
 
 // --- CART LOGIC ---
+
+// [BARU] Fungsi Generate Nomor Faktur Pembelian (PO)
+const generatePurchaseInvoiceNumber = () => {
+    const type = invoiceType.value;
+    if (type === 'system' || type === 'manual') return null;
+
+    const prefix = String(authStore.getSetting('purchase_invoice_prefix') || 'PO-').toUpperCase();
+    const suffix = String(authStore.getSetting('purchase_invoice_suffix') || '').toUpperCase();
+    const length = Number(authStore.getSetting('purchase_invoice_length')) || 5;
+    let randomPart = '';
+
+    if (type === 'numeric') {
+        randomPart = String(new Date().getTime()).slice(-length);
+    } else if (type === 'alphanumeric') {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        for (let i = 0; i < length; i++) {
+            randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+    }
+    
+    return `${prefix}${randomPart}${suffix}`;
+};
+
 const openPurchaseModal = () => {
     if (cart.value.length === 0) {
         toast.add({ severity: 'warn', summary: 'Keranjang Kosong', detail: 'Pilih produk terlebih dahulu', life: 2000 });
@@ -334,6 +366,12 @@ const openPurchaseModal = () => {
     if (purchaseInfo.paymentMethod === 'CASH') {
         cashAmount.value = grandTotal.value;
     }
+    
+    // Auto-generate jika menggunakan setting custom non-manual
+    if (!isManualInvoice.value && invoiceType.value !== 'system') {
+        purchaseInfo.manualInvoiceCode = generatePurchaseInvoiceNumber();
+    }
+    
     showPurchaseModal.value = true;
 };
 
@@ -383,7 +421,7 @@ const pushToCart = (prod, variant) => {
                 qty: 1,
                 warehouseUuid: defaultWarehouse,
                 supplierUuid: defaultSupplier,
-                expanded: false // <-- Tambahkan properti expanded untuk UI
+                expanded: false 
             };
 
             cart.value = [...cart.value, newItem];
@@ -426,7 +464,7 @@ const processPurchase = async () => {
         let globalSupplierName = 'Multi Supplier';
         if (uniqueSuppliers.length === 1 && uniqueSuppliers[0]) {
             const sup = suppliers.value.find(s => s.uuid === uniqueSuppliers[0]);
-            if (sup) globalSupplierName = sup.username || sup.name || 'Unknown';
+            if (sup) globalSupplierName = sup.name || sup.name || 'Unknown';
         }
 
         const itemsPayload = cart.value.map(item => {
@@ -442,7 +480,7 @@ const processPurchase = async () => {
                 unit_name: item.unitName,
                 
                 supplier_uuid: item.supplierUuid, 
-                supplier_name: sup ? (sup.username || sup.name) : 'Unknown', 
+                supplier_name: sup ? (sup.name || sup.name) : 'Unknown', 
                 warehouse_uuid: item.warehouseUuid,
 
                 stok_product_uuid: item.productUuid,
@@ -454,10 +492,13 @@ const processPurchase = async () => {
         });
 
         const payload = {
+            // [BARU] Kirim custom invoice code di root
+            ...(invoiceType.value !== 'system' && { custom_journal_code: purchaseInfo.manualInvoiceCode }),
+
             details: {
                 grand_total: grandTotal.value,
                 supplier: globalSupplierName, 
-                reference_no: purchaseInfo.referenceNo || '-',
+                reference_no: purchaseInfo.referenceNo || '-', // Nomor surat jalan dari supplier asli
                 notes: purchaseInfo.notes,
                 payment_method: purchaseInfo.paymentMethod,
                 
@@ -482,7 +523,9 @@ const processPurchase = async () => {
 
     } catch (e) {
         console.error("Error processing purchase:", e);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Transaksi gagal diproses', life: 3000 });
+        // Tangkap pesan error duplikasi invoice_code dari backend
+        const errMsg = e.response?._data?.message || e.response?.data?.message || e.message || 'Transaksi gagal diproses';
+        toast.add({ severity: 'error', summary: 'Gagal', detail: errMsg, life: 5000 });
     } finally {
         processing.value = false;
     }
@@ -496,6 +539,7 @@ const resetState = () => {
     purchaseInfo.dueDate = null;
     purchaseInfo.transactionDate = new Date();
     purchaseInfo.cashierUuid = authStore.user?.uuid || null;
+    purchaseInfo.manualInvoiceCode = '';
     cashAmount.value = 0;
     showPurchaseModal.value = false;
 };
@@ -719,7 +763,7 @@ defineExpose({ refreshData });
                     <Dropdown 
                         v-model="purchaseInfo.cashierUuid" 
                         :options="users" 
-                        optionLabel="username" 
+                        optionLabel="name" 
                         optionValue="uuid" 
                         filter
                         placeholder="Pilih PIC / Operator..." 
@@ -789,7 +833,7 @@ defineExpose({ refreshData });
                         
                         <div class="flex items-center gap-2">
                             <span class="text-[9px] font-bold text-surface-500 w-12">Supplier:</span>
-                            <Dropdown v-model="item.supplierUuid" :options="suppliers" optionLabel="username" optionValue="uuid" placeholder="Pilih..." class="w-full !h-6 !text-[9px]" :pt="{ root: { class: '!bg-surface-50 !border-surface-200' }, input: { class: '!py-0 !px-1.5 !text-[9px] flex items-center' }, trigger: { class: '!w-5' } }" />
+                            <Dropdown v-model="item.supplierUuid" :options="suppliers" optionLabel="name" optionValue="uuid" placeholder="Pilih..." class="w-full !h-6 !text-[9px]" :pt="{ root: { class: '!bg-surface-50 !border-surface-200' }, input: { class: '!py-0 !px-1.5 !text-[9px] flex items-center' }, trigger: { class: '!w-5' } }" />
                         </div>
 
                         <div class="flex items-center gap-2">
@@ -859,6 +903,18 @@ defineExpose({ refreshData });
                 </div>
 
                 <div class="space-y-4">
+                    
+                    <div class="p-3 bg-surface-100 border border-surface-200 rounded-xl mb-4" v-if="invoiceType !== 'system'">
+                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Nomor PO / Faktur Internal</label>
+                        
+                        <InputText v-if="isManualInvoice" v-model="purchaseInfo.manualInvoiceCode" placeholder="Ketik No PO Manual..." class="w-full !text-sm font-mono font-bold border-emerald-200 focus:ring-emerald-500" />
+                        
+                        <div v-else class="flex justify-between items-center bg-white p-2 rounded border border-surface-200 font-mono font-bold text-emerald-700 text-sm">
+                            <span>{{ purchaseInfo.manualInvoiceCode }}</span>
+                            <Button icon="pi pi-refresh" text rounded size="small" class="!w-6 !h-6 !p-0" @click="purchaseInfo.manualInvoiceCode = generatePurchaseInvoiceNumber()" v-tooltip.top="'Generate Ulang'" />
+                        </div>
+                    </div>
+
                     <div>
                         <label class="text-[10px] uppercase font-bold text-surface-500 mb-1 block">Metode Pembayaran</label>
                         <SelectButton 
@@ -892,7 +948,7 @@ defineExpose({ refreshData });
 
                     <div class="space-y-3 pt-2 border-t border-surface-100">
                         <div>
-                            <label class="text-xs font-bold text-surface-500 uppercase block mb-1">No. Referensi / Nota Supplier</label>
+                            <label class="text-xs font-bold text-surface-500 uppercase block mb-1">Nota Fisik Supplier / Surat Jalan</label>
                             <InputText v-model="purchaseInfo.referenceNo" placeholder="Contoh: INV-SUP-001..." class="w-full !text-sm" />
                         </div>
                         <div>

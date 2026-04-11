@@ -24,6 +24,14 @@ const receiptTemplates = [
     icon: "pi pi-file",
   },
 ];
+
+// [BARU] Pilihan Tipe Nomor Faktur
+const invoiceTypeOptions = [
+    { label: 'Otomatis System (Cth: INV-123456789)', value: 'system' },
+    { label: 'Nomor Urut (Cth: 00001, 00002)', value: 'numeric' },
+    { label: 'Alphanumeric Random (Cth: X7Y9Z2)', value: 'alphanumeric' },
+    { label: 'Custom Manual (Input Kasir)', value: 'manual' }
+];
 </script>
 
 <template>
@@ -65,6 +73,52 @@ const receiptTemplates = [
                         <div class="text-xs text-surface-500">Transaksi tidak bisa diproses tanpa data pelanggan.</div>
                     </div>
                     <InputSwitch v-model="settings.sale_require_customer" />
+                </div>
+            </div>
+        </div>
+
+        <div class="card-section border-primary-200 bg-primary-50/20">
+            <h3 class="section-title !text-primary-700">Pengaturan Nomor Faktur (Invoice)</h3>
+            <p class="text-xs text-surface-500 mb-4 mt-[-10px]">Tentukan format penomoran nota yang akan dicetak dan disimpan.</p>
+            
+            <div class="space-y-5">
+                <div class="field">
+                    <label>Tipe Penomoran</label>
+                    <Dropdown 
+                        v-model="settings.invoice_number_type" 
+                        :options="invoiceTypeOptions" 
+                        optionLabel="label" 
+                        optionValue="value" 
+                        placeholder="Pilih Tipe Penomoran" 
+                        class="w-full" 
+                    />
+                </div>
+
+                <div v-if="settings.invoice_number_type !== 'manual' && settings.invoice_number_type !== 'system'" class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-surface-0 p-4 rounded-lg border border-surface-200">
+                    <div class="field">
+                        <label>Prefix (Awalan)</label>
+                        <InputText v-model="settings.invoice_prefix" placeholder="Cth: INV-" class="w-full uppercase" />
+                    </div>
+                    <div class="field">
+                        <label v-if="settings.invoice_number_type === 'numeric'">Digit Angka</label>
+                        <label v-else>Panjang Karakter</label>
+                        <InputNumber v-model="settings.invoice_length" placeholder="Cth: 5" class="w-full" :min="3" :max="15" />
+                    </div>
+                    <div class="field">
+                        <label>Suffix (Akhiran)</label>
+                        <InputText v-model="settings.invoice_suffix" placeholder="Cth: -JKT" class="w-full uppercase" />
+                    </div>
+                </div>
+
+                <div class="p-3 bg-surface-100 rounded-lg text-sm border border-surface-200 flex items-center justify-between">
+                    <span class="text-surface-600 font-semibold">Preview Format:</span>
+                    <span class="font-mono font-bold text-primary-600 bg-white px-3 py-1 rounded shadow-sm border border-primary-100">
+                        <template v-if="settings.invoice_number_type === 'system'">INV-{{ new Date().getTime().toString().substring(5) }}</template>
+                        <template v-else-if="settings.invoice_number_type === 'manual'">[Diinput Kasir Saat Transaksi]</template>
+                        <template v-else>
+                            {{ (settings.invoice_prefix || '').toUpperCase() }}<span v-if="settings.invoice_number_type === 'numeric'">{{ '0'.repeat((settings.invoice_length || 5) - 1) }}1</span><span v-else>{{ 'A1B2C3D4'.substring(0, (settings.invoice_length || 6)) }}</span>{{ (settings.invoice_suffix || '').toUpperCase() }}
+                        </template>
+                    </span>
                 </div>
             </div>
         </div>

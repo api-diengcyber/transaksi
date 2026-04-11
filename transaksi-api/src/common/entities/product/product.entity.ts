@@ -133,4 +133,7 @@ export class ProductEntity {
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   saleTaxPercentage: number;
+
+  @Column('simple-array', { nullable: true })
+  images: string[];
 }

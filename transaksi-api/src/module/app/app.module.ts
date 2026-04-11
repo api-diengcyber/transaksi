@@ -22,6 +22,7 @@ import { MediaModule } from '../media/media.module';
 import { IeModule } from '../ie/ie.module';
 import { SystemUpdateModule } from '../system/system-update.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { SystemModule } from '../system/system.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { DashboardModule } from '../dashboard/dashboard.module';
     DashboardModule,
     IeModule,
     SystemUpdateModule,
+    SystemModule,
   ],
   controllers: [],
   providers: [],
