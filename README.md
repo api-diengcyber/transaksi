@@ -1,36 +1,45 @@
-# Aplikasi Transaksi Desktop (Electron + NestJS + Nuxt)
+# 🛒 Aplikasi Kasir Transaksi (Electron + NestJS + Nuxt)
 
-Aplikasi desktop *all-in-one* yang menggabungkan kekuatan **NestJS** (Backend), **Nuxt 3** (Frontend), dan **MariaDB/MySQL Portable** (Database), dibungkus menjadi file executable (`.exe`) menggunakan **Electron**.
+Aplikasi Point of Sale (POS) berbasis desktop yang menggabungkan kekuatan **NestJS** sebagai Backend API, **Nuxt 3** sebagai Frontend, dan **Electron** sebagai wrapper desktop. Aplikasi ini menggunakan **MariaDB/MySQL** sebagai engine database lokal yang dibundel langsung di dalam aplikasi.
 
-## 🏗️ Arsitektur
+## 🚀 Rilis Terbaru (Latest Release)
 
-Aplikasi ini menggunakan arsitektur *Monolithic Desktop Bundle*:
+| Versi | OS Support | Tanggal Rilis | Status |
+|-------|------------|---------------|--------|
+| **v1.1.0** | Windows, macOS, Linux | 13 Juni 2026 | :rocket: Latest |
+| **v1.0.1** | Windows, macOS | 01 Mei 2026 | Stable |
+| **v1.0.0** | Windows, Macos | 13 April 2026 | Initial |
 
-1.  **Frontend**: Nuxt 3 (Mode SPA + Hash Router).
-2.  **Backend**: NestJS (API berjalan di `127.0.0.1:3000` di background).
-3.  **Database**: MariaDB Portable (Berjalan di `localhost:8889` tanpa perlu instalasi XAMPP/MySQL di komputer user).
-4.  **Wrapper**: Electron (Menjalankan `mysqld.exe`, `node.exe` untuk API, dan merender UI).
+> **Catatan:** Anda dapat mengunduh aset instalasi (`.exe`, `.dmg`, `.AppImage`) melalui halaman [GitHub Releases](https://github.com/api-diengcyber/transaksi/releases).
 
-## 📂 Struktur Folder
+## 🛠️ Fitur Utama
+- **Manajemen Inventaris:** Stok barang, mutasi, dan opname otomatis.
+- **Akuntansi Jurnal Umum:** Pencatatan otomatis dari transaksi penjualan/pembelian.
+- **Multi-Platform:** Mendukung ekosistem Windows, macOS, dan Linux.
+- **Database Lokal Terintegrasi:** Tidak memerlukan instalasi database terpisah (Standalone).
 
-```text
-/ (Root Project)
-├── build.sh                # Script untuk build source code (API & Web) saja
-├── deploy.sh               # Script OTOMATIS (Build -> Copy -> Package .exe)
-├── README.md               # Dokumentasi ini
-│
-├── transaksi/              # Source Code Frontend (Nuxt)
-│   ├── nuxt.config.ts      # Configured with ssr:false & hashMode
-│   └── ...
-│
-├── transaksi-api/          # Source Code Backend (NestJS)
-│   ├── src/
-│   └── ...
-│
-└── transaksi-electron/     # Wrapper Electron
-    ├── src/
-    │   └── main.js         # Entry point (Manage process MySQL & API)
-    ├── bin/
-    │   └── mysql/          # Folder Database Portable (Harus diisi manual)
-    ├── resources/          # Tempat hasil build API & Web diletakkan (Otomatis)
-    └── package.json        # Konfigurasi Electron Builder
+## 📂 Struktur Proyek
+- `transaksi/`: Frontend Nuxt 3 (Vue.js).
+- `transaksi-api/`: Backend API NestJS.
+- `transaksi-electron/`: Wrapper Desktop & MySQL Manager.
+
+## ⚙️ Persyaratan Pengembangan
+- **Node.js:** v20.x atau lebih baru.
+- **pnpm / npm:** Direkomendasikan menggunakan `pnpm`.
+
+## 🛠️ Cara Menjalankan (Development)
+
+### 1. Persiapan Database
+Pastikan binary MariaDB sudah ada di folder `bin/mysql/[platform]` di dalam `transaksi-electron`.
+
+### 2. Install Dependensi
+Jalankan perintah berikut di root folder atau masing-masing sub-folder:
+```bash
+# Di folder transaksi-api
+npm install
+
+# Di folder transaksi
+npm install
+
+# Di folder transaksi-electron
+npm install
