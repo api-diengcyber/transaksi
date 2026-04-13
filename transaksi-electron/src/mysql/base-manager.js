@@ -15,7 +15,7 @@ class BaseMySQLManager {
 
     prepareInitSql() {
         const sqlContent = [
-            "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';",
+            "ALTER USER 'root'@'127.0.0.1' IDENTIFIED BY 'root';",
             "CREATE DATABASE IF NOT EXISTS transaksi;",
             "FLUSH PRIVILEGES;"
         ].join('\n');

@@ -24,6 +24,10 @@
       "output": "dist"
     },
     "asar": true,
+    "asarUnpack": [
+      "bin/mysql/**/*",
+      "bin/mysql/darwin/**/*"
+    ],
     "files": [
       "src/**/*",
       "package.json",
@@ -47,7 +51,7 @@
       "icon": "resources/icon.icns"
     },
     "win": {
-      "target": "nsis",
+      "target": ["nsis", "portable"],
       "icon": "resources/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
