@@ -60,7 +60,7 @@ class DarwinMySQLManager extends BaseMySQLManager {
             installScript = path.join(this.mysqlBaseDir, 'bin', 'mariadb-install-db');
         }
 
-        // this.fixPermissions(this.mysqlBaseDir);
+        this.fixPermissions(this.mysqlBaseDir);
 
         if (!fs.existsSync(this.mysqlData)) {
             fs.mkdirSync(this.mysqlData, { recursive: true });
