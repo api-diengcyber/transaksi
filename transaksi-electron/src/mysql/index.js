@@ -7,6 +7,8 @@ function getMySQLManager(rootPath, userDataPath) {
         return new DarwinManager(rootPath, userDataPath, 'darwin');
     } else if (platform === 'win32') {
         return new Win32Manager(rootPath, userDataPath, 'win32');
+    } else if (platform === 'linux') {
+        return new LinuxManager(); // Tambahkan rute untuk Linux
     } else {
         // Fallback untuk Linux jika Anda nanti menambahkannya
         throw new Error('Platform not supported yet');
