@@ -78,13 +78,13 @@ const tabs = [
 
       <div class="p-6 flex-1 bg-surface-0 overflow-auto relative">
         <Transition name="fade" mode="out-in">
-          
-          <div v-if="activeTab === 'account'" key="account" class="h-full">
-            <AccountList />
-          </div>
 
-          <div v-else-if="activeTab === 'journal'" key="journal" class="h-full">
+          <div v-if="activeTab === 'journal'" key="journal" class="h-full">
             <JournalGeneralTab />
+          </div>
+          
+          <div v-else-if="activeTab === 'account'" key="account" class="h-full">
+            <AccountList />
           </div>
 
           <div v-else-if="activeTab === 'setting'" key="setting" class="h-full">

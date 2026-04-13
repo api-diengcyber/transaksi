@@ -54,7 +54,11 @@ class DarwinMySQLManager extends BaseMySQLManager {
 
         const binPath = path.join(this.mysqlBaseDir, 'bin');
         const mysqlBin = path.join(binPath, 'mariadbd');
-        const installScript = path.join(this.mysqlBaseDir, 'scripts', 'mariadb-install-db');
+
+        let installScript = path.join(this.mysqlBaseDir, 'scripts', 'mariadb-install-db');
+        if (!fs.existsSync(installScript)) {
+            installScript = path.join(this.mysqlBaseDir, 'bin', 'mariadb-install-db');
+        }
 
         this.fixPermissions(this.mysqlBaseDir);
 
@@ -74,8 +78,8 @@ class DarwinMySQLManager extends BaseMySQLManager {
                 '--no-defaults',
                 `--datadir=${this.mysqlData}`,
                 `--basedir=${this.mysqlBaseDir}`,
-                `--user=${os.userInfo().username}`,
-                '--auth-root-authentication-method=normal'
+                // `--user=${os.userInfo().username}`,
+                // '--auth-root-authentication-method=normal'
             ], { 
                 cwd: this.mysqlBaseDir, 
                 env: customEnv,
@@ -96,9 +100,9 @@ class DarwinMySQLManager extends BaseMySQLManager {
             '--port=8867',
             `--datadir=${this.mysqlData}`,
             `--basedir=${this.mysqlBaseDir}`,
-            '--bind-address=127.0.0.1',
-            '--lower-case-table-names=2',
-            `--init-file=${this.initSqlPath}`
+            // '--bind-address=127.0.0.1',
+            // '--lower-case-table-names=2',
+            // `--init-file=${this.initSqlPath}`
         ], { 
             cwd: this.mysqlBaseDir,
             env: Object.assign({}, process.env, { PATH: `${binPath}:${process.env.PATH}` })

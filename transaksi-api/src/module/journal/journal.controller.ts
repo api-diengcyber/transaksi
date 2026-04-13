@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestException, Req, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestException, Req, Put, Delete } from '@nestjs/common';
 import { JournalService } from './journal.service';
 import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AtGuard } from 'src/common/guards/at.guard';
@@ -133,11 +133,13 @@ export class JournalController {
   async getReport(
     @Param('type') type: string,
     @GetStore() storeUuid: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,    
   ) {
-    // Normalisasi parameter untuk antisipasi huruf kecil/besar (misal 'buy' menjadi 'BUY')
     const normalizedType = type.toUpperCase();
-
     switch (normalizedType) {
+      case 'ALL':
+        return this.journalService.findAll(storeUuid, startDate, endDate);
       case 'SALE':
         return this.journalSaleService.getReport(storeUuid);
       case 'BUY':
@@ -151,9 +153,6 @@ export class JournalController {
       case 'RET_BUY': 
         return this.journalReturnBuyService.getReport(storeUuid);
       default:
-        // Jika masih ada tipe jurnal lama/umum lainnya yang belum dipisah
-        // Anda bisa menyalakannya dengan memanggil findAllByType jika fungsi itu belum Anda hapus
-        // return this.journalService.findAllByType(normalizedType, storeUuid);
         throw new BadRequestException(`Tipe report '${normalizedType}' tidak valid atau belum diimplementasikan.`);
     }
   }
@@ -321,5 +320,24 @@ export class JournalController {
     @GetStore() storeUuid: string
   ) {
     return await this.journalBuyService.getBuyByCode(storeUuid, code);
+  }
+  
+  @Post('manual')
+  @ApiOperation({ summary: 'Membuat Jurnal Umum Manual (Debit/Kredit kustom)' })
+  async createManualJournal(
+    @Body() body: any,
+    @GetUser('sub') userId: string,
+    @GetStore() storeUuid: string,
+  ) {
+    return this.journalService.createManualJournal(body, userId, storeUuid);
+  }
+
+  @Delete(':uuid')
+  @ApiOperation({ summary: 'Menghapus Jurnal Umum' })
+  async deleteJournal(
+    @Param('uuid') uuid: string,
+    @GetUser('sub') userId: string,
+  ) {
+    return this.journalService.deleteJournal(uuid, userId);
   }
 }

@@ -185,6 +185,19 @@ export const useJournalService = () => {
         });
     };
 
+    const createManual = async (payload: any) => {
+        return await useApi(`${API_BASE}/manual`, {
+            method: 'POST',
+            body: payload,
+        });
+    };
+
+    const remove = async (uuid: string) => {
+        return await useApi(`${API_BASE}/${uuid}`, {
+            method: 'DELETE',
+        });
+    };
+
     return {
         createSaleTransaction,
         createBuyTransaction,
@@ -210,5 +223,7 @@ export const useJournalService = () => {
         verifyOpnameJournal,
         getSaleByCode,
         getBuyByCode,
+        createManual,
+        remove,
     };
 };
