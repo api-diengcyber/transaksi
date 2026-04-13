@@ -10,7 +10,7 @@ Aplikasi Point of Sale (POS) berbasis desktop yang menggabungkan kekuatan **Nest
 | **v1.0.1** | Windows, macOS | 01 Mei 2026 | Stable |
 | **v1.0.0** | Windows, Macos | 13 April 2026 | Initial |
 
-> **Catatan:** Anda dapat mengunduh aset instalasi (`.exe`, `.dmg`, `.AppImage`) melalui halaman [GitHub Releases](https://github.com/api-diengcyber/transaksi/releases).
+> **Catatan:** Anda dapat mengunduh aset instalasi (`.zip`, `.exe`, `.dmg`, `.AppImage`) melalui halaman [GitHub Releases](https://github.com/api-diengcyber/transaksi/releases).
 
 ## 🛠️ Fitur Utama
 - **Manajemen Inventaris:** Stok barang, mutasi, dan opname otomatis.
