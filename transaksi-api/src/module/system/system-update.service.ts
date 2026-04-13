@@ -29,7 +29,7 @@ export class SystemUpdateService {
     try {
       // 2. Jika sudah lewat 3 jam, tembak API GitHub
       const response = await axios.get(this.repoUrl);
-      const zipAsset = response.data.assets.find(asset => asset.name.endsWith('.zip'));
+      const zipAsset = response.data.assets.find(asset => asset.name.endsWith('bundle-release.zip'));
       
       // 3. Simpan ke cache
       this.cachedUpdateInfo = {
