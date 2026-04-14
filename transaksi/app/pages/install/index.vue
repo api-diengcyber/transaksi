@@ -11,6 +11,11 @@ const router = useRouter();
 const toast = useToast();
 const installService = useInstallService();
 
+const storeService = useStoreService();
+const storeSettings = ref({});
+const latestStore = ref(null);
+const storeExists = ref(true);
+
 // --- STATE ---
 const activeStep = ref(0);
 const loading = ref(false);

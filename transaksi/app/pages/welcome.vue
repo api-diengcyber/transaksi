@@ -4,6 +4,11 @@ definePageMeta({ layout: 'blank' });
 const { public: { appName } } = useRuntimeConfig();
 const router = useRouter();
 
+const storeService = useStoreService();
+const storeSettings = ref({});
+const latestStore = ref(null);
+const storeExists = ref(true);
+
 const welcomeCookie = useCookie('has_seen_welcome', {
   maxAge: 60 * 60 * 24 * 365 
 });
@@ -35,10 +40,57 @@ const slides = ref([
   }
 ]);
 
-const finishWelcome = () => {
+const finishWelcome = async () => {
   welcomeCookie.value = '1';
-  router.push('/');
+  await navigateTo('/login');
 };
+
+const checkStoreStatus = async () => {
+    try {
+        const response = await storeService.getSetupStatus();
+        const data = response?.data || response;
+        
+        if (data.exists && data.store) {
+            storeExists.value = true;
+            latestStore.value = data.store;
+
+            // Transformasi array settings menjadi Object
+            if (data.store.settings && Array.isArray(data.store.settings)) {
+                const mapped = {};
+                data.store.settings.forEach(s => {
+                    mapped[s.key] = s.value;
+                });
+                storeSettings.value = mapped;
+            }
+
+            // Terapkan warna tema dinamis ke CSS Variable agar komponen PrimeVue ikut berubah
+            if (storeSettings.value.theme_primary_color) {
+                const color = storeSettings.value.theme_primary_color.startsWith('#') 
+                    ? storeSettings.value.theme_primary_color 
+                    : `#${storeSettings.value.theme_primary_color}`;
+                
+                document.documentElement.style.setProperty('--primary-color', color);
+                document.documentElement.style.setProperty('--primary-600', color);
+            } else {
+                document.documentElement.style.setProperty('--primary-color', "#2563eb");
+                document.documentElement.style.setProperty('--primary-600', "#2563eb");
+            }
+        } else {
+            document.documentElement.style.setProperty('--primary-color', "#2563eb");
+            document.documentElement.style.setProperty('--primary-600', "#2563eb");
+            storeExists.value = false;
+        }
+    } catch (error) {
+        document.documentElement.style.setProperty('--primary-color', "#2563eb");
+        document.documentElement.style.setProperty('--primary-600', "#2563eb");
+        console.error('Gagal memuat status toko:', error);
+        storeExists.value = false;
+    }
+};
+
+onMounted(() => {
+    checkStoreStatus();
+});
 </script>
 
 <template>

@@ -5,6 +5,10 @@ import { useToast } from 'primevue/usetoast';
 
 definePageMeta({ layout: 'blank' });
 
+const { public: { apiBase, appVersion, appName } } = useRuntimeConfig();
+
+const displayAppName = (appName || 'Aplikasi').replace(/-/g, ' ').toUpperCase();
+
 const authService = useAuthService();
 const storeService = useStoreService();
 const router = useRouter();
@@ -172,15 +176,15 @@ const getThemeColor = (fallback) => {
                     <i v-else class="pi pi-shop text-5xl text-white"></i>
                 </div>
                 <h2 class="text-4xl font-black mb-4 tracking-tight uppercase drop-shadow-md">
-                    {{ latestStore?.name || 'RetailApp Pro' }}
+                    {{ latestStore?.name || displayAppName || 'Transaksi' }}
                 </h2>
                 <p class="text-lg text-white/90 font-light leading-relaxed drop-shadow">
-                    {{ latestStore?.address || 'Kelola toko Anda dengan lebih cerdas, pantau stok real-time, dan tingkatkan penjualan dengan sistem kasir modern.' }}
+                    {{ latestStore?.address || appVersion || 'Toko modern.' }}
                 </p>
             </div>
             
             <div class="absolute bottom-8 text-white/60 text-xs">
-                &copy; 2026 {{ latestStore?.name || 'RetailApp Inc' }}. All rights reserved.
+                &copy; 2026 {{ latestStore?.name || displayAppName || 'Transaksi' }}. All rights reserved.
             </div>
         </div>
 
