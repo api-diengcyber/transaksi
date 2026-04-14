@@ -19,17 +19,20 @@ const displayAppName = (appName || 'Aplikasi').replace(/-/g, ' ').toUpperCase();
 
 // Logika Pengecekan Initial
 const checkInitialFlow = () => {
-  const welcomeCookie = useCookie('has_seen_welcome');
+  // GANTI useCookie dengan localStorage
+  let hasSeenWelcome = '0';
+  if (process.client) {
+      hasSeenWelcome = localStorage.getItem('has_seen_welcome');
+  }
   
-  // Jika ini adalah halaman welcome, biarkan dia render, jangan jalankan loading API
   if (route.path === '/welcome') {
       isWelcomeChecked.value = false;
-      isApiReady.value = true; // Anggap "ready" agar NuxtLayout bisa ngerender welcome page
+      isApiReady.value = true; 
       return;
   }
 
-  // Jika bukan halaman welcome, pastikan cookie sudah 1 (Middleware sebenarnya sudah handle ini)
-  if (welcomeCookie.value === '1') {
+  // Cek nilai dari localStorage
+  if (hasSeenWelcome === '1') {
       isWelcomeChecked.value = true;
       checkApiStatus();
   }
@@ -68,11 +71,13 @@ const checkApiStatus = async () => {
 
 // Pantau perubahan rute (Jika user dari welcome klik "Mulai Sekarang" ke /login)
 watch(() => route.path, (newPath) => {
-    const welcomeCookie = useCookie('has_seen_welcome');
-    // Jika user pindah rute DARI welcome KE rute lain, dan cookie sudah 1
-    if (newPath !== '/welcome' && welcomeCookie.value === '1' && !isWelcomeChecked.value) {
+    let hasSeenWelcome = '0';
+    if (process.client) {
+        hasSeenWelcome = localStorage.getItem('has_seen_welcome');
+    }
+    if (newPath !== '/welcome' && hasSeenWelcome === '1' && !isWelcomeChecked.value) {
         isWelcomeChecked.value = true;
-        isApiReady.value = false; // Reset ready untuk memunculkan splash screen
+        isApiReady.value = false; 
         checkApiStatus();
     }
 });

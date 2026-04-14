@@ -9,10 +9,6 @@ const storeSettings = ref({});
 const latestStore = ref(null);
 const storeExists = ref(true);
 
-const welcomeCookie = useCookie('has_seen_welcome', {
-  maxAge: 60 * 60 * 24 * 365 
-});
-
 // State untuk mengontrol slide yang aktif
 const activePage = ref(0);
 
@@ -41,7 +37,7 @@ const slides = ref([
 ]);
 
 const finishWelcome = async () => {
-  welcomeCookie.value = '1';
+	localStorage.setItem('has_seen_welcome', 1);
   await navigateTo('/login');
 };
 
