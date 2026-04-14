@@ -10,27 +10,27 @@ import { GetStore } from '../../common/decorators/get-store.decorator';
 export class BankController {
   constructor(private readonly bankService: BankService) {}
 
-  @Get()
-  findAll(@GetStore() storeId: string) {
-    return this.bankService.findAll(storeId);
+  @Get('/get-all')
+  findAll(@GetStore() storeUuid: string) {
+    return this.bankService.findAll(storeUuid);
   }
 
-  @Post()
-  create(@Body() dto: CreateBankDto, @GetStore() storeId: string) {
-    return this.bankService.create(dto, storeId);
+  @Post('/create')
+  create(@Body() dto: CreateBankDto, @GetStore() storeUuid: string) {
+    return this.bankService.create(dto, storeUuid);
   }
 
-  @Put(':id')
+  @Put('/update/:id')
   update(
     @Param('id') id: string, 
     @Body() dto: UpdateBankDto, 
-    @GetStore() storeId: string
+    @GetStore() storeUuid: string
   ) {
-    return this.bankService.update(id, dto, storeId);
+    return this.bankService.update(id, dto, storeUuid);
   }
 
-  @Delete(':id')
-  delete(@Param('id') id: string, @GetStore() storeId: string) {
-    return this.bankService.delete(id, storeId); // Pass storeId untuk keamanan
+  @Delete('/remove/:id')
+  delete(@Param('id') id: string, @GetStore() storeUuid: string) {
+    return this.bankService.delete(id, storeUuid); // Pass storeUuid untuk keamanan
   }
 }

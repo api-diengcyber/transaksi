@@ -5,6 +5,7 @@ export const generateStoreUuid = () => `STR-${generateLocalUuid()}`;
 export const generateUserUuid = (storeUuid: string) => `${storeUuid}-USR-${generateLocalUuid()}`;
 export const generateStoreSettingUuid = (storeUuid: string) => `${storeUuid}-STG-${generateLocalUuid()}`;
 export const generateUserRoleUuid = (storeUuid: string) => `${storeUuid}-ROLE-${generateLocalUuid()}`;
+export const generateBankUuid = (storeUuid: string) => `${storeUuid}-BNK-${generateLocalUuid()}`;
 export const generateShelveUuid = (storeUuid: string) => `${storeUuid}-SHL-${generateLocalUuid()}`;
 export const generateWarehouseUuid = (storeUuid: string) => `${storeUuid}-WRH-${generateLocalUuid()}`;
 export const generateCategoryUuid = (storeUuid: string) => `${storeUuid}-CAT-${generateLocalUuid()}`;
@@ -20,3 +21,4 @@ export const generatePriceUuid = (storeUuid: string) => `${storeUuid}-PRC-${gene
 export const generatePriceGroupUuid = (storeUuid: string) => `${storeUuid}-PRCGRP-${generateLocalUuid()}`;
 export const generateBrandUuid = (storeUuid: string) => `${storeUuid}-BRD-${generateLocalUuid()}`;
 export const generateAccountUuid = (storeUuid: string) => `${storeUuid}-ACT\-${generateLocalUuid()}`;
+export const generatePaymentMethodUuid = (storeUuid: string) => `${storeUuid}-PAYMTD\-${generateLocalUuid()}`;

@@ -374,14 +374,26 @@ const saveProduct = async () => {
                 </div>
 
                 <template v-if="product.isManageStock">
-                    <div class="field mb-0 col-span-1">
-                        <label class="font-semibold text-sm mb-1.5 block text-surface-700">Stok Awal Utama</label>
-                        <InputNumber v-model="product.stock" placeholder="0" class="w-full" />
+                    <div class="field mb-0" :class="product.variants.length > 0 ? 'col-span-1 sm:col-span-3' : 'col-span-1 sm:col-span-2'">
+                        <label class="font-semibold text-sm mb-1.5 block text-surface-700">Rak / Lokasi (Bisa Multi) <span class="text-red-500">*</span></label>
+                        <MultiSelect 
+                            v-model="product.shelveUuids" 
+                            :options="shelves" 
+                            optionLabel="name" 
+                            optionValue="uuid" 
+                            placeholder="Pilih Rak" 
+                            display="chip" 
+                            :class="{'p-invalid': submitted && product.shelveUuids.length === 0}" 
+                            class="w-full" 
+                        />
                     </div>
 
-                    <div class="field mb-0 col-span-1 sm:col-span-2">
-                        <label class="font-semibold text-sm mb-1.5 block text-surface-700">Rak / Lokasi (Bisa Multi) <span class="text-red-500">*</span></label>
-                        <MultiSelect v-model="product.shelveUuids" :options="shelves" optionLabel="name" optionValue="uuid" placeholder="Pilih Rak" display="chip" :class="{'p-invalid': submitted && product.shelveUuids.length === 0}" class="w-full" />
+                    <div v-if="product.variants.length === 0" class="field mb-0 col-span-1">
+                        <label class="font-semibold text-sm mb-1.5 block text-surface-700">
+                            Stok Utama
+                            <i class="pi pi-info-circle text-xs text-primary-500 ml-1" v-tooltip.top="'Jika produk ini memiliki varian, atur stok pada masing-masing varian di bawah.'"></i>
+                        </label>
+                        <InputNumber v-model="product.stock" placeholder="0" class="w-full" :disabled="isEditMode" />
                     </div>
                 </template>
             </div>

@@ -3,16 +3,16 @@ import { ref, reactive, onMounted, watch } from "vue";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { useAuthStore } from "~/stores/auth.store";
-import { useRouter, useRoute } from 'vue-router'; // Perbaikan impor
+import { useRouter, useRoute } from 'vue-router';
 
-// Import komponen-komponen
+// Import komponen-komponen Tab
 import GeneralTab from "~/components/setting/GeneralTab.vue";
 import DisplayTab from "~/components/setting/DisplayTab.vue";
 import StoreManagementTab from "~/components/setting/StoreManagementTab.vue";
 import SalesTab from "~/components/setting/SalesTab.vue";
 import PurchaseTab from "~/components/setting/PurchaseTab.vue";
-import DeviceTab from "~/components/setting/DeviceTab.vue";
 import SyncTab from "~/components/setting/SyncTab.vue"; 
+import PaymentTab from "~/components/setting/PaymentTab.vue"; // <-- TAMBAHKAN IMPORT INI
 
 const router = useRouter();
 const route = useRoute();
@@ -23,16 +23,17 @@ const confirm = useConfirm();
 const activeTab = ref("general");
 const loading = ref(false);
 const initialLoading = ref(true);
-const fileInputRef = ref(null); // Reference untuk input file tersembunyi
+const fileInputRef = ref(null);
 
+// Tambahkan "payment" ke dalam daftar menuItems
 const menuItems = [
   { id: "general", label: "Identitas Toko", icon: "pi pi-building", desc: "Nama, alamat, dan kontak" },
   { id: "display", label: "Tampilan & Tata Letak", icon: "pi pi-palette", desc: "Tema warna dan posisi menu" },
   { id: "stores", label: "Manajemen Toko", icon: "pi pi-sitemap", desc: "Buat dan kelola toko" },
+  { id: "payment", label: "Metode Pembayaran", icon: "pi pi-wallet", desc: "Kelola kasir & rekening" }, // <-- TAMBAHKAN MENU INI
   { id: "sync", label: "Sinkronisasi", icon: "pi pi-sync", desc: "Koneksi data server" }, 
   { id: "sales", label: "Penjualan", icon: "pi pi-shopping-cart", desc: "Pajak, struk, dan stok" },
   { id: "purchase", label: "Pembelian", icon: "pi pi-truck", desc: "Supplier dan persetujuan" },
-  { id: "device", label: "Perangkat & Printer", icon: "pi pi-print", desc: "Konfigurasi hardware" },
 ];
 
 const settings = reactive({
@@ -121,19 +122,14 @@ const mapStateToPayload = () => {
 
 // --- FUNGSI EXPORT & IMPORT KONFIGURASI ---
 const exportConfig = () => {
-    // Kita ubah objek settings (dari state Vue) menjadi JSON string
     const configString = JSON.stringify(settings, null, 2);
-    
-    // Konversi string ke format Blob agar bisa didownload sebagai file .txt
     const blob = new Blob([configString], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     
-    // Penamaan file dinamis
     const storeNameSafe = (settings.store_name || 'toko').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `config_${storeNameSafe}_${dateStr}.txt`;
 
-    // Buat elemen <a> tersembunyi untuk memicu download
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', fileName);
@@ -146,7 +142,6 @@ const exportConfig = () => {
 };
 
 const triggerImportFile = () => {
-    // Membuka jendela pemilihan file lewat input hidden
     if (fileInputRef.value) {
         fileInputRef.value.click();
     }
@@ -156,7 +151,6 @@ const handleFileImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Pastikan file berekstensi .txt atau isinya plain text
     if (file.type !== 'text/plain' && !file.name.endsWith('.txt')) {
         toast.add({ severity: 'warn', summary: 'Format Salah', detail: 'Harap masukkan file berekstensi .txt', life: 3000 });
         return;
@@ -175,9 +169,7 @@ const handleFileImport = (event) => {
                 acceptLabel: "Ya, Import & Timpa",
                 rejectLabel: "Batal",
                 accept: () => {
-                    // Update state dengan data dari file
                     mapApiToState(importedData);
-                    // Langsung simpan ke server
                     saveSettings();
                     toast.add({ severity: 'success', summary: 'Import Berhasil', detail: 'Konfigurasi telah diterapkan.', life: 3000 });
                 }
@@ -186,13 +178,11 @@ const handleFileImport = (event) => {
         } catch (error) {
             toast.add({ severity: 'error', summary: 'File Corrupt', detail: 'File tidak dapat dibaca atau formatnya salah.', life: 3000 });
         } finally {
-            // Reset input file agar bisa import file yang sama lagi jika perlu
             event.target.value = '';
         }
     };
     reader.readAsText(file);
 };
-// ------------------------------------------
 
 // Fetching
 const fetchSettings = async () => {
@@ -276,7 +266,7 @@ definePageMeta({ layout: "default" });
           <p class="text-surface-500 text-sm mt-1">Kelola profil, toko, preferensi transaksi, dan sistem.</p>
         </div>
         
-        <div class="flex flex-wrap gap-3" v-if="activeTab !== 'stores'">
+        <div class="flex flex-wrap gap-3" v-if="!['stores', 'payment'].includes(activeTab)">
             <div class="flex gap-1 border-r border-surface-200 pr-3 mr-1">
                 <Button icon="pi pi-upload" severity="secondary" outlined v-tooltip.bottom="'Import Config dari .txt'" @click="triggerImportFile" :disabled="loading" />
                 <Button icon="pi pi-download" severity="secondary" outlined v-tooltip.bottom="'Export Config ke .txt'" @click="exportConfig" :disabled="loading" />
@@ -309,10 +299,10 @@ definePageMeta({ layout: "default" });
             <GeneralTab v-if="activeTab === 'general'" :settings="settings" :loading="loading" @refresh-store="fetchSettings" />
             <DisplayTab v-if="activeTab === 'display'" :settings="settings" />
             <StoreManagementTab v-if="activeTab === 'stores'" :settings="settings" />
+            <PaymentTab v-if="activeTab === 'payment'" />
             <SyncTab v-if="activeTab === 'sync'" :settings="settings" :loading="loading" /> 
             <SalesTab v-if="activeTab === 'sales'" :settings="settings" />
             <PurchaseTab v-if="activeTab === 'purchase'" :settings="settings" />
-            <DeviceTab v-if="activeTab === 'device'" :settings="settings" />
           </div>
         </main>
       </div>

@@ -9,7 +9,17 @@ export default defineNuxtConfig({
   app: {
     baseURL: '',
     cdnURL: '',
-    buildAssetsDir: 'assets' // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
+    // buildAssetsDir: 'assets' // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
+    head: {
+      script: [
+        {
+          children: `(function() {
+            const color = localStorage.getItem('nuxt-color-mode') || 'light';
+            if (color === 'dark') document.documentElement.classList.add('dark');
+          })()`
+        }
+      ]
+    }
   },
   router: {
     options: {
@@ -23,27 +33,30 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:3000',
-      appVersion: pkg.version || '1.0.0'
+      appVersion: pkg.version || '1.0.0',
+      appName: pkg.name || 'Transaksi'
     }
   },
   modules: [
     '@primevue/nuxt-module',
     '@nuxtjs/tailwindcss',
     '@pinia/nuxt',
-    '@pinia-plugin-persistedstate/nuxt',
+    'pinia-plugin-persistedstate/nuxt',
     '@nuxtjs/color-mode'
   ],
   colorMode: {
-    classSuffix: '',
     preference: 'system', 
-    fallback: 'light'
+    fallback: 'light',
+    classPrefix: '',
+    classSuffix: '',
+    storageKey: 'nuxt-color-mode'
   },
   primevue: {
     options: {
       theme: {
         preset: Aura,
         options: {
-          darkModeSelector: '.dark',
+          darkModeSelector: '.dark', 
         }
       },
       ripple: true,

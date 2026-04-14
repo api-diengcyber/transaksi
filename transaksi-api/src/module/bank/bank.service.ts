@@ -1,9 +1,9 @@
 import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { EntityManager, Like, Repository } from 'typeorm';
 import { BankEntity } from '../../common/entities/bank/bank.entity';
 import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
-import { generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateBankUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class BankService {
@@ -12,47 +12,65 @@ export class BankService {
     private bankRepository: Repository<BankEntity>,
   ) { }
 
-  async findAll(storeId: string) {
+  async findAll(storeUuid: string) {
     return this.bankRepository.find({
-      where: { store_id: storeId, is_active: true },
+      where: { 
+        uuid: Like(`${storeUuid}%`),
+        // is_active: true 
+      },
       order: { created_at: 'DESC' },
     });
   }
 
-  // Helper untuk mencari satu bank dengan validasi toko
-  async findOne(uuid: string, storeId: string) {
+  async findOne(uuid: string, storeUuid: string) {
     const bank = await this.bankRepository.findOne({
-      where: { uuid, store_id: storeId },
+      where: { uuid },
     });
     if (!bank) throw new NotFoundException('Bank tidak ditemukan atau akses ditolak');
     return bank;
   }
 
-  async create(data: CreateBankDto, storeId: string) {
-    // GENERATE UUID DENGAN PREFIX TOKO
-    const customUuid = `${storeId}-${generateLocalUuid()}`;
-
+  async create(data: CreateBankDto, storeUuid: string) {
     const bank = this.bankRepository.create({
       ...data,
-      uuid: customUuid, // Set UUID manual
-      store_id: storeId,
+      uuid: generateBankUuid(storeUuid),
       is_active: true
     });
     return this.bankRepository.save(bank);
   }
 
   async update(uuid: string, data: UpdateBankDto, storeId: string) {
-    // Pastikan bank ada dan milik toko ini sebelum update
     const existingBank = await this.findOne(uuid, storeId);
-    
-    // Update data
     const updatedBank = this.bankRepository.merge(existingBank, data);
     return this.bankRepository.save(updatedBank);
   }
 
   async delete(uuid: string, storeId: string) {
-    // Cek dulu apakah data milik toko ini
     const bank = await this.findOne(uuid, storeId);
     return this.bankRepository.remove(bank);
+  }
+
+  async createDefaults(storeUuid: string, manager: EntityManager) {
+    const defaultBanks = [
+      { bank_name: 'Bank BCA', bank_code: 'BCA' },
+      { bank_name: 'Bank Mandiri', bank_code: 'MANDIRI' },
+      { bank_name: 'Bank BNI', bank_code: 'BNI' },
+      { bank_name: 'Bank BRI', bank_code: 'BRI' },
+      { bank_name: 'Bank Syariah Indonesia (BSI)', bank_code: 'BSI' }
+    ];
+    const createdBanks: any[] = [];
+    for (const b of defaultBanks) {
+      const newBank = manager.create(BankEntity, {
+        uuid: generateBankUuid(storeUuid),
+        bank_name: b.bank_name,
+        bank_code: b.bank_code,
+        account_number: '', 
+        account_holder: '', 
+        is_active: true 
+      });
+      const savedBank = await manager.save(BankEntity, newBank);
+      createdBanks.push(savedBank);
+    }
+    return createdBanks;
   }
 }

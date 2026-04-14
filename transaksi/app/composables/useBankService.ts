@@ -1,25 +1,27 @@
 export const useBankService = () => {
+  const config = useRuntimeConfig();
+  const API_BASE = config.public.apiBase;
 
-  const getBanks = async () => {
-    return await useApi('/bank', { method: 'GET' });
+  const getAll = async () => {
+    return await useApi(`${API_BASE}/bank/get-all`, { method: 'GET' });
   };
 
-  const createBank = async (data: any) => {
-    return await useApi('/bank', { method: 'POST', body: data });
+  const create = async (data: any) => {
+    return await useApi(`${API_BASE}/bank/create`, { method: 'POST', body: data });
   };
 
-  const updateBank = async (id: string, data: any) => {
-    return await useApi(`/bank/${id}`, { method: 'PUT', body: data });
+  const update = async (id: string, data: any) => {
+    return await useApi(`${API_BASE}/bank/update/${id}`, { method: 'PUT', body: data });
   };
 
-  const deleteBank = async (id: string) => {
-    return await useApi(`/bank/${id}`, { method: 'DELETE' });
+  const remove = async (id: string) => {
+    return await useApi(`${API_BASE}/bank/remove/${id}`, { method: 'DELETE' });
   };
 
   return { 
-    getBanks, 
-    createBank, 
-    updateBank,
-    deleteBank 
+    getAll, 
+    create, 
+    update,
+    remove 
   };
 };

@@ -4,8 +4,6 @@ import * as path from 'path';
 
 @Injectable()
 export class SystemService {
-  // Tentukan path ke folder log Anda.
-  // Misalnya kita taruh di folder 'logs' di root project NestJS
   private readonly logDirectory = path.join(process.cwd(), 'logs');
   private readonly defaultLogFile = path.join(this.logDirectory, 'api.log');
 
@@ -21,7 +19,7 @@ export class SystemService {
   }
 
   // --- FUNGSI UNTUK MENULIS LOG (Opsional digunakan di Exception Filter) ---
-  writeLog(message: string, type: 'INFO' | 'ERROR' = 'INFO') {
+  writeLog(message: string, type: string) {
       const timestamp = new Date().toISOString();
       const logMessage = `[${timestamp}] [${type}] ${message}\n`;
       

@@ -7,9 +7,20 @@ import * as express from 'express';
 import { SystemService } from './module/system/system.service';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { SystemLogService } from './module/system/system-log.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // 1. Tambahkan opsi bufferLogs agar log bawaan ditahan dulu 
+  // sebelum SystemService siap diambil dari DI container
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true, 
+  });
+
+  // Ambil SystemService dari Dependency Injection Container
+  const systemLogService = app.get(SystemLogService);
+  
+  // 2. Jadikan SystemService sebagai Logger Global untuk NestJS
+  app.useLogger(systemLogService);
 
   app.enableCors({
     origin: '*',
@@ -22,7 +33,7 @@ async function bootstrap() {
   app.use('/uploads', express.static(join(process.cwd(), 'uploads'))); 
 
   // ============================
-  //     SWAGGER CONFIG
+  //      SWAGGER CONFIG
   // ============================
   const config = new DocumentBuilder()
     .setTitle('🛒 Transaksi API Documentation')
@@ -53,12 +64,10 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-
   SwaggerModule.setup('docs', app, document);
 
-  // Ambil SystemService dari Dependency Injection Container NestJS
   const systemService = app.get(SystemService);
-  
+
   // Pasang interceptor secara global
   app.useGlobalInterceptors(new LoggingInterceptor(systemService));
 

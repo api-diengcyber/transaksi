@@ -94,7 +94,7 @@ const items = ref([
             { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, 
             { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, 
             { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, 
-            { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, 
+            // { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, 
             // { label: 'Member', icon: 'pi pi-user', route: '/member' }, 
             // { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, 
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
@@ -224,7 +224,7 @@ const profileMenu = ref();
 const profileItems = ref([
     { label: 'Pengaturan Toko', icon: 'pi pi-cog', command: () => router.push('/setting') },
     // [BARU] Tambahkan menu Update Aplikasi di bawah pengaturan
-    { label: 'Update Aplikasi', icon: 'pi pi-cloud-download', class: 'text-primary-600 font-bold', command: () => router.push('/setting/update') },
+    { label: 'Update Aplikasi', icon: 'pi pi-cloud-download', command: () => router.push('/setting/update') },
     { separator: true },
     { label: 'Logout', icon: 'pi pi-sign-out', class: 'text-red-600 font-bold', command: async () => await authService.logout() }
 ]);

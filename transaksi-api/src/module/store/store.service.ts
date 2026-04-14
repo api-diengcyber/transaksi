@@ -20,6 +20,8 @@ import { WarehouseEntity } from 'src/common/entities/warehouse/warehouse.entity'
 import { PriceGroupEntity } from 'src/common/entities/price_group/price_group.entity';
 import { AccountService } from '../account/account.service';
 import { JournalConfigService } from '../journal_config/journal_config.service';
+import { PaymentMethodService } from '../payment_method/payment-method.service';
+import { BankService } from '../bank/bank.service';
 
 @Injectable()
 export class StoreService {
@@ -35,6 +37,8 @@ export class StoreService {
     private readonly categoryService: CategoryService,
     private readonly accountService: AccountService,
     private readonly journalConfigService: JournalConfigService,
+    private readonly bankService: BankService,
+    private readonly paymentMethodService: PaymentMethodService,
   ) { }
 
   async installStore(dto: InstallStoreDto, logoPath: string | null = null, originalName: string | null = null) {
@@ -219,6 +223,12 @@ export class StoreService {
              await manager.save(defaultMember);
           }
       }
+
+      // bank default
+      const createdBanks = await this.bankService.createDefaults(customStoreUuid, manager);
+
+      // payment methods default
+      await this.paymentMethodService.createDefaults(customStoreUuid, createdBanks, manager);
 
       // accounts default
       await this.accountService.createDefaultAccounts(customStoreUuid, manager);

@@ -15,7 +15,6 @@ import { CreateBranchDto } from './dto/create-branch.dto';
 export class StoreController {
   constructor(private readonly storeService: StoreService) { }
 
-  // [REVISI KRITIS] Endpoint Install diubah untuk menerima file dan body JSON
   @Post('install')
   @ApiConsumes('multipart/form-data') // Wajib untuk menerima file
   @ApiOperation({ summary: 'Installs new store with optional logo upload' })

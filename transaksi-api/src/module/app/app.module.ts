@@ -23,6 +23,7 @@ import { IeModule } from '../ie/ie.module';
 import { SystemUpdateModule } from '../system/system-update.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { SystemModule } from '../system/system.module';
+import { PaymentMethodModule } from '../payment_method/payment-method.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { SystemModule } from '../system/system.module';
     MediaModule,
     DashboardModule,
     IeModule,
+    PaymentMethodModule,
     SystemUpdateModule,
     SystemModule,
   ],

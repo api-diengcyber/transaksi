@@ -1,3 +1,4 @@
+// src/common/entities/bank/bank.entity.ts
 import { Column, Entity, PrimaryColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('banks')
@@ -6,19 +7,20 @@ export class BankEntity {
   uuid: string;
 
   @Column()
-  bank_name: string;
+  bank_name: string; // Contoh: BCA, Mandiri, BNI
+
+  // [BARU] Penambahan kode per id bank/rekening
+  @Column({ nullable: true, length: 50 })
+  bank_code: string; // Contoh: bca, bni, mandiri
 
   @Column()
-  account_number: string;
+  account_number: string; // Nomor Rekening
 
   @Column()
-  account_holder: string;
+  account_holder: string; // Nama Pemilik Rekening
 
   @Column({ default: true })
   is_active: boolean;
-
-  @Column({ nullable: true })
-  store_id: string;
 
   @CreateDateColumn()
   created_at: Date;

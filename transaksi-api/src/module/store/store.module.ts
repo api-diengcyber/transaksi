@@ -13,6 +13,8 @@ import { CategoryModule } from '../category/category.module';
 import { StorePublicController } from './store-public.controller';
 import { AccountModule } from '../account/account.module';
 import { JournalConfigModule } from '../journal_config/journal_config.module';
+import { PaymentMethodModule } from '../payment_method/payment-method.module';
+import { BankModule } from '../bank/bank.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { JournalConfigModule } from '../journal_config/journal_config.module';
     CategoryModule,
     AccountModule,
     JournalConfigModule,
+    BankModule,
+    PaymentMethodModule,
     MulterModule.register({
       dest: './uploads', 
     }),
