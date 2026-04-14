@@ -1,4 +1,7 @@
 <script setup>
+import { ref, reactive, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+
 definePageMeta({ layout: 'blank' }); 
 
 const { public: { appName } } = useRuntimeConfig();
@@ -37,11 +40,47 @@ const slides = ref([
 ]);
 
 const finishWelcome = async () => {
-	localStorage.setItem('has_seen_welcome', 1);
+  if (process.client) {
+    localStorage.setItem('has_seen_welcome', '1');
+  }
   await navigateTo('/login');
 };
 
+// Memaksa tema Biru (Primary Default Tailwind) khusus di halaman Welcome
+const applyDefaultBlueTheme = () => {
+    if (!process.client) return;
+    
+    // Kumpulan shade warna biru (blue-500 hingga blue-900)
+    const blueTheme = {
+        '50': '#eff6ff',
+        '100': '#dbeafe',
+        '200': '#bfdbfe',
+        '300': '#93c5fd',
+        '400': '#60a5fa',
+        '500': '#3b82f6', // Primary utama
+        '600': '#2563eb', // Hover state biasa
+        '700': '#1d4ed8',
+        '800': '#1e40af',
+        '900': '#1e3a8a',
+        '950': '#172554',
+    };
+
+    // Apply ke variabel CSS basic
+    document.documentElement.style.setProperty('--primary-color', blueTheme['500']);
+    document.documentElement.style.setProperty('--primary-500', blueTheme['500']);
+    document.documentElement.style.setProperty('--primary-600', blueTheme['600']);
+    
+    // Inject seluruh spectrum untuk format var(--p-primary-500) bawaan Aura/Tailwind
+    for (const [shade, color] of Object.entries(blueTheme)) {
+        document.documentElement.style.setProperty(`--p-primary-${shade}`, color);
+    }
+};
+
 const checkStoreStatus = async () => {
+    // Apapun hasil dari check store (karena ini cuma halaman welcome depan),
+    // kita paksa UI ke tema biru default agar rapi.
+    applyDefaultBlueTheme();
+    
     try {
         const response = await storeService.getSetupStatus();
         const data = response?.data || response;
@@ -49,36 +88,10 @@ const checkStoreStatus = async () => {
         if (data.exists && data.store) {
             storeExists.value = true;
             latestStore.value = data.store;
-
-            // Transformasi array settings menjadi Object
-            if (data.store.settings && Array.isArray(data.store.settings)) {
-                const mapped = {};
-                data.store.settings.forEach(s => {
-                    mapped[s.key] = s.value;
-                });
-                storeSettings.value = mapped;
-            }
-
-            // Terapkan warna tema dinamis ke CSS Variable agar komponen PrimeVue ikut berubah
-            if (storeSettings.value.theme_primary_color) {
-                const color = storeSettings.value.theme_primary_color.startsWith('#') 
-                    ? storeSettings.value.theme_primary_color 
-                    : `#${storeSettings.value.theme_primary_color}`;
-                
-                document.documentElement.style.setProperty('--primary-color', color);
-                document.documentElement.style.setProperty('--primary-600', color);
-            } else {
-                document.documentElement.style.setProperty('--primary-color', "#2563eb");
-                document.documentElement.style.setProperty('--primary-600', "#2563eb");
-            }
         } else {
-            document.documentElement.style.setProperty('--primary-color', "#2563eb");
-            document.documentElement.style.setProperty('--primary-600', "#2563eb");
             storeExists.value = false;
         }
     } catch (error) {
-        document.documentElement.style.setProperty('--primary-color', "#2563eb");
-        document.documentElement.style.setProperty('--primary-600', "#2563eb");
         console.error('Gagal memuat status toko:', error);
         storeExists.value = false;
     }
@@ -90,7 +103,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-100 dark:bg-slate-900 font-sans flex flex-col justify-center">
+  <div class="min-h-screen bg-slate-100 dark:bg-slate-900 font-sans flex flex-col justify-center transition-colors duration-300">
 
     <Carousel 
       v-model:page="activePage"
@@ -150,7 +163,7 @@ onMounted(() => {
                 v-else 
                 label="Mulai Sekarang" 
                 icon="pi pi-check" 
-                class="px-6 font-semibold shadow-md"
+                class="px-6 font-semibold shadow-md bg-primary-600 hover:bg-primary-700 border-none text-white"
                 @click="finishWelcome" 
               />
               

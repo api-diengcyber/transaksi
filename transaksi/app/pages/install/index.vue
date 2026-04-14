@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
+
 // Import color mode dari Nuxt
 const colorMode = useColorMode();
 
@@ -10,8 +11,8 @@ definePageMeta({ layout: 'blank' });
 const router = useRouter();
 const toast = useToast();
 const installService = useInstallService();
-
 const storeService = useStoreService();
+
 const storeSettings = ref({});
 const latestStore = ref(null);
 const storeExists = ref(true);
@@ -30,11 +31,9 @@ const steps = ref([
 ]);
 
 const form = reactive({
-    // Store
     name: '',
     storeAddress: '',
     storePhone: '',
-    // User
     username: '',
     email: '',
     password: '',
@@ -42,6 +41,34 @@ const form = reactive({
 });
 
 // --- LOGIC ---
+
+// Memaksa tema Biru (Primary Default Tailwind) khusus di halaman Install
+const applyDefaultBlueTheme = () => {
+    // Kumpulan shade warna biru (blue-500 hingga blue-900)
+    const blueTheme = {
+        '50': '#eff6ff',
+        '100': '#dbeafe',
+        '200': '#bfdbfe',
+        '300': '#93c5fd',
+        '400': '#60a5fa',
+        '500': '#3b82f6', // Primary utama
+        '600': '#2563eb', // Hover state biasa
+        '700': '#1d4ed8',
+        '800': '#1e40af',
+        '900': '#1e3a8a',
+        '950': '#172554',
+    };
+
+    // Apply ke variabel CSS yang di-recognize PrimeVue & Tailwind
+    document.documentElement.style.setProperty('--primary-color', blueTheme['500']);
+    document.documentElement.style.setProperty('--primary-500', blueTheme['500']);
+    document.documentElement.style.setProperty('--primary-600', blueTheme['600']);
+    
+    // Inject seluruh spectrum jika Anda menggunakan format var(--p-primary-500) bawaan Aura
+    for (const [shade, color] of Object.entries(blueTheme)) {
+        document.documentElement.style.setProperty(`--p-primary-${shade}`, color);
+    }
+};
 
 // Fungsi Toggle Theme
 const toggleTheme = () => {
@@ -149,38 +176,18 @@ const checkStoreStatus = async () => {
         if (data.exists && data.store) {
             storeExists.value = true;
             latestStore.value = data.store;
-
-            // Transformasi array settings menjadi Object
-            if (data.store.settings && Array.isArray(data.store.settings)) {
-                const mapped = {};
-                data.store.settings.forEach(s => {
-                    mapped[s.key] = s.value;
-                });
-                storeSettings.value = mapped;
-            }
-
-            // Terapkan warna tema dinamis ke CSS Variable agar komponen PrimeVue ikut berubah
-            if (storeSettings.value.theme_primary_color) {
-                const color = storeSettings.value.theme_primary_color.startsWith('#') 
-                    ? storeSettings.value.theme_primary_color 
-                    : `#${storeSettings.value.theme_primary_color}`;
-                
-                document.documentElement.style.setProperty('--primary-color', color);
-                document.documentElement.style.setProperty('--primary-600', color);
-            } else {
-                document.documentElement.style.setProperty('--primary-color', "#2563eb");
-                document.documentElement.style.setProperty('--primary-600', "#2563eb");
-            }
+            
+            // Jika toko sudah ada, lempar user kembali ke halaman utama / login
+            router.push('/login'); 
         } else {
-            document.documentElement.style.setProperty('--primary-color', "#2563eb");
-            document.documentElement.style.setProperty('--primary-600', "#2563eb");
             storeExists.value = false;
+            // Terapkan default Biru karena belum ada setting toko
+            applyDefaultBlueTheme();
         }
     } catch (error) {
-        document.documentElement.style.setProperty('--primary-color', "#2563eb");
-        document.documentElement.style.setProperty('--primary-600', "#2563eb");
         console.error('Gagal memuat status toko:', error);
         storeExists.value = false;
+        applyDefaultBlueTheme();
     }
 };
 
@@ -190,13 +197,13 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-600 to-primary-900 p-4 relative transition-colors duration-300">
+    <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary-500 to-primary-800 p-4 relative transition-colors duration-300">
         <Toast />
 
         <div class="absolute top-4 right-4 md:top-8 md:right-8 z-50 flex items-center gap-3">
              <Button 
                 :icon="colorMode.value === 'dark' ? 'pi pi-sun' : 'pi pi-moon'" 
-                class="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20 backdrop-blur-sm transition-all" 
+                class="!bg-white/20 !text-white !border-white/30 hover:!bg-white/30 backdrop-blur-md shadow-lg transition-all" 
                 rounded
                 v-tooltip.bottom="colorMode.value === 'dark' ? 'Mode Terang' : 'Mode Gelap'"
                 @click="toggleTheme" 
@@ -205,7 +212,7 @@ onMounted(() => {
              <Button 
                 label="Kembali ke Login" 
                 icon="pi pi-sign-in" 
-                class="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20 backdrop-blur-sm transition-all" 
+                class="!bg-white/20 !text-white !border-white/30 hover:!bg-white/30 backdrop-blur-md shadow-lg transition-all" 
                 size="small" 
                 @click="goToLogin" 
             />
@@ -215,7 +222,7 @@ onMounted(() => {
             
             <div class="w-full md:w-1/3 bg-surface-50 p-8 flex flex-col justify-between border-r border-surface-200">
                 <div>
-                    <div class="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-6 shadow-lg">R</div>
+                    <div class="w-12 h-12 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-6 shadow-lg">W</div>
                     <h1 class="text-2xl font-bold mb-2 text-surface-900">Setup Wizard</h1>
                     <p class="text-surface-500 text-sm leading-relaxed">
                         Selamat datang! Mari siapkan Toko dan Akun Admin Anda.
@@ -275,7 +282,7 @@ onMounted(() => {
                         </div>
                     </div>
                     <div class="mt-8 flex justify-end">
-                        <Button label="Lanjut ke Akun" icon="pi pi-arrow-right" iconPos="right" @click="nextStep" />
+                        <Button label="Lanjut ke Akun" icon="pi pi-arrow-right" iconPos="right" @click="nextStep" class="bg-primary-600 hover:bg-primary-700 text-white" />
                     </div>
                 </div>
 
@@ -305,7 +312,7 @@ onMounted(() => {
                     </div>
                     <div class="mt-8 flex justify-between">
                          <Button label="Kembali" icon="pi pi-arrow-left" text @click="prevStep" severity="secondary" />
-                        <Button label="Install & Selesai" icon="pi pi-check" :loading="loading" @click="handleInstall" severity="success" />
+                        <Button label="Install & Selesai" icon="pi pi-check" :loading="loading" @click="handleInstall" class="bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500" />
                     </div>
                 </div>
 
@@ -318,7 +325,7 @@ onMounted(() => {
                         Toko <strong>{{ form.name }}</strong> telah dibuat.<br>
                         Silakan login menggunakan akun <strong class="text-surface-900">{{ form.username }}</strong> yang telah dibuat.
                     </p>
-                    <Button label="Masuk Halaman Login" icon="pi pi-sign-in" size="large" @click="goToLogin" class="px-8 py-3 shadow-lg shadow-primary-500/30" />
+                    <Button label="Masuk Halaman Login" icon="pi pi-sign-in" size="large" @click="goToLogin" class="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white shadow-lg shadow-primary-500/30 border-none" />
                 </div>
 
             </div>
