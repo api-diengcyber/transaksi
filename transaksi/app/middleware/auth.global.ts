@@ -12,6 +12,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
     }
 
     // 1. Pengecekan Halaman Welcome via localStorage
+    // console.log("hasSeenWelcome: " + hasSeenWelcome);
     if (hasSeenWelcome !== '1' && to.path !== '/welcome') {
         console.log('🛑 User belum melewati Welcome Page, redirecting...');
         return navigateTo('/welcome');
@@ -28,7 +29,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
         }
     } else {
         // 3. Jika user sudah login (Ada token)
-        if (to.path === '/login' || to.path === '/welcome') {
+        if (to.path === '/login') {
             console.log('✅ User already logged in, redirecting to home...');
             return navigateTo('/');
         }

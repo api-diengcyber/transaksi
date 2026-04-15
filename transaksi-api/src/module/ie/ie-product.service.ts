@@ -1,7 +1,8 @@
 // src/module/ie/ie-product.service.ts
 import { Injectable, Inject, InternalServerErrorException } from '@nestjs/common';
 import { ProductService } from '../product/product.service';
-import { Repository } from 'typeorm';
+import { JournalStokService } from '../journal/journal-stok.service'; // <-- [BARU] Import JournalStokService
+import { Repository, DataSource } from 'typeorm'; // <-- [BARU] Perlu DataSource jika pakai transaction manager
 import * as ExcelJS from 'exceljs';
 import * as stream from 'stream';
 import * as crypto from 'crypto';
@@ -13,11 +14,14 @@ import { UnitEntity } from 'src/common/entities/unit/unit.entity';
 import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
 import { PriceGroupEntity } from 'src/common/entities/price_group/price_group.entity';
 import { generateCategoryUuid, generateBrandUuid, generateUnitUuid, generateShelveUuid } from 'src/common/utils/generate_uuid_util';
+import { ProductVariantEntity } from 'src/common/entities/product_variant/product_variant.entity';
 
 @Injectable()
 export class IeProductService {
   constructor(
     private readonly productService: ProductService,
+    private readonly journalStokService: JournalStokService, // <-- [BARU] Inject JournalStokService
+    @Inject('DATA_SOURCE') private readonly dataSource: DataSource, // <-- [BARU] Untuk Transaction
     @Inject('PRODUCT_REPOSITORY') private readonly productRepo: Repository<ProductEntity>,
     @Inject('CATEGORY_REPOSITORY') private readonly categoryRepo: Repository<CategoryEntity>,
     @Inject('BRAND_REPOSITORY') private readonly brandRepo: Repository<BrandEntity>,
@@ -26,7 +30,7 @@ export class IeProductService {
     @Inject('PRICE_GROUP_REPOSITORY') private readonly priceGroupRepo: Repository<PriceGroupEntity>,
   ) {}
 
-  // Helper untuk Ekspor Harga
+  // Helper untuk Ekspor Harga (Tidak berubah)
   private extractPrices(pricesArray: any[]) {
     let hn = 0, hm = 0, mgn = 0, hgn = 0, mgm = 0, hgm = 0;
     if (pricesArray && pricesArray.length > 0) {
@@ -55,11 +59,18 @@ export class IeProductService {
         this.shelveRepo.find(),
       ]);
 
+      // [BARU] Tarik stok dari Jurnal untuk seluruh produk
+      const productUuids = products.map(p => p.uuid);
+      let systemStockMap = new Map<string, number>();
+      if (productUuids.length > 0) {
+        systemStockMap = await this.journalStokService.calculateStockFromJournal(productUuids, storeUuid);
+      }
+
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'RetailApp Pro';
       
       const wsProducts = workbook.addWorksheet('Produk');
-      const wsVariants = workbook.addWorksheet('Varian Produk'); // <-- TAB VARIAN
+      const wsVariants = workbook.addWorksheet('Varian Produk'); 
       const wsCategories = workbook.addWorksheet('Kategori');
       const wsBrands = workbook.addWorksheet('Merek');
       const wsUnits = workbook.addWorksheet('Satuan');
@@ -79,38 +90,38 @@ export class IeProductService {
 
       // --- STRUKTUR KOLOM PRODUK ---
       wsProducts.columns = [
-        { header: 'UUID', key: 'uuid', width: 40 },                     // A
-        { header: 'Kode Produk', key: 'productCode', width: 20 },       // B
-        { header: 'Nama Produk', key: 'name', width: 35 },              // C (Ini yang akan di-lookup)
-        { header: 'Barcode', key: 'barcode', width: 20 },               // D
-        { header: 'Kategori', key: 'category', width: 25 },             // E
-        { header: 'Merek', key: 'brand', width: 25 },                   // F
-        { header: 'Satuan', key: 'unit', width: 20 },                   // G
-        { header: 'Lokasi Rak', key: 'shelve', width: 25 },             // H
-        { header: 'Kelola Stok', key: 'manageStock', width: 15 },       // I
-        { header: 'Sistem HPP', key: 'hppMethod', width: 15 },          // J
-        { header: 'PPN Jual (%)', key: 'saleTax', width: 15 },          // K
-        { header: 'Stok', key: 'stock', width: 15 },                    // L
-        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },      // M
-        { header: 'Harga Member', key: 'hargaMember', width: 20 },      // N
-        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, // O
-        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, // P
-        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, // Q
-        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, // R
+        { header: 'UUID', key: 'uuid', width: 40 },                     
+        { header: 'Kode Produk', key: 'productCode', width: 20 },       
+        { header: 'Nama Produk', key: 'name', width: 35 },              
+        { header: 'Barcode', key: 'barcode', width: 20 },               
+        { header: 'Kategori', key: 'category', width: 25 },             
+        { header: 'Merek', key: 'brand', width: 25 },                   
+        { header: 'Satuan', key: 'unit', width: 20 },                   
+        { header: 'Lokasi Rak', key: 'shelve', width: 25 },             
+        { header: 'Kelola Stok', key: 'manageStock', width: 15 },       
+        { header: 'Sistem HPP', key: 'hppMethod', width: 15 },          
+        { header: 'PPN Jual (%)', key: 'saleTax', width: 15 },          
+        { header: 'Stok', key: 'stock', width: 15 },                    // Diisi dari Journal
+        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },      
+        { header: 'Harga Member', key: 'hargaMember', width: 20 },      
+        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, 
+        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, 
+        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, 
+        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, 
       ];
 
-      // --- STRUKTUR KOLOM VARIAN (Hanya Lookup ke Produk) ---
+      // --- STRUKTUR KOLOM VARIAN ---
       wsVariants.columns = [
-        { header: 'Nama Produk (Pilih)', key: 'productName', width: 35 }, // A (Dropdown Lookup)
-        { header: 'Nama Varian', key: 'name', width: 35 },                // B
-        { header: 'Barcode', key: 'barcode', width: 20 },                 // C
-        { header: 'Stok', key: 'stock', width: 15 },                      // D
-        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },        // E
-        { header: 'Harga Member', key: 'hargaMember', width: 20 },        // F
-        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, // G
-        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, // H
-        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, // I
-        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, // J
+        { header: 'Nama Produk (Pilih)', key: 'productName', width: 35 }, 
+        { header: 'Nama Varian', key: 'name', width: 35 },                
+        { header: 'Barcode', key: 'barcode', width: 20 },                 
+        { header: 'Stok', key: 'stock', width: 15 },                      // Diisi dari Journal (Key digabung)
+        { header: 'Harga Normal', key: 'hargaNormal', width: 20 },        
+        { header: 'Harga Member', key: 'hargaMember', width: 20 },        
+        { header: 'Min Grosir Normal', key: 'minGrosirNormal', width: 20 }, 
+        { header: 'Harga Grosir Normal', key: 'hargaGrosirNormal', width: 20 }, 
+        { header: 'Min Grosir Member', key: 'minGrosirMember', width: 20 }, 
+        { header: 'Harga Grosir Member', key: 'hargaGrosirMember', width: 20 }, 
       ];
 
       wsProducts.getRow(1).font = { bold: true };
@@ -123,6 +134,9 @@ export class IeProductService {
       products.forEach(p => {
         const productCategory = categories.find(c => c.uuid === p.categoryUuid);
         const pPrices = this.extractPrices(p.prices);
+        
+        // [BARU] Ambil Stok Utama dari Journal Map (Key format: productUuid_null)
+        const mainStock = systemStockMap.get(`${p.uuid}_null`) || 0;
 
         // Baris Induk (Produk)
         wsProducts.addRow({
@@ -137,7 +151,7 @@ export class IeProductService {
           manageStock: p.isManageStock ? 'Ya' : 'Tidak',
           hppMethod: p.hppMethod || 'FIFO',
           saleTax: p.saleTaxPercentage ? Number(p.saleTaxPercentage) : 0,
-          stock: (p as any).stock || 0,
+          stock: mainStock, // <-- Disematkan dari Journal
           hargaNormal: pPrices.hn,
           hargaMember: pPrices.hm,
           minGrosirNormal: pPrices.mgn,
@@ -146,15 +160,19 @@ export class IeProductService {
           hargaGrosirMember: pPrices.hgm,
         });
 
-        // Baris Anak (Varian) diletakkan di Tab Varian menggunakan referensi Nama
+        // Baris Anak (Varian)
         if (p.variants && p.variants.length > 0) {
           p.variants.forEach(v => {
             const vPrices = this.extractPrices(v.prices);
+            
+            // [BARU] Ambil Stok Varian dari Journal Map (Key format: productUuid_variantUuid)
+            const variantStock = systemStockMap.get(`${p.uuid}_${v.uuid}`) || 0;
+
             wsVariants.addRow({
-              productName: p.name, // Otomatis mengisi lookup nama produk
+              productName: p.name, 
               name: v.name,
               barcode: (v as any).barcode || '-',
-              stock: (v as any).stock || 0,
+              stock: variantStock, // <-- Disematkan dari Journal
               hargaNormal: vPrices.hn,
               hargaMember: vPrices.hm,
               minGrosirNormal: vPrices.mgn,
@@ -166,10 +184,9 @@ export class IeProductService {
         }
       });
 
-      // 5. VALIDASI DROPDOWN EXCEL
+      // 5. VALIDASI DROPDOWN EXCEL (Tidak berubah)
       if (format !== 'csv') {
         for (let i = 2; i <= 1000; i++) {
-          // Dropdown untuk Master di Sheet Produk
           if (categories.length > 0) wsProducts.getCell(`E${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Kategori!$B$2:$B$${categories.length + 1}`] };
           if (brands.length > 0) wsProducts.getCell(`F${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Merek!$B$2:$B$${brands.length + 1}`] };
           if (units.length > 0) wsProducts.getCell(`G${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`Satuan!$B$2:$B$${units.length + 1}`] };
@@ -177,8 +194,6 @@ export class IeProductService {
           wsProducts.getCell(`I${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Ya,Tidak"'] };
           wsProducts.getCell(`J${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['"FIFO,LIFO,AVERAGE"'] };
 
-          // --- DROPDOWN LOOKUP PRODUK DI SHEET VARIAN ---
-          // Mengambil range dari Sheet "Produk", Kolom C (Nama Produk)
           wsVariants.getCell(`A${i}`).dataValidation = { 
             type: 'list', 
             allowBlank: true, 
@@ -293,10 +308,8 @@ export class IeProductService {
 
       name = name.replace('↳', '').trim();
 
-      // Jika baris adalah Induk Produk
       if (tipe === 'PRODUK' || (!tipe && row['Kategori']) || (row['Nama Produk'] && !row['Nama Produk/Varian'])) {
         
-        // Tarik Varian yang Lookup ke Nama Produk Ini
         const myVariantsFromTab = variantsData.filter((v: any) => {
            const variantProductName = v['Nama Produk (Pilih)'] || v['Nama Produk (Referensi)'];
            if (name && variantProductName === name) return true;
@@ -307,14 +320,13 @@ export class IeProductService {
         groupedProducts.push(currentProd);
 
       } else if (tipe === 'VARIAN' || (!tipe && !row['Kategori'])) {
-        // Fallback untuk Excel format sub-baris lama (jika user masih pakai yang lama)
         if (currentProd) {
           currentProd.variants.push({ row, nameCleaned: name });
         }
       }
     }
 
-    // --- STEP 2: PROSES KE DATABASE ---
+    // --- STEP 2: PROSES KE DATABASE & JURNAL ---
     let successCount = 0;
     let failedCount = 0;
     const errors: string[] = []; 
@@ -335,6 +347,11 @@ export class IeProductService {
       const barcode = row['Barcode'] && row['Barcode'] !== '-' ? row['Barcode'] : undefined;
       const productCode = row['Kode Produk'] && row['Kode Produk'] !== '-' ? row['Kode Produk'] : undefined;
 
+      // [BARU] Inisialisasi transaction agar pembuatan produk dan jurnal sinkron
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
       try {
         const whereCondition: any[] = [];
         if (productCode) whereCondition.push({ productCode });
@@ -346,6 +363,7 @@ export class IeProductService {
         if (existingProduct) {
           failedCount++;
           errors.push(`Baris ${item.rowNumber}: Produk "${name}" sudah ada di sistem (Lewati).`);
+          await queryRunner.rollbackTransaction();
           continue; 
         }
 
@@ -364,6 +382,8 @@ export class IeProductService {
           shelveUuids = allShelves.filter(s => shelveNames.includes(s.name)).map(s => s.uuid);
         }
 
+        const isManageStock = row['Kelola Stok'] === 'Ya' || row['Kelola Stok'] === 'TRUE';
+
         let saleTaxPercentage = 0;
         if (row['PPN Jual (%)']) {
             const parsedTax = parseFloat(String(row['PPN Jual (%)']).replace('%', '').trim());
@@ -374,7 +394,7 @@ export class IeProductService {
            return {
              name: v.nameCleaned,
              barcode: v.row['Barcode'] && v.row['Barcode'] !== '-' ? v.row['Barcode'] : undefined,
-             stock: Number(v.row['Stok'] || 0),
+             // Jangan kirim stock ke Create DTO karena entity variant tidak ada field stock
              prices: parsePricesDto(v.row)
            };
         });
@@ -386,22 +406,82 @@ export class IeProductService {
           unitUuid: unit?.uuid,
           categoryUuid: categoryUuid,
           brandUuid: brand?.uuid,
-          isManageStock: row['Kelola Stok'] === 'Ya' || row['Kelola Stok'] === 'TRUE',
+          isManageStock: isManageStock,
           hppMethod: ['FIFO', 'LIFO', 'AVERAGE'].includes(row['Sistem HPP']?.toString().toUpperCase()) ? row['Sistem HPP'].toUpperCase() : 'FIFO',
           saleTaxPercentage: saleTaxPercentage, 
           conversionQty: 1,
-          stock: Number(row['Stok'] || 0),
+          // Jangan kirim stock ke Create DTO
           prices: parsePricesDto(row),
           variants: variantsDto,
           shelveUuids: shelveUuids,
         };
 
-        await this.productService.create(dto, storeUuid, userId);
+        // 1. Simpan Produk ke Database via ProductService
+        const createdProduct = await this.productService.create(dto, storeUuid, userId, queryRunner.manager);
+
+        // 2. Jika isManageStock = true, buat Jurnal Stok Awal
+        if (isManageStock && createdProduct) {
+            const stockJournalItems: any[] = [];
+            const defaultShelveUuid = shelveUuids.length > 0 ? shelveUuids[0] : null;
+
+            // Jika tidak ada varian, gunakan stok dari kolom utama
+            if (variantsDto.length === 0) {
+                const mainStockQty = Number(row['Stok'] || 0);
+                if (mainStockQty > 0) {
+                    stockJournalItems.push({
+                        productUuid: createdProduct.uuid,
+                        variantUuid: null,
+                        unitUuid: unit?.uuid,
+                        shelveUuid: defaultShelveUuid,
+                        qty: mainStockQty
+                    });
+                }
+            } 
+            // Jika ada varian, loop varian untuk mencatat stok masing-masing
+            else {
+                // Diperlukan query untuk mengambil uuid varian yang baru saja dibuat
+                const savedVariants = await queryRunner.manager.find(ProductVariantEntity, {
+                    where: { productUuid: createdProduct.uuid }
+                });
+
+                item.variants.forEach((vObj) => {
+                    const variantStockQty = Number(vObj.row['Stok'] || 0);
+                    if (variantStockQty > 0) {
+                        const matchedVariant = savedVariants.find((sv: any) => sv.name === vObj.nameCleaned);
+                        if (matchedVariant) {
+                            stockJournalItems.push({
+                                productUuid: createdProduct.uuid,
+                                variantUuid: matchedVariant.uuid,
+                                unitUuid: unit?.uuid,
+                                shelveUuid: defaultShelveUuid,
+                                qty: variantStockQty
+                            });
+                        }
+                    }
+                });
+            }
+
+            // Eksekusi Pembuatan Jurnal (Tipe: STOCK_IN) jika array tidak kosong
+            if (stockJournalItems.length > 0) {
+                await this.journalStokService.stockIn(
+                    stockJournalItems, 
+                    userId, 
+                    queryRunner.manager, 
+                    storeUuid, 
+                    'Saldo Awal (Import Excel)'
+                );
+            }
+        }
+
+        await queryRunner.commitTransaction();
         successCount++;
         
       } catch (error) {
+        await queryRunner.rollbackTransaction();
         failedCount++;
-        errors.push(`Baris ${item.rowNumber} (${name}): ${error}`);
+        errors.push(`Baris ${item.rowNumber} (${name}): ${error || error}`);
+      } finally {
+        await queryRunner.release();
       }
     }
 

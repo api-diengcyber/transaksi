@@ -3,6 +3,7 @@ import { ref, computed, watch, reactive } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useAuthStore } from '~/stores/auth.store';
 import { useJournalService } from '~/composables/useJournalService';
+import PaymentMethodSelector from '~/components/payment/PaymentMethodSelector.vue';
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -19,28 +20,40 @@ const toast = useToast();
 const journalService = useJournalService();
 
 const processing = ref(false);
-const cashAmount = ref(0);
 
-// State Transaksi Khusus Pembayaran
 const transactionMeta = reactive({
   transactionDate: new Date(),
   cashierUuid: authStore.user?.uuid || null,
   memberUuid: null,
   customerName: '', 
-  paymentMethod: 'CASH',
-  dueDate: null,
   manualInvoiceCode: ''
+});
+
+// State Terpusat untuk Pembayaran (Digunakan oleh Selector)
+const paymentData = reactive({
+  paymentType: 'CASH', // 'CASH' atau 'CREDIT'
+  paymentMethodUuid: null, // ID Rekening/Metode (misal BCA)
+  paymentMethodCode: 'CASH', 
+  cashAmount: 0, // Nominal uang yang diterima (baik untuk Lunas maupun DP)
+  dueDate: null // Jatuh tempo khusus kredit
 });
 
 // Computed Settings
 const invoiceType = computed(() => authStore.getSetting('invoice_number_type', 'system'));
 const isManualInvoice = computed(() => invoiceType.value === 'manual');
-const isCreditSale = computed(() => transactionMeta.paymentMethod === 'CREDIT');
+const isCreditSale = computed(() => paymentData.paymentType === 'CREDIT');
 
 const remainingBalance = computed(() => {
     if (isCreditSale.value) return 0;
-    return cashAmount.value - props.grandTotal;
+    return paymentData.cashAmount - props.grandTotal;
 });
+
+const sisaPiutang = computed(() => {
+    if (!isCreditSale.value) return 0;
+    return props.grandTotal - (paymentData.cashAmount || 0);
+});
+
+const hasCustomer = computed(() => !!transactionMeta.memberUuid || transactionMeta.customerName.trim() !== '');
 
 const canCheckout = computed(() => {
     if (props.cart.length === 0) return false;
@@ -50,31 +63,31 @@ const canCheckout = computed(() => {
     if (isManualInvoice.value && !transactionMeta.manualInvoiceCode.trim()) return false;
 
     if (isCreditSale.value) {
-        const hasCustomer = transactionMeta.memberUuid || transactionMeta.customerName.trim() !== '';
-        return hasCustomer && transactionMeta.dueDate;
+        // Validasi Kredit: Harus ada pelanggan dan tanggal jatuh tempo
+        // Jika ada DP (cashAmount > 0), pastikan metode pembayaran DP juga dipilih
+        const isCustomerValid = hasCustomer.value;
+        const isDueDateValid = !!paymentData.dueDate;
+        const isDpValid = paymentData.cashAmount === 0 || !!paymentData.paymentMethodUuid;
+        
+        return isCustomerValid && isDueDateValid && isDpValid;
     } else {
-        return cashAmount.value >= props.grandTotal;
+        // Validasi Lunas: Uang tunai >= Total tagihan & metode bayar terpilih
+        return paymentData.cashAmount >= props.grandTotal && !!paymentData.paymentMethodUuid;
     }
 });
 
-// Watcher untuk sinkronisasi Visibility & Data Awal
+// Watcher untuk reset saat modal dibuka
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    if (transactionMeta.paymentMethod === 'CASH') {
-        cashAmount.value = props.grandTotal;
-    }
+    paymentData.paymentType = 'CASH';
+    paymentData.cashAmount = props.grandTotal;
+    paymentData.dueDate = null;
+    paymentData.paymentMethodUuid = null; // Biarkan Selector yang set default-nya
+
     if (!isManualInvoice.value && invoiceType.value !== 'system') {
         transactionMeta.manualInvoiceCode = generateInvoiceNumber();
     }
   }
-});
-
-watch(() => transactionMeta.paymentMethod, (newMethod) => {
-    if (newMethod === 'CASH') {
-        cashAmount.value = props.grandTotal;
-    } else {
-        cashAmount.value = 0; 
-    }
 });
 
 const generateInvoiceNumber = () => {
@@ -97,7 +110,7 @@ const generateInvoiceNumber = () => {
     return `${prefix}${randomPart}${suffix}`;
 };
 
-const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
 
 const processCheckout = async (isPrint = false) => {
     if (!canCheckout.value) return;
@@ -122,11 +135,9 @@ const processCheckout = async (isPrint = false) => {
             unit_name: item.unitName,
             note: item.note || '',
             price_tier_name: item.activeTierName || 'Manual',
-            
             hpp_method: item.hppMethod,
             tax_percentage: item.saleTaxPercentage,
             tax_amount: (item.price * item.qty) * (item.saleTaxPercentage / 100),
-
             stok_product_uuid: item.productUuid,
             stok_variant_uuid: item.variantUuid || null,
             stok_unit: item.unitUuid,
@@ -137,31 +148,33 @@ const processCheckout = async (isPrint = false) => {
 
         let catatan = '';
         if (isCreditSale.value) {
-            catatan = cashAmount.value > 0 
-                ? `Piutang (Kredit) - DP: ${formatCurrency(cashAmount.value)}`
+            catatan = paymentData.cashAmount > 0 
+                ? `Piutang (Kredit) - DP: ${formatCurrency(paymentData.cashAmount)} via ${paymentData.paymentMethodCode}`
                 : `Piutang (Kredit) Penuh`;
         } else {
             catatan = remainingBalance.value > 0 
-                ? `Tunai: ${formatCurrency(cashAmount.value)} | Kembali: ${formatCurrency(remainingBalance.value)}` 
-                : 'Pembayaran Uang Pas';
+                ? `Lunas via ${paymentData.paymentMethodCode}: ${formatCurrency(paymentData.cashAmount)} | Kembali: ${formatCurrency(remainingBalance.value)}` 
+                : `Lunas Uang Pas via ${paymentData.paymentMethodCode}`;
         }
 
         const payload = {
             grand_total: props.grandTotal,
             total_items: props.cart.length,
-            payment_method: transactionMeta.paymentMethod,
+            // Jika kredit penuh tanpa DP, payment method sebenarnya tidak diperlukan saat ini, 
+            // tapi kita defaultkan ke CASH agar backend tidak error, 
+            // ATAU gunakan kode metode yang dipilih untuk bayar DP.
+            payment_method: paymentData.paymentMethodCode || 'CASH',
             customer_name: finalCustName,
             notes: catatan,
             status: isCreditSale.value ? 'PENDING' : 'COMPLETED',
-            amount_cash: cashAmount.value,
+            amount_cash: paymentData.cashAmount,
             transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
             cashier_uuid: transactionMeta.cashierUuid, 
-            
             ...(invoiceType.value !== 'system' && { custom_journal_code: transactionMeta.manualInvoiceCode }),
 
             ...(isCreditSale.value && {
                 is_credit: 'true',
-                due_date: transactionMeta.dueDate ? transactionMeta.dueDate.toISOString().split('T')[0] : null
+                due_date: paymentData.dueDate ? paymentData.dueDate.toISOString().split('T')[0] : null
             }),
             amount_credit: isCreditSale.value ? props.grandTotal : 0, 
             amount_installment: 0, 
@@ -180,25 +193,17 @@ const processCheckout = async (isPrint = false) => {
         emit('checkout-success'); 
         emit('update:visible', false);
 
-        if (isPrint) {
-            if (transactionUuid) {
-                const printWindow = window.open(`/#/receipt/${transactionUuid}`, '_blank');
-                if (!printWindow) {
-                    const printWindow2 = window.open(`/receipt/${transactionUuid}`, '_blank');
-                    if (!printWindow2) {
-                        toast.add({ severity: 'warn', summary: 'Popup Diblokir', detail: 'Nota gagal terbuka. Izinkan Popup browser.', life: 6000 });
-                    }
-                }
-            } else {
-                toast.add({ severity: 'error', summary: 'Gagal Cetak', detail: 'Gagal mengambil ID struk.', life: 4000 });
+        if (isPrint && transactionUuid) {
+            const printWindow = window.open(`/#/receipt/${transactionUuid}`, '_blank');
+            if (!printWindow) {
+                const printWindow2 = window.open(`/receipt/${transactionUuid}`, '_blank');
+                if (!printWindow2) toast.add({ severity: 'warn', summary: 'Popup Diblokir', detail: 'Nota gagal terbuka.', life: 6000 });
             }
         }
 
-        // Reset
+        // Reset Data
         transactionMeta.customerName = '';
         transactionMeta.memberUuid = null;
-        transactionMeta.dueDate = null;
-        transactionMeta.paymentMethod = 'CASH';
 
     } catch (e) {
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memproses transaksi', life: 3000 });
@@ -212,161 +217,133 @@ const processCheckout = async (isPrint = false) => {
   <Dialog 
     :visible="visible" 
     @update:visible="$emit('update:visible', $event)" 
-    class="w-full max-w-4xl m-4 !p-0" 
+    class="w-full max-w-5xl m-4 !p-0" 
     :pt="{ root: { class: '!border-0 !shadow-2xl !rounded-2xl' }, header: { class: 'hidden' }, content: { class: '!p-0 !rounded-2xl' } }" 
-    modal 
-    dismissableMask
+    modal dismissableMask
   >
         <div class="bg-surface-0 flex flex-col max-h-[95vh] rounded-2xl overflow-hidden relative">
             
             <div class="flex justify-between items-center px-6 py-5 border-b border-surface-200 bg-surface-50 shrink-0">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
-                        <i class="pi pi-wallet text-xl"></i>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center text-primary-600 shadow-inner">
+                        <i class="pi pi-wallet text-2xl"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-xl text-surface-800 leading-tight">Selesaikan Pembayaran</h3>
+                        <h3 class="font-black text-xl text-surface-800 leading-tight tracking-tight">Selesaikan Pembayaran</h3>
                         <p class="text-xs text-surface-500 font-medium mt-0.5">Lengkapi data transaksi dan pilih metode pembayaran</p>
                     </div>
                 </div>
-                <button @click="$emit('update:visible', false)" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-200 hover:bg-surface-300 text-surface-600 transition"><i class="pi pi-times"></i></button>
+                <button @click="$emit('update:visible', false)" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-200 hover:bg-red-100 hover:text-red-500 text-surface-600 transition-colors"><i class="pi pi-times font-bold"></i></button>
             </div>
 
             <div class="flex flex-col lg:flex-row flex-1 overflow-hidden">
-                
                 <div class="w-full lg:w-[40%] bg-surface-50 border-r border-surface-200 flex flex-col shrink-0">
-                    <div class="p-6 flex-1 flex flex-col justify-center">
-                        <div class="bg-primary-600 text-white rounded-2xl p-6 shadow-lg shadow-primary-500/30 relative overflow-hidden flex flex-col items-center justify-center text-center h-48">
+                    <div class="p-6 md:p-8 flex-1 flex flex-col">
+                        
+                        <div class="bg-primary-600 text-white rounded-3xl p-6 shadow-lg shadow-primary-500/30 relative overflow-hidden flex flex-col items-center justify-center text-center h-56 mb-8 border border-primary-500">
+                            <div class="absolute inset-0 bg-gradient-to-br from-primary-500/50 to-primary-800/50"></div>
                             <i class="pi pi-money-bill absolute -right-6 -bottom-6 text-9xl opacity-10"></i>
-                            <span class="text-sm uppercase font-bold tracking-widest text-primary-200 mb-2">Total Tagihan</span>
-                            <div class="text-4xl md:text-5xl font-black text-white drop-shadow-md">{{ formatCurrency(grandTotal) }}</div>
+                            
+                            <span class="text-xs uppercase font-black tracking-widest text-primary-200 mb-2 relative z-10 drop-shadow-sm">Total Tagihan</span>
+                            <div class="text-5xl font-black text-white drop-shadow-md relative z-10">{{ formatCurrency(grandTotal) }}</div>
                         </div>
 
-                        <div class="mt-8 space-y-4 px-2">
-                            <div class="flex justify-between items-center pb-4 border-b border-surface-200 border-dashed" v-if="!isCreditSale">
-                                <span class="text-sm font-bold text-surface-500 uppercase tracking-wider">
-                                    {{ remainingBalance < 0 ? 'Kurang Bayar' : 'Kembalian' }}
-                                </span>
-                                <span class="text-2xl font-black font-mono" :class="remainingBalance < 0 ? 'text-red-500' : 'text-emerald-500'">
+                        <div class="flex-1 flex flex-col justify-end space-y-5 px-2">
+                            <div class="flex justify-between items-center pb-5 border-b border-surface-200 border-dashed" v-if="!isCreditSale">
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-bold text-surface-500 uppercase tracking-wider">
+                                        {{ remainingBalance < 0 ? 'Kekurangan Pembayaran' : 'Uang Kembalian' }}
+                                    </span>
+                                </div>
+                                <span class="text-3xl font-black font-mono" :class="remainingBalance < 0 ? 'text-red-500' : 'text-emerald-500'">
                                     {{ formatCurrency(Math.abs(remainingBalance)) }}
                                 </span>
                             </div>
                             
-                            <div class="flex justify-between items-center pb-4 border-b border-surface-200 border-dashed" v-else>
-                                <span class="text-sm font-bold text-orange-600 uppercase tracking-wider">Sisa Piutang Bersih</span>
-                                <span class="text-2xl font-black font-mono text-orange-600">{{ formatCurrency(props.grandTotal - cashAmount) }}</span>
+                            <div class="flex justify-between items-center pb-5 border-b border-surface-200 border-dashed" v-else>
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-bold text-orange-600 uppercase tracking-wider">Sisa Piutang</span>
+                                    <span class="text-[10px] text-surface-400 font-medium">Setelah dikurangi Uang Muka (DP)</span>
+                                </div>
+                                <span class="text-3xl font-black font-mono text-orange-600">{{ formatCurrency(sisaPiutang) }}</span>
                             </div>
 
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-medium text-surface-500">Jumlah Item</span>
-                                <span class="text-sm font-bold text-surface-800">{{ cart.length }} Item</span>
+                            <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-surface-200 shadow-sm">
+                                <div class="flex items-center gap-3">
+                                    <i class="pi pi-shopping-cart text-surface-400"></i>
+                                    <span class="text-sm font-bold text-surface-600">Total Item Dibeli</span>
+                                </div>
+                                <span class="text-lg font-black text-surface-800 bg-surface-100 px-3 py-1 rounded-lg">{{ cart.length }} Item</span>
                             </div>
                         </div>
+
                     </div>
                 </div>
 
                 <div class="w-full lg:w-[60%] flex flex-col flex-1 overflow-y-auto scrollbar-thin bg-surface-0">
-                    <div class="p-6 md:p-8 space-y-6">
+                    <div class="p-6 md:p-8 space-y-8">
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="p-3 bg-surface-50 border border-surface-200 rounded-xl" v-if="invoiceType !== 'system'">
-                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">No. Faktur / Invoice</label>
-                                <InputText v-if="isManualInvoice" v-model="transactionMeta.manualInvoiceCode" placeholder="Ketik No Faktur Manual..." class="w-full !text-sm font-mono font-bold" />
-                                <div v-else class="flex justify-between items-center bg-white px-3 py-2 rounded-lg border border-surface-200 font-mono font-bold text-primary-700 text-sm shadow-sm">
-                                    <span>{{ transactionMeta.manualInvoiceCode }}</span>
-                                    <button class="text-surface-400 hover:text-primary-600 transition" @click="transactionMeta.manualInvoiceCode = generateInvoiceNumber()" v-tooltip.top="'Generate Ulang'"><i class="pi pi-refresh"></i></button>
+                        <section>
+                            <h4 class="text-xs font-black text-surface-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i class="pi pi-receipt"></i> Data Transaksi</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm" v-if="invoiceType !== 'system'">
+                                    <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">No. Faktur / Invoice</label>
+                                    <InputText v-if="isManualInvoice" v-model="transactionMeta.manualInvoiceCode" placeholder="Ketik No Faktur Manual..." class="w-full !text-sm font-mono font-bold" />
+                                    <div v-else class="flex justify-between items-center bg-white px-3 py-2.5 rounded-lg border border-surface-200 font-mono font-bold text-primary-700 text-sm shadow-inner">
+                                        <span>{{ transactionMeta.manualInvoiceCode }}</span>
+                                        <button class="text-surface-400 hover:text-primary-600 transition" @click="transactionMeta.manualInvoiceCode = generateInvoiceNumber()" v-tooltip.top="'Generate Ulang'"><i class="pi pi-refresh"></i></button>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm flex flex-col justify-center" :class="{'md:col-span-2': invoiceType === 'system'}">
+                                    <div class="flex flex-col sm:flex-row gap-4 h-full">
+                                        <div class="flex-1">
+                                            <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Pilih Member</label>
+                                            <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Cari Member..." class="w-full !text-sm" showClear />
+                                        </div>
+                                        <div class="flex-1" v-if="!transactionMeta.memberUuid">
+                                            <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Atau Nama Umum</label>
+                                            <InputText v-model="transactionMeta.customerName" placeholder="Contoh: Bapak Budi" class="w-full !text-sm" />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                        </section>
+
+                        <Divider type="dashed" class="!m-0 opacity-50" />
+
+                        <section>
+                            <h4 class="text-xs font-black text-surface-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i class="pi pi-credit-card"></i> Opsi Pembayaran</h4>
                             
-                            <div class="p-3 bg-surface-50 border border-surface-200 rounded-xl flex flex-col justify-center" :class="{'md:col-span-2': invoiceType === 'system'}">
-                                <div class="flex gap-3 h-full">
-                                    <div class="flex-1">
-                                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Member</label>
-                                        <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Member..." class="w-full !text-sm" showClear />
-                                    </div>
-                                    <div class="flex-1" v-if="!transactionMeta.memberUuid">
-                                        <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Pelanggan Umum</label>
-                                        <InputText v-model="transactionMeta.customerName" placeholder="Contoh: Bapak Budi" class="w-full !text-sm" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <Divider type="dashed" />
-
-                        <div>
-                            <label class="text-[11px] uppercase font-bold text-surface-500 mb-3 block">Tipe Pembayaran</label>
-                            <SelectButton 
-                                v-model="transactionMeta.paymentMethod" 
-                                :options="[{label:'Tunai (Lunas)', value:'CASH'}, {label:'Piutang (Kredit)', value:'CREDIT'}]" 
-                                optionLabel="label" 
-                                optionValue="value"
-                                class="w-full shadow-sm"
-                                :pt="{ button: { class: '!text-sm !font-bold !py-3 flex-1' } }" 
+                            <PaymentMethodSelector 
+                                v-model="paymentData"
+                                :grand-total="grandTotal"
+                                type="sale"
+                                :has-customer="hasCustomer"
                             />
-                        </div>
+                        </section>
 
-                        <div class="bg-surface-50 p-5 rounded-2xl border border-surface-200">
-                            
-                            <div v-if="isCreditSale" class="space-y-5 animate-fade-in-down">
-                                <div v-if="!transactionMeta.memberUuid && !transactionMeta.customerName.trim()" class="text-xs text-red-600 font-bold bg-red-50 p-3 rounded-lg border border-red-200 flex items-center gap-2">
-                                    <i class="pi pi-exclamation-triangle text-lg"></i> Nama Pelanggan wajib diisi untuk transaksi kredit.
-                                </div>
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="text-xs font-bold text-orange-700 uppercase mb-2 block">Jatuh Tempo <span class="text-red-500">*</span></label>
-                                        <Calendar v-model="transactionMeta.dueDate" dateFormat="dd/mm/yy" :minDate="new Date()" showIcon class="w-full shadow-sm" inputClass="!text-sm" placeholder="Pilih Tanggal..." />
-                                    </div>
-                                    <div>
-                                        <label class="text-xs font-bold text-surface-600 uppercase block mb-2">Uang Muka / DP</label>
-                                        <InputNumber v-model="cashAmount" mode="currency" currency="IDR" locale="id-ID" class="w-full shadow-sm" :max="grandTotal" inputClass="!text-lg !font-black !py-2 !text-orange-600 focus:!ring-orange-500 focus:border-orange-500" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-else class="space-y-4 animate-fade-in-down">
-                                <label class="text-[11px] font-bold text-surface-500 uppercase block">Nominal Uang Tunai yang Diterima</label>
-                                <InputNumber 
-                                    v-model="cashAmount" 
-                                    mode="currency" 
-                                    currency="IDR" 
-                                    locale="id-ID" 
-                                    class="w-full shadow-sm" 
-                                    inputClass="!text-3xl !py-4 !font-black !text-center text-emerald-600 focus:!ring-emerald-500 focus:border-emerald-500" 
-                                    autofocus
-                                />
-
-                                <div class="grid grid-cols-4 gap-3 mt-4">
-                                    <Button label="Uang Pas" outlined severity="success" size="small" class="!font-bold !py-2 shadow-sm bg-white" @click="cashAmount = grandTotal" />
-                                    <Button label="20.000" outlined severity="secondary" size="small" class="!font-bold font-mono !py-2 shadow-sm bg-white" @click="cashAmount = 20000" />
-                                    <Button label="50.000" outlined severity="secondary" size="small" class="!font-bold font-mono !py-2 shadow-sm bg-white" @click="cashAmount = 50000" />
-                                    <Button label="100.000" outlined severity="secondary" size="small" class="!font-bold font-mono !py-2 shadow-sm bg-white" @click="cashAmount = 100000" />
-                                </div>
-                            </div>
-
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="px-6 py-4 border-t border-surface-200 bg-surface-50 shrink-0 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.03)] z-10">
-                <div class="flex flex-col sm:flex-row gap-3 justify-end">
-                    <Button label="Kembali" icon="pi pi-arrow-left" class="sm:w-32 font-bold !rounded-xl" severity="secondary" outlined @click="$emit('update:visible', false)" :disabled="processing" />
+            <div class="px-6 md:px-8 py-5 border-t border-surface-200 bg-surface-50 shrink-0 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.03)] z-10">
+                <div class="flex flex-col sm:flex-row gap-4 justify-end items-center">
+                    <Button label="Batal Selesai" icon="pi pi-times" class="w-full sm:w-auto sm:w-36 font-bold !rounded-xl" severity="secondary" text @click="$emit('update:visible', false)" :disabled="processing" />
                     
-                    <div class="flex-1 flex gap-3 justify-end">
+                    <div class="flex-1 w-full sm:w-auto flex flex-col sm:flex-row gap-3 justify-end">
                         <Button 
-                            :label="isCreditSale ? 'Catat Tanpa Cetak' : 'Bayar Saja'" 
-                            class="flex-1 max-w-xs !h-12 !text-sm !font-bold !rounded-xl shadow-sm transition-colors" 
+                            :label="isCreditSale ? 'Simpan Data Piutang' : 'Bayar Tanpa Nota'" 
+                            class="flex-1 max-w-[200px] !h-14 !text-sm !font-bold !rounded-xl shadow-sm transition-colors" 
                             :severity="isCreditSale ? 'warning' : 'success'" outlined
                             :loading="processing" 
                             :disabled="!canCheckout" 
                             @click="processCheckout(false)" 
                         />
                         <Button 
-                            :label="isCreditSale ? 'Catat & Cetak Nota' : 'Bayar & Cetak Nota'" 
+                            :label="isCreditSale ? 'Simpan & Cetak Faktur' : 'Bayar & Cetak Struk'" 
                             icon="pi pi-print" 
-                            class="flex-[1.5] max-w-sm !h-12 !text-sm !font-bold !rounded-xl shadow-md transition-colors" 
+                            class="flex-[1.5] max-w-[280px] !h-14 !text-sm !font-bold !rounded-xl shadow-md transition-colors" 
                             :severity="isCreditSale ? 'warning' : 'success'" 
                             :loading="processing" 
                             :disabled="!canCheckout" 

@@ -12,11 +12,13 @@ import { unitProvider } from 'src/common/entities/unit/unit.provider';
 import { shelveProvider } from 'src/common/entities/shelve/shelve.provider';   
 import { DatabaseModule } from 'src/common/db/database.module';
 import { priceGroupProviders } from 'src/common/entities/price_group/price_group.provider';
+import { JournalModule } from '../journal/journal.module';
 
 @Module({
   imports: [
     DatabaseModule,
-    ProductModule
+    ProductModule,
+    JournalModule,
   ], 
   controllers: [IeController],
   providers: [

@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { ILike, Repository, DataSource, Like } from 'typeorm';
+import { ILike, Repository, DataSource, Like, EntityManager } from 'typeorm';
 import { ProductEntity } from '../../common/entities/product/product.entity';
 import { ProductVariantEntity } from '../../common/entities/product_variant/product_variant.entity';
 import { ProductPriceEntity } from '../../common/entities/product_price/product_price.entity'; 
@@ -23,8 +23,11 @@ export class ProductService {
   ) {}
 
   // --- FUNGSI CREATE, UPDATE, DELETE ---
-  async create(dto: CreateProductDto, storeUuid: string, userId: string) {
-    return await this.dataSource.transaction(async (manager) => {
+  async create(dto: CreateProductDto, storeUuid: string, userId: string, externalManager?: EntityManager) {
+    
+    // Pindahkan inti/logic dari fungsi create ke dalam fungsi helper
+    // agar bisa dieksekusi dengan manager manapun (eksternal maupun internal)
+    const executeLogic = async (manager: EntityManager) => {
       const productUuid = generateProductUuid(storeUuid);
       const mappedPrices = dto.prices?.map((p) => ({
         uuid: generatePriceUuid(storeUuid), priceGroupUuid: p.priceGroupUuid, name: p.name, price: p.price || 0, minQty: p.minQty ?? 1, createdBy: userId,
@@ -37,7 +40,6 @@ export class ProductService {
       })) || [];
       const mappedShelves = dto.shelveUuids?.map(uuid => ({ uuid } as ShelveEntity)) || [];
 
-      // [BARU] Tambahkan properti images saat create
       const newProduct = manager.create(ProductEntity, {
         uuid: productUuid, 
         name: dto.name, 
@@ -48,14 +50,15 @@ export class ProductService {
         brandUuid: dto.brandUuid, 
         isManageStock: dto.isManageStock !== false, 
         conversionQty: dto.conversionQty || 1, 
-        images: dto.images || [], // <-- [BARU] Simpan array gambar ke database
+        images: dto.images || [], 
         variants: mappedVariants, 
         prices: mappedPrices, 
         shelves: mappedShelves, 
+        storeUuid: storeUuid, // Pastikan ini juga ter-set jika tidak default di DTO
         createdBy: userId,
       });
 
-      const savedProduct = await manager.save(newProduct);
+      const savedProduct = await manager.save(ProductEntity, newProduct);
       
       const inItems: any[] = [];
       const initialStock = dto.stock || 0;
@@ -78,9 +81,10 @@ export class ProductService {
           }
       }
       
-      // 3. Masukkan datanya (HANYA JIKA PRODUK INI DIKELOLA STOKNYA)
+      // 3. Masukkan datanya ke Jurnal (HANYA JIKA PRODUK INI DIKELOLA STOKNYA)
       if (dto.isManageStock !== false) {
-          if (initialStock > 0) {
+          // Jika produk utama punya stok, masukkan
+          if (initialStock > 0 && (!dto.variants || dto.variants.length === 0)) {
             inItems.push({ 
                 productUuid: productUuid, 
                 unitUuid: dto.unitUuid, 
@@ -90,6 +94,7 @@ export class ProductService {
             });
           }
 
+          // Jika ada varian, masukkan stok masing-masing varian
           if (dto.variants && dto.variants.length > 0) {
             dto.variants.forEach((v, index) => {
               const vStock = v.stock || 0; 
@@ -106,14 +111,24 @@ export class ProductService {
             });
           }
 
-          // Catat ke Jurnal Stok jika ada stok awal
+          // Catat ke Jurnal Stok jika ada stok awal yang > 0
           if (inItems.length > 0) {
+            // Kita juga lempar `manager` ini ke dalam journalStokService agar jurnal dibuat di transaksi yang sama!
             await this.journalStokService.stockIn(inItems, userId, manager, storeUuid, "Stok awal produk baru");
           }
       }
 
       return savedProduct;
-    });
+    };
+
+    // EKSEKUSI: Jika dikirim externalManager, langsung pakai itu. Jika tidak, buat transaksi baru.
+    if (externalManager) {
+        return await executeLogic(externalManager);
+    } else {
+        return await this.dataSource.transaction(async (manager) => {
+            return await executeLogic(manager);
+        });
+    }
   }
 
   async update(uuid: string, dto: UpdateProductDto, storeUuid: string, userId: string) {
