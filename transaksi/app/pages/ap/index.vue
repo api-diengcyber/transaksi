@@ -4,6 +4,7 @@ import { useToast } from 'primevue/usetoast';
 
 import { useSupplierService } from '~/composables/useSupplierService';
 import ApCreateModal from '~/components/ap/ApCreateModal.vue';
+import PaymentApModal from '~/components/payment/PaymentApModal.vue';
 
 const journalService = useJournalService();
 const supplierService = useSupplierService(); 
@@ -14,17 +15,13 @@ const suppliers = ref([]);
 const loading = ref(true);
 const filters = ref({ global: { value: null, matchMode: 'contains' } });
 
-// STATE EXPANDER
+// STATE EXPANDER & MODAL
 const expandedRows = ref({}); 
-
 const showCreateModal = ref(false);
 const showPaymentModal = ref(false);
 const selectedDebt = ref(null);
-const paymentDetails = ref({ amount: null, method: 'CASH', notes: '' });
-const paymentProcessing = ref(false);
 
 // --- COMPUTED DATA ---
-// Data tabel utama: Hanya tagihan yang belum lunas
 const hutangList = computed(() => rawDebts.value.filter(d => !d.isPaidOff));
 
 const summary = computed(() => {
@@ -52,21 +49,16 @@ const loadData = async () => {
     try {
         if (suppliers.value.length === 0) await loadSuppliers();
 
-        // Ambil dari backend (format otomatis bersarang)
         const response = await journalService.findAllByType('AP');
         const dataList = response?.data?.data || response?.data || response || [];
         
-        // Cocokkan ke database
         rawDebts.value = dataList.map(item => {
             let finalSupplierName = item.supplier;
             if (item.supplierUuid && suppliers.value.length > 0) {
                 const dbSupplier = suppliers.value.find(s => s.uuid === item.supplierUuid);
                 if (dbSupplier) finalSupplierName = dbSupplier.name || dbSupplier.username || finalSupplierName;
             }
-            return {
-                ...item,
-                supplier: finalSupplierName
-            };
+            return { ...item, supplier: finalSupplierName };
         });
 
     } catch (e) {
@@ -82,47 +74,10 @@ const onTransactionSaved = () => loadData();
 
 const openPaymentModal = (debt) => {
     selectedDebt.value = debt;
-    paymentDetails.value.amount = debt.remaining; 
-    paymentDetails.value.notes = `Pembayaran Hutang Nota ${debt.code}`;
-    paymentDetails.value.method = 'CASH';
     showPaymentModal.value = true;
 };
 
-const processPayment = async () => {
-    if (!selectedDebt.value || paymentDetails.value.amount <= 0 || paymentProcessing.value) return;
-
-    if (paymentDetails.value.amount > selectedDebt.value.remaining) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Jumlah bayar melebihi sisa tagihan.', life: 3000 });
-        return;
-    }
-    
-    paymentProcessing.value = true;
-    try {
-        const payload = {
-            amount: paymentDetails.value.amount,
-            reference_journal_code: selectedDebt.value.code,
-            payment_method: paymentDetails.value.method,
-            notes: paymentDetails.value.notes,
-            supplier: selectedDebt.value.supplier,
-            supplier_uuid: selectedDebt.value.supplierUuid
-        };
-
-        if (journalService.createApPaymentTransaction) {
-            await journalService.createApPaymentTransaction({ details: payload });
-        } else {
-            await journalService.createTransaction({ details: { ...payload, transaction_type: 'PAY_AP' }});
-        }
-
-        toast.add({ severity: 'success', summary: 'Sukses', detail: `Pembayaran keluar dicatat.`, life: 3000 });
-        showPaymentModal.value = false;
-        await loadData();
-    } catch (e) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi Kesalahan', life: 3000 });
-    } finally {
-        paymentProcessing.value = false;
-    }
-};
-
+// --- UTILS ---
 const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 const formatDate = (dateString) => (!dateString) ? '-' : new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' });
 const isOverdue = (dateString) => {
@@ -324,46 +279,8 @@ onMounted(() => { loadData(); });
             </DataTable>
         </div>
 
-        <Dialog v-model:visible="showPaymentModal" header="Bayar Hutang Supplier" :modal="true" class="w-[95vw] sm:w-[450px]" :pt="{ root: { class: '!rounded-2xl !border-0 !shadow-2xl' }, header: { class: '!bg-surface-50 !border-b !border-surface-200 !pb-4' }, content: { class: '!pt-4 !pb-0' } }">
-            <div v-if="selectedDebt" class="flex flex-col h-full">
-                
-                <div class="mb-5 p-4 bg-rose-50 rounded-xl border border-rose-100 flex flex-col gap-2 relative overflow-hidden">
-                    <div class="absolute -right-4 -bottom-4 opacity-10"><i class="pi pi-money-bill text-8xl"></i></div>
-                    <div><span class="text-xs text-rose-700/70 font-semibold uppercase tracking-wider block">Supplier / Vendor</span><span class="font-bold text-rose-900 text-base">{{ selectedDebt.supplier }}</span></div>
-                    <div class="flex justify-between items-end mt-2 pt-2 border-t border-rose-200/50 relative z-10">
-                        <div><span class="text-[10px] text-rose-700/70 font-semibold block mb-0.5">Sisa Kewajiban</span><span class="text-xs font-mono bg-white/60 px-1.5 py-0.5 rounded text-rose-800">{{ selectedDebt.code }}</span></div>
-                        <span class="text-2xl font-black text-rose-700">{{ formatCurrency(selectedDebt.remaining) }}</span>
-                    </div>
-                </div>
-
-                <div class="space-y-4">
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-bold text-surface-600 uppercase">Jumlah yang Ingin Dibayar</label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-surface-400">Rp</span>
-                            <InputNumber v-model="paymentDetails.amount" mode="decimal" locale="id-ID" :max="selectedDebt.remaining" class="w-full" inputClass="!text-lg !font-black !py-2.5 !pl-9 !text-rose-600 focus:!ring-rose-500 focus:!border-rose-500" />
-                        </div>
-                        <div class="flex justify-end mt-1"><button class="text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:underline bg-rose-50 px-2 py-0.5 rounded transition-colors" @click="paymentDetails.amount = selectedDebt.remaining">Bayar Lunas</button></div>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-bold text-surface-600 uppercase">Metode Pembayaran</label>
-                        <SelectButton v-model="paymentDetails.method" :options="[{label:'Tunai (Cash)', value:'CASH'}, {label:'Transfer Bank', value:'TRANSFER'}]" optionLabel="label" optionValue="value" class="w-full" :pt="{ button: { class: '!text-xs !py-2.5 flex-1' } }" />
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-bold text-surface-600 uppercase">Catatan / Bukti Transfer</label>
-                        <Textarea v-model="paymentDetails.notes" rows="2" class="w-full !text-sm resize-none" placeholder="Cth: Transfer via Mandiri..." />
-                    </div>
-                </div>
-            </div>
-
-            <template #footer>
-                <div class="flex gap-2 w-full pt-4 border-t border-surface-200 mt-2">
-                    <Button label="Batal" class="flex-1 !rounded-xl font-bold" severity="secondary" text @click="showPaymentModal = false" />
-                    <Button label="Proses Pembayaran" icon="pi pi-check-circle" class="flex-[2] !rounded-xl font-bold shadow-md" severity="danger" @click="processPayment" :loading="paymentProcessing" />
-                </div>
-            </template>
-        </Dialog>
-
-        <ApCreateModal v-model:visible="showCreateModal" defaultType="hutang" @saved="onTransactionSaved" />
+        <ApCreateModal v-model:visible="showCreateModal" @saved="onTransactionSaved" />
+        <PaymentApModal v-model:visible="showPaymentModal" :payable="selectedDebt" @saved="onTransactionSaved" />
+        
     </div>
 </template>

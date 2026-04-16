@@ -99,6 +99,7 @@ const items = ref([
             // { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, 
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
             { label: 'Media', icon: 'pi pi-image', route: '/media' }, 
+            { label: 'Promo', icon: 'pi pi-gift', route: '/promo' }, 
         ]
     },
     { 

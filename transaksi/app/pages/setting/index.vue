@@ -12,7 +12,9 @@ import StoreManagementTab from "~/components/setting/StoreManagementTab.vue";
 import SalesTab from "~/components/setting/SalesTab.vue";
 import PurchaseTab from "~/components/setting/PurchaseTab.vue";
 import SyncTab from "~/components/setting/SyncTab.vue"; 
-import PaymentTab from "~/components/setting/PaymentTab.vue"; // <-- TAMBAHKAN IMPORT INI
+import PaymentTab from "~/components/setting/PaymentTab.vue";
+import ReceivableTab from '~/components/setting/ReceivableTab.vue';
+import PayableTab from '~/components/setting/PayableTab.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -34,6 +36,8 @@ const menuItems = [
   { id: "sync", label: "Sinkronisasi", icon: "pi pi-sync", desc: "Koneksi data server" }, 
   { id: "sales", label: "Penjualan", icon: "pi pi-shopping-cart", desc: "Pajak, struk, dan stok" },
   { id: "purchase", label: "Pembelian", icon: "pi pi-truck", desc: "Supplier dan persetujuan" },
+  { id: "ar", label: "Piutang", icon: "pi pi-truck", desc: "Piutang" },
+  { id: "ap", label: "Hutang", icon: "pi pi-truck", desc: "Hutang" },
 ];
 
 const settings = reactive({
@@ -66,9 +70,10 @@ const settings = reactive({
   purchase_invoice_prefix: "PO-",
   purchase_invoice_length: 5,
   purchase_invoice_suffix: "",
-  
-  // 4. Device
-  dev_printer_width: "58mm", dev_auto_print_receipt: true, dev_show_logo_receipt: false,
+
+  // AR (Piutang) & AP (Hutang)
+  ar_use_invoice_number: false,
+  ap_use_invoice_number: false,
 });
 
 // Routing Logic
@@ -302,7 +307,8 @@ definePageMeta({ layout: "default" });
             <PaymentTab v-if="activeTab === 'payment'" />
             <SyncTab v-if="activeTab === 'sync'" :settings="settings" :loading="loading" /> 
             <SalesTab v-if="activeTab === 'sales'" :settings="settings" />
-            <PurchaseTab v-if="activeTab === 'purchase'" :settings="settings" />
+            <ReceivableTab v-if="activeTab === 'ar'" :settings="settings" />
+            <PayableTab v-if="activeTab === 'ap'" :settings="settings" />
           </div>
         </main>
       </div>

@@ -22,3 +22,4 @@ export const generatePriceGroupUuid = (storeUuid: string) => `${storeUuid}-PRCGR
 export const generateBrandUuid = (storeUuid: string) => `${storeUuid}-BRD-${generateLocalUuid()}`;
 export const generateAccountUuid = (storeUuid: string) => `${storeUuid}-ACT\-${generateLocalUuid()}`;
 export const generatePaymentMethodUuid = (storeUuid: string) => `${storeUuid}-PAYMTD\-${generateLocalUuid()}`;
+export const generatePromoUuid = (storeUuid: string) => `${storeUuid}-PRO\-${generateLocalUuid()}`;

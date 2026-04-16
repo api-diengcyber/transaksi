@@ -84,7 +84,8 @@ export class ProductService {
       // 3. Masukkan datanya ke Jurnal (HANYA JIKA PRODUK INI DIKELOLA STOKNYA)
       if (dto.isManageStock !== false) {
           // Jika produk utama punya stok, masukkan
-          if (initialStock > 0 && (!dto.variants || dto.variants.length === 0)) {
+          // if (initialStock > 0 && (!dto.variants || dto.variants.length === 0)) {
+          if (!dto.variants || dto.variants.length === 0) {
             inItems.push({ 
                 productUuid: productUuid, 
                 unitUuid: dto.unitUuid, 
@@ -98,7 +99,7 @@ export class ProductService {
           if (dto.variants && dto.variants.length > 0) {
             dto.variants.forEach((v, index) => {
               const vStock = v.stock || 0; 
-              if (vStock > 0) {
+              // if (vStock > 0) {
                 inItems.push({ 
                     productUuid: productUuid, 
                     variantUuid: mappedVariants[index].uuid, 
@@ -107,7 +108,7 @@ export class ProductService {
                     shelveUuid: defaultShelveUuid,
                     warehouseUuid: defaultWarehouseUuid
                 });
-              }
+              // }
             });
           }
 
@@ -187,7 +188,7 @@ export class ProductService {
                  productUuid: uuid, 
                  variantUuid: variantUuid, 
                  unitUuid: dto.unitUuid || product.unitUuid, 
-                 qty: v.stock,
+                 qty: v.stock || 0,
                  shelveUuid: defaultShelveUuid,
                  warehouseUuid: defaultWarehouseUuid 
              });

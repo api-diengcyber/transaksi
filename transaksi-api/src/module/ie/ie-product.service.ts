@@ -286,7 +286,7 @@ export class IeProductService {
     }
 
     const [allCategories, allBrands, allUnits, allShelves] = await Promise.all([
-      this.categoryRepo.find(), this.brandRepo.find(), this.unitRepo.find(), this.shelveRepo.find(),
+      this.categoryRepo.find(), this.brandRepo.find(), this.unitRepo.find(), this.shelveRepo.find({ relations: ['warehouse'] }),
     ]);
 
     const wsProducts = workbook.getWorksheet('Produk') || workbook.worksheets[0];
@@ -422,20 +422,31 @@ export class IeProductService {
         // 2. Jika isManageStock = true, buat Jurnal Stok Awal
         if (isManageStock && createdProduct) {
             const stockJournalItems: any[] = [];
-            const defaultShelveUuid = shelveUuids.length > 0 ? shelveUuids[0] : null;
-
+            let defaultShelveUuid = null;
+            let targetWarehouseUuid: any = null;
+            
+            if (shelveUuids.length > 0) {
+                defaultShelveUuid = shelveUuids[0];
+                const selectedShelve = allShelves.find(s => s.uuid === defaultShelveUuid);
+                
+                // Pastikan shelve memiliki relasi warehouse
+                if (selectedShelve && selectedShelve.warehouse) {
+                    targetWarehouseUuid = selectedShelve.warehouse.uuid;
+                }
+            }
             // Jika tidak ada varian, gunakan stok dari kolom utama
             if (variantsDto.length === 0) {
                 const mainStockQty = Number(row['Stok'] || 0);
-                if (mainStockQty > 0) {
+                // if (mainStockQty > 0) {
                     stockJournalItems.push({
                         productUuid: createdProduct.uuid,
                         variantUuid: null,
                         unitUuid: unit?.uuid,
                         shelveUuid: defaultShelveUuid,
+                        warehouseUuid: targetWarehouseUuid,
                         qty: mainStockQty
                     });
-                }
+                // }
             } 
             // Jika ada varian, loop varian untuk mencatat stok masing-masing
             else {
@@ -446,7 +457,7 @@ export class IeProductService {
 
                 item.variants.forEach((vObj) => {
                     const variantStockQty = Number(vObj.row['Stok'] || 0);
-                    if (variantStockQty > 0) {
+                    // if (variantStockQty > 0) {
                         const matchedVariant = savedVariants.find((sv: any) => sv.name === vObj.nameCleaned);
                         if (matchedVariant) {
                             stockJournalItems.push({
@@ -454,10 +465,11 @@ export class IeProductService {
                                 variantUuid: matchedVariant.uuid,
                                 unitUuid: unit?.uuid,
                                 shelveUuid: defaultShelveUuid,
+                                warehouseUuid: targetWarehouseUuid,
                                 qty: variantStockQty
                             });
                         }
-                    }
+                    // }
                 });
             }
 

@@ -83,6 +83,7 @@ const manajemenMenu = [
     // { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier', color: 'text-rose-500 bg-rose-50' },
     { label: 'Pegawai', icon: 'pi pi-id-card', route: '/user', color: 'text-violet-500 bg-violet-50' },
     { label: 'Media', icon: 'pi pi-image', route: '/media', color: 'text-fuchsia-500 bg-fuchsia-50' },
+    { label: 'Promo', icon: 'pi pi-gift', route: 'promo', color: 'text-blue-500 bg-blue-50' },
 ];
 
 const laporanMenu = [

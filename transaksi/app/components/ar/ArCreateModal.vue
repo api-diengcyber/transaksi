@@ -3,6 +3,9 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useMemberService } from '~/composables/useMemberService';
 
+// Import komponen PaymentMethodSelector
+import PaymentMethodSelector from '~/components/payment/PaymentMethodSelector.vue';
+
 const props = defineProps({
     visible: {
         type: Boolean,
@@ -19,13 +22,21 @@ const toast = useToast();
 const processing = ref(false);
 const members = ref([]);
 
+// State utama transaksi (di luar pengaturan pembayaran/DP)
 const transaction = reactive({
     amount: null,
-    dpAmount: null, // Tambahan state DP
-    memberUuid: null, // Tambahan pilihan Member
+    memberUuid: null,
     contactName: '',
-    dueDate: null,
     notes: '',
+});
+
+// State khusus untuk dikirimkan dan disinkronisasikan ke PaymentMethodSelector
+const paymentData = ref({
+    paymentType: 'CREDIT', // Karena ini Form Piutang, defaultnya Kredit
+    cashAmount: 0,         // Nominal DP atau Pembayaran Masuk
+    dueDate: null,         // Tanggal Jatuh Tempo
+    paymentMethodUuid: null,
+    paymentMethodCode: null
 });
 
 // Load data member saat komponen di-mount
@@ -42,24 +53,46 @@ onMounted(async () => {
 watch(() => props.visible, (newVal) => {
     if (newVal) {
         transaction.amount = null;
-        transaction.dpAmount = null;
         transaction.memberUuid = null;
         transaction.contactName = '';
-        transaction.dueDate = null;
         transaction.notes = '';
+        
+        // Kembalikan payment state ke default tiap buka modal
+        paymentData.value = {
+            paymentType: 'CREDIT', 
+            cashAmount: 0,
+            dueDate: null,
+            paymentMethodUuid: null,
+            paymentMethodCode: null
+        };
+        
         processing.value = false;
     }
 });
 
+// Deteksi jika sudah ada identitas pelanggan yang dipilih (Member / Umum)
+const hasCustomer = computed(() => {
+    return !!(transaction.memberUuid || transaction.contactName.trim());
+});
+
 const sisaPiutang = computed(() => {
     const total = transaction.amount || 0;
-    const dp = transaction.dpAmount || 0;
+    const dp = paymentData.value.cashAmount || 0;
     return total - dp;
 });
 
 const canSave = computed(() => {
-    const hasCustomer = transaction.memberUuid || transaction.contactName.trim();
-    return transaction.amount > 0 && sisaPiutang.value >= 0 && !!hasCustomer && !!transaction.dueDate && !processing.value;
+    // Validasi tambahan terkait pembayaran
+    const isCredit = paymentData.value.paymentType === 'CREDIT';
+    const hasValidDueDate = !isCredit || (isCredit && !!paymentData.value.dueDate);
+    const hasValidDP = paymentData.value.cashAmount >= 0 && paymentData.value.cashAmount <= (transaction.amount || 0);
+
+    return transaction.amount > 0 && 
+           sisaPiutang.value >= 0 && 
+           hasValidDP &&
+           hasCustomer.value && 
+           hasValidDueDate && 
+           !processing.value;
 });
 
 const handleClose = () => {
@@ -81,12 +114,16 @@ const processTransaction = async () => {
         const payload = {
             details: {
                 amount: transaction.amount,
-                dp_amount: transaction.dpAmount || 0, // Mengirim DP ke backend
-                due_date: transaction.dueDate ? transaction.dueDate.toISOString().split('T')[0] : null, 
+                dp_amount: paymentData.value.cashAmount || 0,
+                due_date: paymentData.value.dueDate ? new Date(paymentData.value.dueDate).toISOString().split('T')[0] : null, 
                 notes: transaction.notes,
                 customer_name: finalCustName,
                 member_uuid: transaction.memberUuid || null,
-                is_credit: 'true',
+                is_credit: paymentData.value.paymentType === 'CREDIT' ? 'true' : 'false',
+                
+                // Meneruskan UUID metode jika DP diberikan melalui metode tertentu
+                payment_method_uuid: paymentData.value.paymentMethodUuid,
+                payment_method_code: paymentData.value.paymentMethodCode
             }
         };
 
@@ -146,7 +183,7 @@ const processTransaction = async () => {
                         <Dropdown 
                             v-model="transaction.memberUuid" 
                             :options="members" 
-                            optionLabel="username" 
+                            optionLabel="name" 
                             optionValue="uuid" 
                             filter 
                             placeholder="Pilih Member..." 
@@ -164,57 +201,36 @@ const processTransaction = async () => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Total Tagihan (Piutang) <span class="text-red-500">*</span></label>
-                        <InputNumber 
-                            v-model="transaction.amount" 
-                            mode="currency" 
-                            currency="IDR" 
-                            locale="id-ID" 
-                            placeholder="Rp 0"
-                            class="w-full"
-                            inputClass="!font-mono !font-bold"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Uang Muka (DP)</label>
-                        <InputNumber 
-                            v-model="transaction.dpAmount" 
-                            mode="currency" 
-                            currency="IDR" 
-                            locale="id-ID" 
-                            placeholder="Rp 0"
-                            class="w-full"
-                            inputClass="!font-mono text-emerald-600"
-                        />
-                    </div>
+                <div>
+                    <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Total Tagihan (Piutang Keseluruhan) <span class="text-red-500">*</span></label>
+                    <InputNumber 
+                        v-model="transaction.amount" 
+                        mode="currency" 
+                        currency="IDR" 
+                        locale="id-ID" 
+                        placeholder="Rp 0"
+                        class="w-full"
+                        inputClass="!font-mono !font-bold !text-lg !py-3"
+                    />
                 </div>
 
-                <div v-if="transaction.amount > 0" class="p-3 bg-red-50 rounded-lg border border-red-100 flex justify-between items-center">
+                <div v-if="transaction.amount > 0" class="p-3 bg-red-50 rounded-lg border border-red-100 flex justify-between items-center transition-all">
                     <span class="text-xs font-bold text-red-600 uppercase">Sisa Piutang Bersih:</span>
-                    <span class="font-black text-lg font-mono text-red-600">{{ (sisaPiutang < 0) ? '0' : sisaPiutang.toLocaleString('id-ID') }}</span>
+                    <span class="font-black text-xl font-mono text-red-600">Rp {{ (sisaPiutang < 0) ? '0' : sisaPiutang.toLocaleString('id-ID') }}</span>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4">
-                    <div>
-                        <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Jatuh Tempo <span class="text-red-500">*</span></label>
-                         <Calendar 
-                            v-model="transaction.dueDate" 
-                            dateFormat="dd/mm/yy" 
-                            :minDate="new Date()" 
-                            showIcon 
-                            class="w-full" 
-                            inputClass="!text-sm"
-                            placeholder="Pilih Tanggal Jatuh Tempo"
-                        />
-                    </div>
+                <div class="border-t border-surface-200 pt-5">
+                    <PaymentMethodSelector 
+                        v-model="paymentData" 
+                        :grandTotal="transaction.amount || 0" 
+                        type="sale" 
+                        :hasCustomer="hasCustomer"
+                    />
+                </div>
 
-                    <div>
-                        <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Catatan Tambahan</label>
-                        <Textarea v-model="transaction.notes" rows="2" placeholder="Keterangan opsional..." class="w-full !text-sm resize-none" />
-                    </div>
+                <div>
+                    <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Catatan Tambahan</label>
+                    <Textarea v-model="transaction.notes" rows="2" placeholder="Keterangan opsional..." class="w-full !text-sm resize-none" />
                 </div>
 
             </div>

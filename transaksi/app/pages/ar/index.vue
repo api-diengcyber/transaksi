@@ -4,6 +4,7 @@ import { useToast } from 'primevue/usetoast';
 
 import { useMemberService } from '~/composables/useMemberService';
 import ArCreateModal from '~/components/ar/ArCreateModal.vue';
+import PaymentArModal from '~/components/payment/PaymentArModal.vue';
 
 const journalService = useJournalService();
 const memberService = useMemberService(); 
@@ -13,18 +14,14 @@ const rawReceivables = ref([]);
 const members = ref([]); 
 const loading = ref(true);
 const filters = ref({ global: { value: null, matchMode: 'contains' } });
-
-// KUNCI: State untuk fitur Row Expansion
 const expandedRows = ref({}); 
 
+// State Modal
 const showCreateModal = ref(false);
 const showPaymentModal = ref(false);
 const selectedReceivable = ref(null);
-const paymentDetails = ref({ amount: null, method: 'CASH', notes: '' });
-const paymentProcessing = ref(false);
 
 // --- COMPUTED DATA ---
-// Filter hanya tagihan yang BELUM LUNAS untuk tabel utama
 const piutangList = computed(() => rawReceivables.value.filter(d => !d.isPaidOff));
 
 const summary = computed(() => {
@@ -52,21 +49,16 @@ const loadData = async () => {
     try {
         if (members.value.length === 0) await loadMembers();
 
-        // 1. Backend sekarang sudah mereturn data yang sangat rapi
         const response = await journalService.findAllByType('AR');
         const dataList = response?.data?.data || response?.data || response || [];
         
-        // 2. Cocokkan nama pelanggan dengan database member jika perlu
         rawReceivables.value = dataList.map(item => {
             let finalMemberName = item.member;
             if (item.memberUuid && members.value.length > 0) {
                 const dbMember = members.value.find(m => m.uuid === item.memberUuid);
                 if (dbMember) finalMemberName = dbMember.name || dbMember.username || finalMemberName;
             }
-            return {
-                ...item,
-                member: finalMemberName
-            };
+            return { ...item, member: finalMemberName };
         });
 
     } catch (e) {
@@ -82,45 +74,7 @@ const onTransactionSaved = () => loadData();
 
 const openPaymentModal = (receivable) => {
     selectedReceivable.value = receivable;
-    paymentDetails.value.amount = receivable.remaining; 
-    paymentDetails.value.notes = `Penerimaan Pembayaran Piutang Nota ${receivable.code}`;
-    paymentDetails.value.method = 'CASH';
     showPaymentModal.value = true;
-};
-
-const processPayment = async () => {
-    if (!selectedReceivable.value || paymentDetails.value.amount <= 0 || paymentProcessing.value) return;
-
-    if (paymentDetails.value.amount > selectedReceivable.value.remaining) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: 'Jumlah terima melebihi sisa tagihan.', life: 3000 });
-        return;
-    }
-    
-    paymentProcessing.value = true;
-    try {
-        const payload = {
-            amount: paymentDetails.value.amount,
-            reference_journal_code: selectedReceivable.value.code,
-            payment_method: paymentDetails.value.method,
-            notes: paymentDetails.value.notes,
-            member: selectedReceivable.value.member,
-            member_uuid: selectedReceivable.value.memberUuid 
-        };
-
-        if (journalService.createArPaymentTransaction) {
-            await journalService.createArPaymentTransaction({ details: payload });
-        } else {
-            await journalService.createTransaction({ details: { ...payload, transaction_type: 'PAY_AR' }});
-        }
-
-        toast.add({ severity: 'success', summary: 'Sukses', detail: `Pembayaran piutang berhasil dicatat.`, life: 3000 });
-        showPaymentModal.value = false;
-        await loadData();
-    } catch (e) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi Kesalahan', life: 3000 });
-    } finally {
-        paymentProcessing.value = false;
-    }
 };
 
 // --- UTILS ---
@@ -323,45 +277,8 @@ onMounted(() => { loadData(); });
             </DataTable>
         </div>
 
-        <Dialog v-model:visible="showPaymentModal" header="Terima Pembayaran Piutang" :modal="true" class="w-[95vw] sm:w-[450px]" :pt="{ root: { class: '!rounded-2xl !border-0 !shadow-2xl' }, header: { class: '!bg-surface-50 !border-b !border-surface-200 !pb-4' }, content: { class: '!pt-4 !pb-0' } }">
-            <div v-if="selectedReceivable" class="flex flex-col h-full">
-                
-                <div class="mb-5 p-4 bg-emerald-50 rounded-xl border border-emerald-100 flex flex-col gap-2 relative overflow-hidden">
-                    <div class="absolute -right-4 -bottom-4 opacity-10"><i class="pi pi-money-bill text-8xl"></i></div>
-                    <div><span class="text-xs text-emerald-700/70 font-semibold uppercase tracking-wider block">Pelanggan / Member</span><span class="font-bold text-emerald-900 text-base">{{ selectedReceivable.member }}</span></div>
-                    <div class="flex justify-between items-end mt-2 pt-2 border-t border-emerald-200/50 relative z-10">
-                        <div><span class="text-[10px] text-emerald-700/70 font-semibold block mb-0.5">Sisa Tagihan</span><span class="text-xs font-mono bg-white/60 px-1.5 py-0.5 rounded text-emerald-800">{{ selectedReceivable.code }}</span></div>
-                        <span class="text-2xl font-black text-emerald-700">{{ formatCurrency(selectedReceivable.remaining) }}</span>
-                    </div>
-                </div>
-
-                <div class="space-y-4">
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-bold text-surface-600 uppercase">Dana yang Diterima</label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-surface-400">Rp</span>
-                            <InputNumber v-model="paymentDetails.amount" mode="decimal" locale="id-ID" :max="selectedReceivable.remaining" class="w-full" inputClass="!text-lg !font-black !py-2.5 !pl-9 !text-emerald-600 focus:!ring-emerald-500 focus:!border-emerald-500" />
-                        </div>
-                        <div class="flex justify-end mt-1"><button class="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline bg-emerald-50 px-2 py-0.5 rounded transition-colors" @click="paymentDetails.amount = selectedReceivable.remaining">Bayar Lunas</button></div>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-bold text-surface-600 uppercase">Diterima Ke (Metode)</label>
-                        <SelectButton v-model="paymentDetails.method" :options="[{label:'Tunai (Cash)', value:'CASH'}, {label:'Transfer Bank', value:'TRANSFER'}]" optionLabel="label" optionValue="value" class="w-full" :pt="{ button: { class: '!text-xs !py-2.5 flex-1' } }" />
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-bold text-surface-600 uppercase">Catatan / Referensi</label>
-                        <Textarea v-model="paymentDetails.notes" rows="2" class="w-full !text-sm resize-none" placeholder="Cth: Transfer via BCA..." />
-                    </div>
-                </div>
-            </div>
-
-            <template #footer>
-                <div class="flex gap-2 w-full pt-4 border-t border-surface-200 mt-2">
-                    <Button label="Batal" class="flex-1 !rounded-xl font-bold" severity="secondary" text @click="showPaymentModal = false" />
-                    <Button label="Terima Pembayaran" icon="pi pi-check-circle" class="flex-[2] !rounded-xl font-bold shadow-md" severity="success" @click="processPayment" :loading="paymentProcessing" />
-                </div>
-            </template>
-        </Dialog>
         <ArCreateModal v-model:visible="showCreateModal" defaultType="piutang" @saved="onTransactionSaved" />
+        <PaymentArModal v-model:visible="showPaymentModal" :receivable="selectedReceivable" @saved="onTransactionSaved" />
+        
     </div>
 </template>

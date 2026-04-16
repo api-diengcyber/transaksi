@@ -1,6 +1,6 @@
 {
   "name": "transaksi-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "src/main.js",
   "description": "Aplikasi Kasir Elektron + NestJS + Nuxt",
   "author": "Ushama",
