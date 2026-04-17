@@ -29,7 +29,6 @@ const transactionMeta = reactive({
   manualInvoiceCode: ''
 });
 
-// [PERBAIKAN] Gunakan 'ref' alih-alih 'reactive' agar bisa dire-assign oleh v-model dari komponen anak
 const paymentData = ref({
   paymentType: 'CASH', // 'CASH' atau 'CREDIT'
   paymentMethodUuid: null, // ID Rekening/Metode (misal BCA)
@@ -38,10 +37,6 @@ const paymentData = ref({
   dueDate: null // Jatuh tempo khusus kredit
 });
 
-// Computed Settings
-const invoiceType = computed(() => authStore.getSetting('invoice_number_type', 'system'));
-const isManualInvoice = computed(() => invoiceType.value === 'manual');
-// [PERBAIKAN] Tambahkan .value
 const isCreditSale = computed(() => paymentData.value.paymentType === 'CREDIT');
 
 const remainingBalance = computed(() => {
@@ -60,8 +55,6 @@ const canCheckout = computed(() => {
     if (props.cart.length === 0) return false;
     if (!transactionMeta.cashierUuid) return false;
     if (processing.value) return false;
-    
-    if (isManualInvoice.value && !transactionMeta.manualInvoiceCode.trim()) return false;
 
     if (isCreditSale.value) {
         const isCustomerValid = hasCustomer.value;
@@ -76,37 +69,15 @@ const canCheckout = computed(() => {
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    // [PERBAIKAN] Akses property dengan .value
     paymentData.value.paymentType = 'CASH';
     paymentData.value.cashAmount = props.grandTotal;
     paymentData.value.dueDate = null;
     paymentData.value.paymentMethodUuid = null; 
-
-    if (!isManualInvoice.value && invoiceType.value !== 'system') {
-        transactionMeta.manualInvoiceCode = generateInvoiceNumber();
-    }
+    
+    // Reset manual code setiap kali modal dibuka
+    transactionMeta.manualInvoiceCode = ''; 
   }
 });
-
-const generateInvoiceNumber = () => {
-    const type = invoiceType.value;
-    if (type === 'system' || type === 'manual') return null;
-
-    const prefix = String(authStore.getSetting('invoice_prefix') || 'INV-').toUpperCase();
-    const suffix = String(authStore.getSetting('invoice_suffix') || '').toUpperCase();
-    const length = Number(authStore.getSetting('invoice_length')) || 5;
-    let randomPart = '';
-
-    if (type === 'numeric') {
-        randomPart = String(new Date().getTime()).slice(-length);
-    } else if (type === 'alphanumeric') {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        for (let i = 0; i < length; i++) {
-            randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-    }
-    return `${prefix}${randomPart}${suffix}`;
-};
 
 const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
 
@@ -158,7 +129,6 @@ const processCheckout = async (isPrint = false) => {
         const payload = {
             grand_total: props.grandTotal,
             total_items: props.cart.length,
-            // [PERBAIKAN] Akses property dengan .value
             payment_method: paymentData.value.paymentMethodCode || 'CASH',
             customer_name: finalCustName,
             notes: catatan,
@@ -166,7 +136,9 @@ const processCheckout = async (isPrint = false) => {
             amount_cash: paymentData.value.cashAmount,
             transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
             cashier_uuid: transactionMeta.cashierUuid, 
-            ...(invoiceType.value !== 'system' && { custom_journal_code: transactionMeta.manualInvoiceCode }),
+            
+            // [REVISI] Hanya mengirimkan jika pengguna mengetikkan nomor manual
+            ...(transactionMeta.manualInvoiceCode.trim() && { custom_journal_code: transactionMeta.manualInvoiceCode.trim() }),
 
             ...(isCreditSale.value && {
                 is_credit: 'true',
@@ -279,29 +251,50 @@ const processCheckout = async (isPrint = false) => {
                     <div class="p-6 md:p-8 space-y-8">
                         
                         <section>
-                            <h4 class="text-xs font-black text-surface-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i class="pi pi-receipt"></i> Data Transaksi</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm" v-if="invoiceType !== 'system'">
+                            <h4 class="text-xs font-black text-surface-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="pi pi-receipt"></i> Data Transaksi
+                            </h4>
+                            
+                            <div class="flex flex-col gap-4">
+                                
+                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm">
                                     <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">No. Faktur / Invoice</label>
-                                    <InputText v-if="isManualInvoice" v-model="transactionMeta.manualInvoiceCode" placeholder="Ketik No Faktur Manual..." class="w-full !text-sm font-mono font-bold" />
-                                    <div v-else class="flex justify-between items-center bg-white px-3 py-2.5 rounded-lg border border-surface-200 font-mono font-bold text-primary-700 text-sm shadow-inner">
-                                        <span>{{ transactionMeta.manualInvoiceCode }}</span>
-                                        <button class="text-surface-400 hover:text-primary-600 transition" @click="transactionMeta.manualInvoiceCode = generateInvoiceNumber()" v-tooltip.top="'Generate Ulang'"><i class="pi pi-refresh"></i></button>
-                                    </div>
+                                    <InputText 
+                                        v-model="transactionMeta.manualInvoiceCode" 
+                                        placeholder="Kosongkan untuk otomatis" 
+                                        class="w-full !text-sm font-mono font-bold" 
+                                    />
+                                    <p class="text-[11px] text-surface-500 mt-1.5 leading-tight">
+                                        Isi hanya jika ingin menggunakan nomor faktur manual.
+                                    </p>
                                 </div>
                                 
-                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm flex flex-col justify-center" :class="{'md:col-span-2': invoiceType === 'system'}">
+                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm flex flex-col justify-center">
                                     <div class="flex flex-col sm:flex-row gap-4 h-full">
                                         <div class="flex-1">
                                             <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Pilih Member</label>
-                                            <Dropdown v-model="transactionMeta.memberUuid" :options="members" optionLabel="name" optionValue="uuid" filter placeholder="Cari Member..." class="w-full !text-sm" showClear />
+                                            <Dropdown 
+                                                v-model="transactionMeta.memberUuid" 
+                                                :options="members" 
+                                                optionLabel="name" 
+                                                optionValue="uuid" 
+                                                filter 
+                                                placeholder="Cari Member..." 
+                                                class="w-full !text-sm" 
+                                                showClear 
+                                            />
                                         </div>
                                         <div class="flex-1" v-if="!transactionMeta.memberUuid">
                                             <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Atau Nama Umum</label>
-                                            <InputText v-model="transactionMeta.customerName" placeholder="Contoh: Bapak Budi" class="w-full !text-sm" />
+                                            <InputText 
+                                                v-model="transactionMeta.customerName" 
+                                                placeholder="Contoh: Bapak Budi" 
+                                                class="w-full !text-sm" 
+                                            />
                                         </div>
                                     </div>
                                 </div>
+
                             </div>
                         </section>
 

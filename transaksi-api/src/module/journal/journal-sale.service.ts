@@ -127,7 +127,8 @@ export class JournalSaleService {
         const code = await this.journalService.generateCode('SALE', storeUuid);
         
         // 2. Ambil nilai custom invoice dari payload kasir
-        const customInvoiceCode = payload.custom_journal_code;
+        const autoInvoiceCode = await this.journalService.generateCustomInvoiceCode('sale', storeUuid, manager);
+        var customInvoiceCode = payload.custom_journal_code || autoInvoiceCode;
 
         // 3. Validasi: Jangan sampai kasir memasukkan No Faktur Manual yang sudah pernah ada
         if (customInvoiceCode && customInvoiceCode.trim() !== '') {
@@ -137,7 +138,7 @@ export class JournalSaleService {
                 .getOne();
 
             if (existingInvoice) {
-                throw new BadRequestException(`Nomor Faktur/Invoice "${customInvoiceCode}" sudah pernah digunakan. Silakan gunakan nomor lain.`);
+                customInvoiceCode = await this.journalService.generateCustomInvoiceCode('sale', storeUuid, manager);
             }
         }
 
@@ -288,6 +289,7 @@ export class JournalSaleService {
             const amountCredit = Number(dataDetails.amount_credit) || (Number(dataDetails.grand_total) - Number(dataDetails.amount_cash || 0));
 
             if (amountCredit > 0) {
+                const customInvoiceCodeAr = await this.journalService.generateCustomInvoiceCode('ar', storeUuid, manager);
                 const arPayload = {
                     amount: amountCredit,
                     dp_amount: Number(dataDetails.amount_cash || 0),
@@ -296,7 +298,7 @@ export class JournalSaleService {
                     customer_name: dataDetails.customer_name || 'Pelanggan Umum',
                     member_uuid: dataDetails.member_uuid || null,
                     reference_journal_code: code,
-                    custom_journal_code: customInvoiceCode ? `AR-${customInvoiceCode}` : undefined
+                    custom_journal_code: customInvoiceCodeAr,
                 };
                 await this.journalArService.createAr(arPayload, userId, storeUuid, manager);
             }

@@ -19,7 +19,8 @@ export class JournalApService {
         const code = await this.journalService.generateCode('AP', storeUuid); 
         
         // --- TAMBAHAN UNTUK FAKTUR KUSTOM ---
-        const customInvoiceCode = details.custom_journal_code || details.invoice_code;
+        const autoInvoiceCode = await this.journalService.generateCustomInvoiceCode('ap', storeUuid, manager);
+        var customInvoiceCode = details.custom_journal_code || autoInvoiceCode;
 
         // Validasi Faktur Duplikat
         if (customInvoiceCode && customInvoiceCode.trim() !== '') {
@@ -31,7 +32,7 @@ export class JournalApService {
                 .getOne();
 
             if (existingInvoice) {
-                throw new BadRequestException(`Nomor Faktur Hutang "${customInvoiceCode}" sudah digunakan. Silakan gunakan nomor lain.`);
+                customInvoiceCode = await this.journalService.generateCustomInvoiceCode('ap', storeUuid, manager);
             }
         }
         // ------------------------------------

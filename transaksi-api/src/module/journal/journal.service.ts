@@ -1,8 +1,9 @@
 // transaksi-api/src/module/journal/journal.service.ts
 import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
-import { Repository, Like, Between, DataSource } from 'typeorm';
+import { Repository, Like, Between, DataSource, In, EntityManager } from 'typeorm';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
+import { StoreSettingEntity } from 'src/common/entities/store_setting/store_setting.entity';
 
 @Injectable()
 export class JournalService {
@@ -181,5 +182,52 @@ export class JournalService {
     }
     query.orderBy('journal.createdAt', 'DESC');
     return await query.getMany();
+  }
+
+  // Tambahkan di dalam class JournalService
+  async generateCustomInvoiceCode(menu: 'sale' | 'buy' | 'ap' | 'ar', storeUuid: string, manager: EntityManager): Promise<string> {
+    // 1. Tentukan prefix setting berdasarkan menu
+    const prefixMap = {
+        sale: { type: 'invoice_number_type', pre: 'invoice_prefix', len: 'invoice_length', suf: 'invoice_suffix' },
+        buy: { type: 'purchase_invoice_number_type', pre: 'purchase_invoice_prefix', len: 'purchase_invoice_length', suf: 'purchase_invoice_suffix' },
+        ar: { type: 'ar_invoice_number_type', pre: 'ar_invoice_prefix', len: 'ar_invoice_length', suf: 'ar_invoice_suffix' },
+        ap: { type: 'ap_invoice_number_type', pre: 'ap_invoice_prefix', len: 'ap_invoice_length', suf: 'ap_invoice_suffix' }
+    };
+
+    const keys = prefixMap[menu];
+
+    // 2. Ambil semua setting sekaligus
+    const settings = await manager.find(StoreSettingEntity, {
+        where: { storeUuid, key: In([keys.type, keys.pre, keys.len, keys.suf]) }
+    });
+
+    const getSetting = (key: string, def: string) => settings.find(s => s.key === key)?.value || def;
+
+    const type = getSetting(keys.type, 'system');
+    const prefix = getSetting(keys.pre, '').toUpperCase();
+    const suffix = getSetting(keys.suf, '').toUpperCase();
+    const length = parseInt(getSetting(keys.len, '5'));
+
+    // 3. Logika Generator (System dijadikan fallback terakhir)
+    
+    if (type === 'numeric') {
+        // Ambil timestamp milidetik terakhir sesuai panjang digit
+        const middlePart = Date.now().toString().slice(-length);
+        return `${prefix}${middlePart}${suffix}`;
+    } 
+    
+    if (type === 'alphanumeric') {
+        // Alphanumeric Random
+        let middlePart = '';
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        for (let i = 0; i < length; i++) {
+            middlePart += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return `${prefix}${middlePart}${suffix}`;
+    }
+
+    // Default / Fallback terakhir jika type adalah 'system', 'manual', atau tidak ditemukan.
+    // Gunakan kode default (cth: AR-xxxx / INV-xxxx) dari system bawaan
+    return await this.generateCode(menu.toUpperCase(), storeUuid);
   }
 }

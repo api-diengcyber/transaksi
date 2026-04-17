@@ -100,12 +100,12 @@ onMounted(() => { loadData(); });
                 </div>
             </div>
 
-            <DataTable v-model:expandedRows="expandedRows" :value="payables" dataKey="code" :loading="loading" paginator :rows="10" stripedRows class="p-datatable-sm flex-1 text-sm border-none" :filters="filters">
+            <DataTable v-model:expandedRows="expandedRows" :value="payables" dataKey="invoiceCode" :loading="loading" paginator :rows="10" stripedRows class="p-datatable-sm flex-1 text-sm border-none" :filters="filters">
                 <Column expander style="width: 3rem" />
                 
-                <Column field="code" header="Nomor Hutang" sortable>
+                <Column field="invoiceCode" header="Nomor Hutang" sortable>
                     <template #body="{ data }">
-                        <div class="font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 inline-block">{{ data.code }}</div>
+                        <div class="font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 inline-block">{{ data.invoiceCode }}</div>
                         <div class="text-[10px] text-surface-400 mt-1">{{ data.type === 'BUY_CREDIT' ? 'Pembelian' : 'Input Manual' }}</div>
                     </template>
                 </Column>
@@ -142,7 +142,7 @@ onMounted(() => { loadData(); });
 
                             <div v-for="(pay, idx) in slotProps.data.payments" :key="idx" class="p-3 bg-white border border-surface-200 rounded-lg flex justify-between shadow-sm">
                                 <div class="flex flex-col">
-                                    <span class="text-xs font-bold">{{ pay.code }}</span>
+                                    <span class="text-xs font-bold">{{ pay.invoiceCode }}</span>
                                     <span class="text-[10px] text-surface-400">{{ formatDate(pay.date) }}</span>
                                 </div>
                                 <span class="font-bold text-blue-600">- {{ formatCurrency(pay.amount) }}</span>

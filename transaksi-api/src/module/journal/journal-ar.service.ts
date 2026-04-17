@@ -21,7 +21,8 @@ export class JournalArService {
         
         // --- TAMBAHAN UNTUK FAKTUR KUSTOM ---
         // Ambil nilai custom invoice dari payload kasir/frontend
-        const customInvoiceCode = details.custom_journal_code || details.invoice_code;
+        const autoInvoiceCode = await this.journalService.generateCustomInvoiceCode('ar', storeUuid, manager);
+        var customInvoiceCode = details.custom_journal_code || autoInvoiceCode;
 
         // Validasi: Jangan sampai No Faktur Manual yang sudah pernah ada terpakai lagi
         if (customInvoiceCode && customInvoiceCode.trim() !== '') {
@@ -33,7 +34,7 @@ export class JournalArService {
                 .getOne();
 
             if (existingInvoice) {
-                throw new BadRequestException(`Nomor Faktur Piutang "${customInvoiceCode}" sudah digunakan. Silakan gunakan nomor lain.`);
+                customInvoiceCode = await this.journalService.generateCustomInvoiceCode('ar', storeUuid, manager);
             }
         }
         // ------------------------------------

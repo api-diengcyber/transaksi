@@ -142,7 +142,7 @@ onMounted(() => { loadData(); });
             <DataTable 
                 v-model:expandedRows="expandedRows"
                 :value="hutangList" 
-                dataKey="code"
+                dataKey="invoiceCode"
                 :loading="loading"
                 paginator 
                 :rows="15" 
@@ -163,19 +163,15 @@ onMounted(() => { loadData(); });
 
                 <Column expander style="width: 3rem" />
 
-                <Column field="code" header="Informasi Tagihan" sortable style="min-width: 14rem">
+                <Column field="invoiceCode" header="Informasi Tagihan" sortable style="min-width: 14rem">
                     <template #body="{ data }">
                         <div class="flex flex-col gap-1 py-1">
                             <div class="font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md inline-block w-max border border-rose-100">
-                                {{ data.code }}
+                                {{ data.invoiceCode }}
                             </div>
                             
                             <div v-if="data.refCode" class="text-[10px] text-surface-500 flex items-center gap-1 mt-1">
                                 <i class="pi pi-box text-[9px] text-rose-500"></i> Hutang Pembelian
-                            </div>
-
-                            <div v-if="data.refCode" class="text-[10px] text-surface-500 flex items-center gap-1">
-                                <i class="pi pi-link text-[9px]"></i> Ref: <span class="font-medium font-mono">{{ data.refCode }}</span>
                             </div>
 
                             <div class="text-xs text-surface-500 flex items-center gap-1 mt-0.5">
@@ -241,7 +237,7 @@ onMounted(() => { loadData(); });
                 <template #expansion="slotProps">
                     <div class="p-4 bg-rose-50/30 border-y border-rose-100">
                         <h5 class="text-sm font-bold text-rose-800 mb-3 flex items-center gap-2">
-                            <i class="pi pi-history"></i> Riwayat Pembayaran (Nota: {{ slotProps.data.code }})
+                            <i class="pi pi-history"></i> Riwayat Pembayaran (Nota: {{ slotProps.data.invoiceCode }})
                         </h5>
                         
                         <div v-if="slotProps.data.dp > 0" class="mb-2 p-3 bg-white border border-surface-200 rounded-lg flex justify-between items-center shadow-sm">
@@ -264,7 +260,7 @@ onMounted(() => { loadData(); });
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center"><i class="pi pi-arrow-up-right text-xs"></i></div>
                                     <div>
-                                        <div class="text-xs font-bold text-surface-800 font-mono">{{ pay.code }}</div>
+                                        <div class="text-xs font-bold text-surface-800 font-mono">{{ pay.invoiceCode }}</div>
                                         <div class="text-[10px] text-surface-500 flex gap-2">
                                             <span>{{ formatDate(pay.date) }}</span>
                                             <span v-if="pay.notes" class="italic text-surface-400 border-l border-surface-300 pl-2">"{{ pay.notes }}"</span>

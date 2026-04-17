@@ -100,12 +100,12 @@ onMounted(() => { loadData(); });
                 </div>
             </div>
 
-            <DataTable v-model:expandedRows="expandedRows" :value="receivables" dataKey="code" :loading="loading" paginator :rows="10" stripedRows class="p-datatable-sm flex-1 text-sm border-none" :filters="filters">
+            <DataTable v-model:expandedRows="expandedRows" :value="receivables" dataKey="invoiceCode" :loading="loading" paginator :rows="10" stripedRows class="p-datatable-sm flex-1 text-sm border-none" :filters="filters">
                 <Column expander style="width: 3rem" />
                 
-                <Column field="code" header="Nomor Tagihan" sortable>
+                <Column field="invoiceCode" header="Nomor Tagihan" sortable>
                     <template #body="{ data }">
-                        <div class="font-bold font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block">{{ data.code }}</div>
+                        <div class="font-bold font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block">{{ data.invoiceCode }}</div>
                         <div class="text-[10px] text-surface-400 mt-1">{{ data.type === 'SALE_CREDIT' ? 'Penjualan' : 'Input Manual' }}</div>
                     </template>
                 </Column>
@@ -142,7 +142,7 @@ onMounted(() => { loadData(); });
 
                             <div v-for="(pay, idx) in slotProps.data.payments" :key="idx" class="p-3 bg-white border border-surface-200 rounded-lg flex justify-between shadow-sm">
                                 <div class="flex flex-col">
-                                    <span class="text-xs font-bold">{{ pay.code }}</span>
+                                    <span class="text-xs font-bold">{{ pay.invoiceCode }}</span>
                                     <span class="text-[10px] text-surface-400">{{ formatDate(pay.date) }}</span>
                                 </div>
                                 <span class="font-bold text-emerald-600">+ {{ formatCurrency(pay.amount) }}</span>

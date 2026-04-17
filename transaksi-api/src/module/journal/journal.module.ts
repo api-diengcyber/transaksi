@@ -15,7 +15,7 @@ import { JournalReturnBuyService } from './journal-return-buy.service';
 
 @Module({
   imports: [
-    DatabaseModule
+    DatabaseModule,
   ],
   controllers: [JournalController],
   providers: [

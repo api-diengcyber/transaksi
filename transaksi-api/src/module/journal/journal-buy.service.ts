@@ -26,7 +26,8 @@ export class JournalBuyService {
         const code = await this.journalService.generateCode('BUY', storeUuid);
         
         // 2. Ambil nilai custom invoice dari payload (Nomor PO Internal)
-        const customInvoiceCode = payload.custom_journal_code;
+        const autoInvoiceCode = await this.journalService.generateCustomInvoiceCode('buy', storeUuid, manager);
+        var customInvoiceCode = payload.custom_journal_code || autoInvoiceCode;
 
         // 3. Validasi Custom Invoice
         if (customInvoiceCode && customInvoiceCode.trim() !== '') {
@@ -36,7 +37,7 @@ export class JournalBuyService {
                 .getOne();
 
             if (existingInvoice) {
-                throw new BadRequestException(`Nomor PO / Faktur Internal "${customInvoiceCode}" sudah pernah digunakan. Silakan gunakan nomor lain.`);
+                customInvoiceCode = await this.journalService.generateCustomInvoiceCode('buy', storeUuid, manager);
             }
         }
 
@@ -143,6 +144,8 @@ export class JournalBuyService {
             const amountCredit = Number(dataDetails.amount_credit) || (Number(dataDetails.grand_total) - Number(dataDetails.amount_cash || 0));
 
             if (amountCredit > 0) {
+                const customInvoiceCodeAp = await this.journalService.generateCustomInvoiceCode('ap', storeUuid, manager);
+
                 const apPayload = {
                     amount: amountCredit,
                     dp_amount: Number(dataDetails.amount_cash || 0),
@@ -150,7 +153,7 @@ export class JournalBuyService {
                     notes: `Hutang otomatis dari Nota Pembelian: ${customInvoiceCode || code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
                     supplier_name: dataDetails.supplier || 'Supplier Umum', 
                     reference_journal_code: code,
-                    custom_journal_code: customInvoiceCode ? `AP-${customInvoiceCode}` : undefined
+                    custom_journal_code: customInvoiceCodeAp,
                 };
                 
                 await this.journalApService.createAp(apPayload, userId, storeUuid, manager);

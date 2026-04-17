@@ -119,7 +119,7 @@ onMounted(() => { loadData(); });
             <DataTable 
                 v-model:expandedRows="expandedRows" 
                 :value="purchases" 
-                dataKey="code" 
+                dataKey="invoiceCode" 
                 :loading="loading" 
                 paginator 
                 :rows="15" 
@@ -138,19 +138,15 @@ onMounted(() => { loadData(); });
 
                 <Column expander style="width: 3rem" />
                 
-                <Column field="code" header="Nomor PO / Transaksi" sortable style="min-width: 14rem">
+                <Column field="invoiceCode" header="Nomor PO / Transaksi" sortable style="min-width: 14rem">
                     <template #body="{ data }">
                         <div class="flex flex-col gap-1 py-1">
                             
                             <div class="font-bold font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md inline-block w-max border border-emerald-200 shadow-sm" v-tooltip.top="'Nomor Faktur / PO Internal'">
-                                <i class="pi pi-file text-[10px] mr-1"></i> {{ data.invoiceCode || data.code }}
+                                <i class="pi pi-file text-[10px] mr-1"></i> {{ data.invoiceCode }}
                             </div>
                             
                             <div class="flex flex-wrap gap-1 mt-1">
-                                <div v-if="data.invoice_code && data.invoice_code !== data.code" class="text-[10px] font-mono text-surface-500 flex items-center gap-1 bg-surface-100 px-1 py-0.5 rounded border border-surface-200">
-                                    <i class="pi pi-database text-[9px]"></i> {{ data.code }}
-                                </div>
-                                
                                 <div v-if="data.referenceNo && data.referenceNo !== '-'" class="text-[10px] font-mono font-bold text-surface-700 flex items-center gap-1 bg-surface-100 px-1.5 py-0.5 rounded border border-surface-300 shadow-sm" v-tooltip.bottom="'Nota Surat Jalan dari Supplier'">
                                     <i class="pi pi-truck text-[9px]"></i> Ref: {{ data.referenceNo }}
                                 </div>
@@ -200,7 +196,7 @@ onMounted(() => { loadData(); });
                         <div class="bg-white p-4 rounded-xl border border-surface-200 shadow-sm col-span-1 xl:col-span-2">
                             <div class="flex justify-between items-center mb-3 border-b border-surface-100 pb-2">
                                 <h5 class="text-sm font-bold text-emerald-800 flex items-center gap-2 m-0"><i class="pi pi-box"></i> 1. Rincian Barang Masuk (Stok Bertambah)</h5>
-                                <span class="text-xs font-mono font-bold text-surface-400">PO: {{ slotProps.data.invoice_code || slotProps.data.code }}</span>
+                                <span class="text-xs font-mono font-bold text-surface-400">PO: {{ slotProps.data.invoiceCode || slotProps.data.invoiceCode }}</span>
                             </div>
                             
                             <div v-if="!slotProps.data.items || slotProps.data.items.length === 0" class="p-4 text-center text-surface-400 italic text-xs">
@@ -250,7 +246,7 @@ onMounted(() => { loadData(); });
                                 </div>
                                 <div v-for="(pay, idx) in slotProps.data.payments" :key="idx" class="p-2 border border-surface-100 rounded-lg flex justify-between items-center bg-surface-50 text-xs">
                                     <div class="flex flex-col">
-                                        <span class="font-bold text-surface-800"><i class="pi pi-arrow-down-left text-emerald-500 mr-1 text-[10px]"></i> {{ pay.code }}</span>
+                                        <span class="font-bold text-surface-800"><i class="pi pi-arrow-down-left text-emerald-500 mr-1 text-[10px]"></i> {{ pay.invoiceCode }}</span>
                                         <span class="text-[10px] text-surface-500 mt-0.5 ml-4">{{ formatDate(pay.date) }}</span>
                                     </div>
                                     <span class="font-bold text-emerald-600">+ {{ formatCurrency(pay.amount) }}</span>
@@ -271,7 +267,7 @@ onMounted(() => { loadData(); });
                             <div class="space-y-2">
                                 <div v-for="(ret, idx) in slotProps.data.returns" :key="idx" class="p-2 border border-cyan-100 rounded-lg flex justify-between items-center bg-cyan-50/50 text-xs">
                                     <div class="flex flex-col">
-                                        <span class="font-bold text-surface-800"><i class="pi pi-arrow-up-right text-cyan-600 mr-1 text-[10px]"></i> {{ ret.code }}</span>
+                                        <span class="font-bold text-surface-800"><i class="pi pi-arrow-up-right text-cyan-600 mr-1 text-[10px]"></i> {{ ret.invoiceCode }}</span>
                                         <span class="text-[10px] text-surface-500 mt-0.5 ml-4">{{ formatDate(ret.date) }}</span>
                                     </div>
                                     <span class="font-bold text-cyan-700">Nominal Retur: {{ formatCurrency(ret.amount) }}</span>

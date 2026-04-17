@@ -26,8 +26,8 @@ const transactionMeta = reactive({
   manualInvoiceCode: ''
 });
 
-// State Selector Pembayaran
-const paymentData = reactive({
+// State Selector Pembayaran (diubah jadi ref agar sinkron dengan v-model anak)
+const paymentData = ref({
   paymentType: 'CASH',
   paymentMethodUuid: null,
   paymentMethodCode: 'CASH',
@@ -36,59 +36,37 @@ const paymentData = reactive({
 });
 
 // Computed Settings
-const invoiceType = computed(() => authStore.getSetting('purchase_invoice_number_type', 'system'));
-const isManualInvoice = computed(() => invoiceType.value === 'manual');
-const isCreditSale = computed(() => paymentData.paymentType === 'CREDIT');
+const isCreditSale = computed(() => paymentData.value.paymentType === 'CREDIT');
 
 const remainingBalance = computed(() => {
     if (isCreditSale.value) return 0;
-    return paymentData.cashAmount - props.grandTotal;
+    return paymentData.value.cashAmount - props.grandTotal;
 });
 
 const canCheckout = computed(() => {
     if (props.cart.length === 0) return false;
     if (processing.value) return false;
     
-    if (isManualInvoice.value && !transactionMeta.manualInvoiceCode.trim()) return false;
-
     if (isCreditSale.value) {
-        return !!transactionMeta.supplierUuid && paymentData.dueDate;
+        // Pembelian kredit wajib pilih supplier dan tanggal jatuh tempo
+        return !!transactionMeta.supplierUuid && !!paymentData.value.dueDate;
     } else {
-        return paymentData.cashAmount >= props.grandTotal;
+        // Pembelian tunai, pastikan uang yang dibayarkan cukup
+        return paymentData.value.cashAmount >= props.grandTotal && !!paymentData.value.paymentMethodUuid;
     }
 });
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    paymentData.paymentType = 'CASH';
-    paymentData.cashAmount = props.grandTotal;
-    paymentData.dueDate = null;
+    paymentData.value.paymentType = 'CASH';
+    paymentData.value.cashAmount = props.grandTotal;
+    paymentData.value.dueDate = null;
+    paymentData.value.paymentMethodUuid = null;
 
-    if (!isManualInvoice.value && invoiceType.value !== 'system') {
-        transactionMeta.manualInvoiceCode = generateInvoiceNumber();
-    }
+    // Reset input faktur manual setiap modal dibuka
+    transactionMeta.manualInvoiceCode = '';
   }
 });
-
-const generateInvoiceNumber = () => {
-    const type = invoiceType.value;
-    if (type === 'system' || type === 'manual') return null;
-
-    const prefix = String(authStore.getSetting('purchase_invoice_prefix') || 'PO-').toUpperCase();
-    const suffix = String(authStore.getSetting('purchase_invoice_suffix') || '').toUpperCase();
-    const length = Number(authStore.getSetting('purchase_invoice_length')) || 5;
-    let randomPart = '';
-
-    if (type === 'numeric') {
-        randomPart = String(new Date().getTime()).slice(-length);
-    } else if (type === 'alphanumeric') {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        for (let i = 0; i < length; i++) {
-            randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-    }
-    return `${prefix}${randomPart}${suffix}`;
-};
 
 const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 
@@ -121,27 +99,28 @@ const processCheckout = async () => {
 
         let catatan = '';
         if (isCreditSale.value) {
-            catatan = paymentData.cashAmount > 0 
-                ? `Hutang (Kredit) - DP: ${formatCurrency(paymentData.cashAmount)}`
+            catatan = paymentData.value.cashAmount > 0 
+                ? `Hutang (Kredit) - DP: ${formatCurrency(paymentData.value.cashAmount)} via ${paymentData.value.paymentMethodCode}`
                 : `Hutang (Kredit) Penuh`;
         } else {
-            catatan = `Lunas Pembelian: ${formatCurrency(paymentData.cashAmount)}`;
+            catatan = `Lunas Pembelian: ${formatCurrency(paymentData.value.cashAmount)} via ${paymentData.value.paymentMethodCode}`;
         }
 
         const payload = {
             grand_total: props.grandTotal,
             total_items: props.cart.length,
-            payment_method: paymentData.paymentMethodCode || 'CASH',
+            payment_method: paymentData.value.paymentMethodCode || 'CASH',
             notes: catatan,
             status: isCreditSale.value ? 'PENDING' : 'COMPLETED',
-            amount_cash: paymentData.cashAmount,
+            amount_cash: paymentData.value.cashAmount,
             transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
             
-            ...(invoiceType.value !== 'system' && { custom_journal_code: transactionMeta.manualInvoiceCode }),
+            // Mengirim parameter jika diisi oleh user
+            ...(transactionMeta.manualInvoiceCode.trim() && { custom_journal_code: transactionMeta.manualInvoiceCode.trim() }),
 
             ...(isCreditSale.value && {
                 is_credit: 'true',
-                due_date: paymentData.dueDate ? paymentData.dueDate.toISOString().split('T')[0] : null
+                due_date: paymentData.value.dueDate ? paymentData.value.dueDate.toISOString().split('T')[0] : null
             }),
             amount_credit: isCreditSale.value ? props.grandTotal : 0, 
             shipping_cost: 0, 
@@ -169,93 +148,119 @@ const processCheckout = async () => {
   <Dialog 
     :visible="visible" 
     @update:visible="$emit('update:visible', $event)" 
-    class="w-full max-w-4xl m-4 !p-0" 
+    class="w-full max-w-5xl m-4 !p-0" 
     :pt="{ root: { class: '!border-0 !shadow-2xl !rounded-2xl' }, header: { class: 'hidden' }, content: { class: '!p-0 !rounded-2xl' } }" 
     modal dismissableMask
   >
         <div class="bg-surface-0 flex flex-col max-h-[95vh] rounded-2xl overflow-hidden relative">
             
             <div class="flex justify-between items-center px-6 py-5 border-b border-surface-200 bg-surface-50 shrink-0">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                        <i class="pi pi-shopping-cart text-xl"></i>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-inner">
+                        <i class="pi pi-shopping-cart text-2xl"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-xl text-surface-800 leading-tight">Proses Pembelian (Restock)</h3>
+                        <h3 class="font-black text-xl text-surface-800 leading-tight tracking-tight">Proses Pembelian (Restock)</h3>
                         <p class="text-xs text-surface-500 font-medium mt-0.5">Selesaikan data tagihan ke Supplier</p>
                     </div>
                 </div>
-                <button @click="$emit('update:visible', false)" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-200 hover:bg-surface-300 text-surface-600 transition"><i class="pi pi-times"></i></button>
+                <button @click="$emit('update:visible', false)" class="w-8 h-8 rounded-full flex items-center justify-center bg-surface-200 hover:bg-red-100 hover:text-red-500 text-surface-600 transition-colors"><i class="pi pi-times font-bold"></i></button>
             </div>
 
             <div class="flex flex-col lg:flex-row flex-1 overflow-hidden">
                 <div class="w-full lg:w-[40%] bg-surface-50 border-r border-surface-200 flex flex-col shrink-0">
-                    <div class="p-6 flex-1 flex flex-col justify-center">
-                        <div class="bg-emerald-600 text-white rounded-2xl p-6 shadow-lg shadow-emerald-500/30 relative overflow-hidden flex flex-col items-center justify-center text-center h-48">
+                    <div class="p-6 md:p-8 flex-1 flex flex-col">
+                        
+                        <div class="bg-emerald-600 text-white rounded-3xl p-6 shadow-lg shadow-emerald-500/30 relative overflow-hidden flex flex-col items-center justify-center text-center h-56 mb-8 border border-emerald-500">
+                            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/50 to-emerald-800/50"></div>
                             <i class="pi pi-truck absolute -right-6 -bottom-6 text-9xl opacity-10"></i>
-                            <span class="text-sm uppercase font-bold tracking-widest text-emerald-200 mb-2">Total Pembelian</span>
-                            <div class="text-4xl md:text-5xl font-black text-white drop-shadow-md">{{ formatCurrency(grandTotal) }}</div>
+                            
+                            <span class="text-xs uppercase font-black tracking-widest text-emerald-200 mb-2 relative z-10 drop-shadow-sm">Total Tagihan</span>
+                            <div class="text-5xl font-black text-white drop-shadow-md relative z-10">{{ formatCurrency(grandTotal) }}</div>
                         </div>
 
-                        <div class="mt-8 space-y-4 px-2">
-                            <div class="flex justify-between items-center pb-4 border-b border-surface-200 border-dashed" v-if="!isCreditSale">
-                                <span class="text-sm font-bold text-surface-500 uppercase tracking-wider">Total Kas Keluar</span>
-                                <span class="text-2xl font-black font-mono text-emerald-600">{{ formatCurrency(paymentData.cashAmount) }}</span>
+                        <div class="flex-1 flex flex-col justify-end space-y-5 px-2">
+                            <div class="flex justify-between items-center pb-5 border-b border-surface-200 border-dashed" v-if="!isCreditSale">
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-bold text-surface-500 uppercase tracking-wider">Total Kas Keluar</span>
+                                </div>
+                                <span class="text-3xl font-black font-mono text-emerald-500">
+                                    {{ formatCurrency(paymentData.cashAmount) }}
+                                </span>
                             </div>
                             
-                            <div class="flex justify-between items-center pb-4 border-b border-surface-200 border-dashed" v-else>
-                                <span class="text-sm font-bold text-orange-600 uppercase tracking-wider">Total Hutang (Minus DP)</span>
-                                <span class="text-2xl font-black font-mono text-orange-600">{{ formatCurrency(props.grandTotal - paymentData.cashAmount) }}</span>
+                            <div class="flex justify-between items-center pb-5 border-b border-surface-200 border-dashed" v-else>
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-bold text-orange-600 uppercase tracking-wider">Sisa Hutang</span>
+                                    <span class="text-[10px] text-surface-400 font-medium">Setelah dikurangi Uang Muka (DP)</span>
+                                </div>
+                                <span class="text-3xl font-black font-mono text-orange-600">
+                                    {{ formatCurrency(props.grandTotal - paymentData.cashAmount) }}
+                                </span>
                             </div>
 
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm font-medium text-surface-500">Jumlah Item Masuk</span>
-                                <span class="text-sm font-bold text-surface-800">{{ cart.length }} Item</span>
+                            <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-surface-200 shadow-sm">
+                                <div class="flex items-center gap-3">
+                                    <i class="pi pi-box text-surface-400"></i>
+                                    <span class="text-sm font-bold text-surface-600">Jumlah Item Masuk</span>
+                                </div>
+                                <span class="text-lg font-black text-surface-800 bg-surface-100 px-3 py-1 rounded-lg">{{ cart.length }} Item</span>
                             </div>
                         </div>
+
                     </div>
                 </div>
 
                 <div class="w-full lg:w-[60%] flex flex-col flex-1 overflow-y-auto scrollbar-thin bg-surface-0">
-                    <div class="p-6 md:p-8 space-y-6">
+                    <div class="p-6 md:p-8 space-y-8">
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="p-3 bg-surface-50 border border-surface-200 rounded-xl" v-if="invoiceType !== 'system'">
-                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">No. Faktur Beli / PO</label>
-                                <InputText v-if="isManualInvoice" v-model="transactionMeta.manualInvoiceCode" placeholder="Ketik No PO Manual..." class="w-full !text-sm font-mono font-bold" />
-                                <div v-else class="flex justify-between items-center bg-white px-3 py-2 rounded-lg border border-surface-200 font-mono font-bold text-emerald-700 text-sm shadow-sm">
-                                    <span>{{ transactionMeta.manualInvoiceCode }}</span>
-                                    <button class="text-surface-400 hover:text-emerald-600 transition" @click="transactionMeta.manualInvoiceCode = generateInvoiceNumber()" v-tooltip.top="'Generate Ulang'"><i class="pi pi-refresh"></i></button>
+                        <section>
+                            <h4 class="text-xs font-black text-surface-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i class="pi pi-receipt"></i> Data Transaksi</h4>
+                            
+                            <div class="flex flex-col gap-4">
+                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm">
+                                    <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">No. Faktur / PO Pembelian</label>
+                                    <InputText v-model="transactionMeta.manualInvoiceCode" placeholder="Kosongkan untuk otomatis" class="w-full !text-sm font-mono font-bold" />
+                                    <p class="text-[11px] text-surface-500 mt-1.5 leading-tight">
+                                        Isi nomor faktur fisik dari supplier. Biarkan kosong jika ingin sistem membuatkan nomor PO otomatis.
+                                    </p>
+                                </div>
+                                
+                                <div class="p-4 bg-surface-50 border border-surface-200 rounded-xl shadow-sm flex flex-col justify-center">
+                                    <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Pilih Supplier <span class="text-red-500" v-if="isCreditSale">*</span></label>
+                                    <Dropdown v-model="transactionMeta.supplierUuid" :options="suppliers" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Supplier..." class="w-full !text-sm" showClear />
+                                    <p class="text-[11px] text-orange-500 mt-1.5 leading-tight font-medium" v-if="isCreditSale && !transactionMeta.supplierUuid">
+                                        Supplier wajib diisi untuk pencatatan hutang.
+                                    </p>
                                 </div>
                             </div>
+                        </section>
+
+                        <Divider type="dashed" class="!m-0 opacity-50" />
+
+                        <section>
+                            <h4 class="text-xs font-black text-surface-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i class="pi pi-credit-card"></i> Opsi Pembayaran</h4>
                             
-                            <div class="p-3 bg-surface-50 border border-surface-200 rounded-xl flex flex-col justify-center" :class="{'md:col-span-2': invoiceType === 'system'}">
-                                <label class="text-[10px] uppercase font-bold text-surface-500 mb-2 block">Pilih Supplier <span class="text-red-500" v-if="isCreditSale">*</span></label>
-                                <Dropdown v-model="transactionMeta.supplierUuid" :options="suppliers" optionLabel="name" optionValue="uuid" filter placeholder="Pilih Supplier..." class="w-full !text-sm" showClear />
-                            </div>
-                        </div>
-
-                        <Divider type="dashed" />
-
-                        <PaymentMethodSelector 
-                            v-model="paymentData"
-                            :grand-total="grandTotal"
-                            type="buy"
-                            :has-customer="!!transactionMeta.supplierUuid"
-                        />
+                            <PaymentMethodSelector 
+                                v-model="paymentData"
+                                :grand-total="grandTotal"
+                                type="buy"
+                                :has-customer="!!transactionMeta.supplierUuid"
+                            />
+                        </section>
 
                     </div>
                 </div>
             </div>
 
-            <div class="px-6 py-4 border-t border-surface-200 bg-surface-50 shrink-0 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.03)] z-10">
-                <div class="flex flex-col sm:flex-row gap-3 justify-end">
-                    <Button label="Kembali" icon="pi pi-arrow-left" class="sm:w-32 font-bold !rounded-xl" severity="secondary" outlined @click="$emit('update:visible', false)" :disabled="processing" />
+            <div class="px-6 md:px-8 py-5 border-t border-surface-200 bg-surface-50 shrink-0 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.03)] z-10">
+                <div class="flex flex-col sm:flex-row gap-4 justify-end items-center">
+                    <Button label="Kembali Selesai" icon="pi pi-arrow-left" class="w-full sm:w-auto sm:w-36 font-bold !rounded-xl" severity="secondary" text @click="$emit('update:visible', false)" :disabled="processing" />
                     
                     <Button 
-                        :label="isCreditSale ? 'Catat Hutang' : 'Selesaikan Pembelian'" 
+                        :label="isCreditSale ? 'Catat Hutang Pembelian' : 'Selesaikan Pembelian'" 
                         icon="pi pi-check"
-                        class="w-full sm:w-auto px-8 !h-12 !text-sm !font-bold !rounded-xl shadow-sm transition-colors" 
+                        class="w-full sm:w-auto sm:w-[280px] !h-14 !text-sm !font-bold !rounded-xl shadow-md transition-colors" 
                         :severity="isCreditSale ? 'warning' : 'success'" 
                         :loading="processing" 
                         :disabled="!canCheckout" 
@@ -273,4 +278,7 @@ const processCheckout = async () => {
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 10px; }
 .scrollbar-thin:hover::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.8); }
+
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
