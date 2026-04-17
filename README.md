@@ -3,13 +3,6 @@
 Aplikasi Point of Sale (POS) berbasis desktop yang menggabungkan kekuatan **NestJS** sebagai Backend API, **Nuxt 3** sebagai Frontend, dan **Electron** sebagai wrapper desktop. Aplikasi ini menggunakan **MariaDB/MySQL** sebagai engine database lokal yang dibundel langsung di dalam aplikasi.
 
 ## 🚀 Rilis Terbaru (Latest Release)
-
-| Versi | OS Support | Tanggal Rilis | Status |
-|-------|------------|---------------|--------|
-| **v1.1.0** | Windows, macOS, Linux | 13 Juni 2026 | :rocket: Latest |
-| **v1.0.1** | Windows, macOS | 01 Mei 2026 | Stable |
-| **v1.0.0** | Windows, Macos | 13 April 2026 | Initial |
-
 > **Catatan:** Anda dapat mengunduh aset instalasi (`.zip`, `.exe`, `.dmg`, `.AppImage`) melalui halaman [GitHub Releases](https://github.com/api-diengcyber/transaksi/releases).
 
 ## 🛠️ Fitur Utama
@@ -36,10 +29,10 @@ Pastikan binary MariaDB sudah ada di folder `bin/mysql/[platform]` di dalam `tra
 Jalankan perintah berikut di root folder atau masing-masing sub-folder:
 ```bash
 # Di folder transaksi-api
-npm install
+pnpm install
 
 # Di folder transaksi
-npm install
+pnpm install
 
 # Di folder transaksi-electron
 npm install
