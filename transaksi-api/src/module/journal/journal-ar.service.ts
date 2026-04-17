@@ -3,7 +3,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { JournalService } from './journal.service';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateJournalDetailUuid, generateJournalUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class JournalArService {
@@ -17,7 +17,6 @@ export class JournalArService {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         const code = await this.journalService.generateCode('AR', storeUuid); 
         
         // --- TAMBAHAN UNTUK FAKTUR KUSTOM ---
@@ -40,7 +39,7 @@ export class JournalArService {
         // ------------------------------------
 
         const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
+          uuid: generateJournalUuid(storeUuid),
           code,
           createdBy: userId,
           verifiedBy: userId,
@@ -93,11 +92,10 @@ export class JournalArService {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         const code = await this.journalService.generateCode('PAY_AR', storeUuid); 
         
         const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
+          uuid: generateJournalUuid(storeUuid),
           code,
           createdBy: userId,
           verifiedBy: userId,

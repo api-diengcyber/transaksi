@@ -314,6 +314,7 @@ definePageMeta({ layout: "default" });
             <PaymentTab v-if="activeTab === 'payment'" />
             <SyncTab v-if="activeTab === 'sync'" :settings="settings" :loading="loading" /> 
             <SalesTab v-if="activeTab === 'sales'" :settings="settings" />
+            <PurchaseTab v-if="activeTab === 'purchase'" :settings="settings" />
             <ReceivableTab v-if="activeTab === 'ar'" :settings="settings" />
             <PayableTab v-if="activeTab === 'ap'" :settings="settings" />
           </div>

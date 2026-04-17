@@ -3,7 +3,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { JournalService } from './journal.service';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateJournalDetailUuid, generateJournalUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 import { JournalStokService } from './journal-stok.service';
 
 @Injectable()
@@ -19,13 +19,12 @@ export class JournalReturnSaleService {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         // Generate kode dengan prefix RET_SALE
         const code = await this.journalService.generateCode('RET_SALE', storeUuid);
         
         // 1. Simpan Header Jurnal
         const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
+          uuid: generateJournalUuid(storeUuid),
           code,
           createdBy: userId,
           verifiedBy: userId,

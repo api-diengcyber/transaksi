@@ -29,8 +29,8 @@ const transactionMeta = reactive({
   manualInvoiceCode: ''
 });
 
-// State Terpusat untuk Pembayaran (Digunakan oleh Selector)
-const paymentData = reactive({
+// [PERBAIKAN] Gunakan 'ref' alih-alih 'reactive' agar bisa dire-assign oleh v-model dari komponen anak
+const paymentData = ref({
   paymentType: 'CASH', // 'CASH' atau 'CREDIT'
   paymentMethodUuid: null, // ID Rekening/Metode (misal BCA)
   paymentMethodCode: 'CASH', 
@@ -41,16 +41,17 @@ const paymentData = reactive({
 // Computed Settings
 const invoiceType = computed(() => authStore.getSetting('invoice_number_type', 'system'));
 const isManualInvoice = computed(() => invoiceType.value === 'manual');
-const isCreditSale = computed(() => paymentData.paymentType === 'CREDIT');
+// [PERBAIKAN] Tambahkan .value
+const isCreditSale = computed(() => paymentData.value.paymentType === 'CREDIT');
 
 const remainingBalance = computed(() => {
     if (isCreditSale.value) return 0;
-    return paymentData.cashAmount - props.grandTotal;
+    return paymentData.value.cashAmount - props.grandTotal;
 });
 
 const sisaPiutang = computed(() => {
     if (!isCreditSale.value) return 0;
-    return props.grandTotal - (paymentData.cashAmount || 0);
+    return props.grandTotal - (paymentData.value.cashAmount || 0);
 });
 
 const hasCustomer = computed(() => !!transactionMeta.memberUuid || transactionMeta.customerName.trim() !== '');
@@ -63,26 +64,23 @@ const canCheckout = computed(() => {
     if (isManualInvoice.value && !transactionMeta.manualInvoiceCode.trim()) return false;
 
     if (isCreditSale.value) {
-        // Validasi Kredit: Harus ada pelanggan dan tanggal jatuh tempo
-        // Jika ada DP (cashAmount > 0), pastikan metode pembayaran DP juga dipilih
         const isCustomerValid = hasCustomer.value;
-        const isDueDateValid = !!paymentData.dueDate;
-        const isDpValid = paymentData.cashAmount === 0 || !!paymentData.paymentMethodUuid;
+        const isDueDateValid = !!paymentData.value.dueDate;
+        const isDpValid = paymentData.value.cashAmount === 0 || !!paymentData.value.paymentMethodUuid;
         
         return isCustomerValid && isDueDateValid && isDpValid;
     } else {
-        // Validasi Lunas: Uang tunai >= Total tagihan & metode bayar terpilih
-        return paymentData.cashAmount >= props.grandTotal && !!paymentData.paymentMethodUuid;
+        return paymentData.value.cashAmount >= props.grandTotal && !!paymentData.value.paymentMethodUuid;
     }
 });
 
-// Watcher untuk reset saat modal dibuka
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    paymentData.paymentType = 'CASH';
-    paymentData.cashAmount = props.grandTotal;
-    paymentData.dueDate = null;
-    paymentData.paymentMethodUuid = null; // Biarkan Selector yang set default-nya
+    // [PERBAIKAN] Akses property dengan .value
+    paymentData.value.paymentType = 'CASH';
+    paymentData.value.cashAmount = props.grandTotal;
+    paymentData.value.dueDate = null;
+    paymentData.value.paymentMethodUuid = null; 
 
     if (!isManualInvoice.value && invoiceType.value !== 'system') {
         transactionMeta.manualInvoiceCode = generateInvoiceNumber();
@@ -148,33 +146,31 @@ const processCheckout = async (isPrint = false) => {
 
         let catatan = '';
         if (isCreditSale.value) {
-            catatan = paymentData.cashAmount > 0 
-                ? `Piutang (Kredit) - DP: ${formatCurrency(paymentData.cashAmount)} via ${paymentData.paymentMethodCode}`
+            catatan = paymentData.value.cashAmount > 0 
+                ? `Piutang (Kredit) - DP: ${formatCurrency(paymentData.value.cashAmount)} via ${paymentData.value.paymentMethodCode}`
                 : `Piutang (Kredit) Penuh`;
         } else {
             catatan = remainingBalance.value > 0 
-                ? `Lunas via ${paymentData.paymentMethodCode}: ${formatCurrency(paymentData.cashAmount)} | Kembali: ${formatCurrency(remainingBalance.value)}` 
-                : `Lunas Uang Pas via ${paymentData.paymentMethodCode}`;
+                ? `Lunas via ${paymentData.value.paymentMethodCode}: ${formatCurrency(paymentData.value.cashAmount)} | Kembali: ${formatCurrency(remainingBalance.value)}` 
+                : `Lunas Uang Pas via ${paymentData.value.paymentMethodCode}`;
         }
 
         const payload = {
             grand_total: props.grandTotal,
             total_items: props.cart.length,
-            // Jika kredit penuh tanpa DP, payment method sebenarnya tidak diperlukan saat ini, 
-            // tapi kita defaultkan ke CASH agar backend tidak error, 
-            // ATAU gunakan kode metode yang dipilih untuk bayar DP.
-            payment_method: paymentData.paymentMethodCode || 'CASH',
+            // [PERBAIKAN] Akses property dengan .value
+            payment_method: paymentData.value.paymentMethodCode || 'CASH',
             customer_name: finalCustName,
             notes: catatan,
             status: isCreditSale.value ? 'PENDING' : 'COMPLETED',
-            amount_cash: paymentData.cashAmount,
+            amount_cash: paymentData.value.cashAmount,
             transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
             cashier_uuid: transactionMeta.cashierUuid, 
             ...(invoiceType.value !== 'system' && { custom_journal_code: transactionMeta.manualInvoiceCode }),
 
             ...(isCreditSale.value && {
                 is_credit: 'true',
-                due_date: paymentData.dueDate ? paymentData.dueDate.toISOString().split('T')[0] : null
+                due_date: paymentData.value.dueDate ? paymentData.value.dueDate.toISOString().split('T')[0] : null
             }),
             amount_credit: isCreditSale.value ? props.grandTotal : 0, 
             amount_installment: 0, 
@@ -201,7 +197,6 @@ const processCheckout = async (isPrint = false) => {
             }
         }
 
-        // Reset Data
         transactionMeta.customerName = '';
         transactionMeta.memberUuid = null;
 

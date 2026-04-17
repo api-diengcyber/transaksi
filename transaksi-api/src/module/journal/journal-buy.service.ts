@@ -3,7 +3,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { JournalService } from './journal.service';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateJournalDetailUuid, generateJournalUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 import { JournalStokService } from './journal-stok.service';
 import { JournalApService } from './journal-ap.service'; 
 
@@ -22,8 +22,6 @@ export class JournalBuyService {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
-        
         // 1. Selalu generate 'code' bawaan sistem (Default System)
         const code = await this.journalService.generateCode('BUY', storeUuid);
         
@@ -44,7 +42,7 @@ export class JournalBuyService {
 
         // 4. Simpan ke Journal Utama MENGGUNAKAN CODE SYSTEM
         const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
+          uuid: generateJournalUuid(storeUuid),
           code: code, // Tetap aman menggunakan BUY-...
           createdBy: userId,
           verifiedBy: userId,

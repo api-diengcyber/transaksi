@@ -3,7 +3,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { JournalService } from './journal.service';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateJournalUuid, generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class JournalApService {
@@ -16,7 +16,6 @@ export class JournalApService {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         const code = await this.journalService.generateCode('AP', storeUuid); 
         
         // --- TAMBAHAN UNTUK FAKTUR KUSTOM ---
@@ -38,7 +37,7 @@ export class JournalApService {
         // ------------------------------------
 
         const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
+          uuid: generateJournalUuid(storeUuid),
           code,
           createdBy: userId,
           verifiedBy: userId,
@@ -90,11 +89,10 @@ export class JournalApService {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
-        const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         const code = await this.journalService.generateCode('PAY_AP', storeUuid); // Kode berawalan PAY_AP
         
         const journal = manager.create(JournalEntity, {
-          uuid: customJournalUuid,
+          uuid: generateJournalUuid(storeUuid),
           code,
           createdBy: userId,
           verifiedBy: userId,
