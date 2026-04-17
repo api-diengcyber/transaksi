@@ -294,10 +294,11 @@ export class JournalSaleService {
                     amount: amountCredit,
                     dp_amount: Number(dataDetails.amount_cash || 0),
                     due_date: dataDetails.due_date,
-                    notes: `Piutang otomatis dari Nota Penjualan: ${code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
+                    notes: `Piutang otomatis dari Nota Penjualan: ${customInvoiceCode || code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
                     customer_name: dataDetails.customer_name || 'Pelanggan Umum',
                     member_uuid: dataDetails.member_uuid || null,
                     reference_journal_code: code,
+                    custom_journal_code: customInvoiceCode ? `AR-${customInvoiceCode}` : undefined
                 };
                 await this.journalArService.createAr(arPayload, userId, storeUuid, manager);
             }

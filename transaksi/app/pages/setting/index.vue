@@ -72,8 +72,15 @@ const settings = reactive({
   purchase_invoice_suffix: "",
 
   // AR (Piutang) & AP (Hutang)
-  ar_use_invoice_number: false,
-  ap_use_invoice_number: false,
+  ar_invoice_number_type: "system",
+  ar_invoice_prefix: "INV-",
+  ar_invoice_length: 5,
+  ar_invoice_suffix: "",
+
+  ap_invoice_number_type: "system",
+  ap_invoice_prefix: "INV-",
+  ap_invoice_length: 5,
+  ap_invoice_suffix: "",
 });
 
 // Routing Logic

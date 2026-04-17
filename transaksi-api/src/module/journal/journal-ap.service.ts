@@ -12,14 +12,31 @@ export class JournalApService {
     @Inject('DATA_SOURCE') private dataSource: DataSource,
   ) {}
 
-  // 1. FUNGSI UNTUK MENCATAT HUTANG BARU / MANUAL
   async createAp(details: any, userId: string, storeUuid: string, externalManager?: EntityManager) {
     if (!storeUuid) throw new BadRequestException('Store ID is required.');
 
     const work = async (manager: EntityManager) => {
         const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
-        const code = await this.journalService.generateCode('AP', storeUuid); // Kode berawalan AP
+        const code = await this.journalService.generateCode('AP', storeUuid); 
         
+        // --- TAMBAHAN UNTUK FAKTUR KUSTOM ---
+        const customInvoiceCode = details.custom_journal_code || details.invoice_code;
+
+        // Validasi Faktur Duplikat
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            const existingInvoice = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+                .innerJoin(JournalEntity, 'j', 'j.code = d.journalCode')
+                .where('j.code LIKE :pattern', { pattern: '%AP%' })
+                .andWhere('d.key = :key', { key: 'invoice_code' })
+                .andWhere('d.value = :val', { val: customInvoiceCode })
+                .getOne();
+
+            if (existingInvoice) {
+                throw new BadRequestException(`Nomor Faktur Hutang "${customInvoiceCode}" sudah digunakan. Silakan gunakan nomor lain.`);
+            }
+        }
+        // ------------------------------------
+
         const journal = manager.create(JournalEntity, {
           uuid: customJournalUuid,
           code,
@@ -31,14 +48,25 @@ export class JournalApService {
 
         const detailEntities: JournalDetailEntity[] = [];
 
-        // PENGAMANAN: Buka bungkus detail jika dari frontend terkirim berlapis
+        // --- SIMPAN FAKTUR KUSTOM KE DETAIL ---
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            detailEntities.push(manager.create(JournalDetailEntity, {
+                uuid: generateJournalDetailUuid(storeUuid),
+                key: 'invoice_code',
+                value: customInvoiceCode,
+                journalCode: code,
+                createdBy: userId,
+            }));
+        }
+
         const dataDetails = details?.details ? details.details : details;
 
         Object.entries(dataDetails).forEach(([key, value]) => {
+          // Abaikan field custom code agar tidak ganda
+          if (key === 'custom_journal_code' || key === 'invoice_code') return;
           if (value === null || value === undefined) return;
   
           let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-          // Pengamanan agar tidak Error Data Too Long
           if (valStr.length > 250) valStr = valStr.substring(0, 250);
 
           detailEntities.push(manager.create(JournalDetailEntity, {
@@ -166,10 +194,13 @@ export class JournalApService {
           const itemSupplierUuidKey = Object.keys(main.detailsMap).find(k => k.startsWith('supplier_uuid#'));
           if (itemSupplierUuidKey) supplierUuid = main.detailsMap[itemSupplierUuidKey];
       }
+      
+      const invoiceCode = main.detailsMap['invoice_code'] || main.code;
 
       return {
         uuid: main.uuid,
         code: main.code,
+        invoiceCode: invoiceCode,
         date: main.createdAt,
         type: 'AP',
         total: total,

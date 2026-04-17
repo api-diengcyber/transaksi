@@ -149,9 +149,10 @@ export class JournalBuyService {
                     amount: amountCredit,
                     dp_amount: Number(dataDetails.amount_cash || 0),
                     due_date: dataDetails.due_date,
-                    notes: `Hutang otomatis dari Nota Pembelian: ${code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
+                    notes: `Hutang otomatis dari Nota Pembelian: ${customInvoiceCode || code} ${dataDetails.notes ? ' | ' + dataDetails.notes : ''}`,
                     supplier_name: dataDetails.supplier || 'Supplier Umum', 
                     reference_journal_code: code,
+                    custom_journal_code: customInvoiceCode ? `AP-${customInvoiceCode}` : undefined
                 };
                 
                 await this.journalApService.createAp(apPayload, userId, storeUuid, manager);

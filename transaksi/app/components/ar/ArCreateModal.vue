@@ -24,6 +24,7 @@ const members = ref([]);
 
 // State utama transaksi (di luar pengaturan pembayaran/DP)
 const transaction = reactive({
+    invoiceCode: '', // [BARU] Field untuk nomor faktur kustom
     amount: null,
     memberUuid: null,
     contactName: '',
@@ -52,6 +53,7 @@ onMounted(async () => {
 // Reset form saat modal dibuka/ditutup
 watch(() => props.visible, (newVal) => {
     if (newVal) {
+        transaction.invoiceCode = ''; // [BARU] Reset nomor faktur
         transaction.amount = null;
         transaction.memberUuid = null;
         transaction.contactName = '';
@@ -112,6 +114,8 @@ const processTransaction = async () => {
         }
 
         const payload = {
+            // [BARU] Menyisipkan Nomor Faktur Kustom ke Backend
+            custom_journal_code: transaction.invoiceCode || undefined,
             details: {
                 amount: transaction.amount,
                 dp_amount: paymentData.value.cashAmount || 0,
@@ -141,7 +145,9 @@ const processTransaction = async () => {
 
     } catch (e) {
         console.error("Error creating AR:", e);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.message || 'Terjadi kesalahan', life: 3000 });
+        // Menampilkan pesan error dari backend (seperti error nomor nota duplikat)
+        const errorMessage = e.response?.data?.message || e.message || 'Terjadi kesalahan';
+        toast.add({ severity: 'error', summary: 'Gagal Menyimpan', detail: errorMessage, life: 5000 });
     } finally {
         processing.value = false;
     }
@@ -177,6 +183,18 @@ const processTransaction = async () => {
 
             <div class="p-6 space-y-5 overflow-y-auto scrollbar-thin">
                 
+                <div class="bg-surface-50 p-4 border border-surface-200 rounded-lg">
+                    <label class="text-xs font-bold text-surface-600 uppercase mb-1 block">Nomor Faktur / Invoice</label>
+                    <InputText 
+                        v-model="transaction.invoiceCode" 
+                        placeholder="Biarkan kosong untuk penomoran otomatis" 
+                        class="w-full !text-sm uppercase font-mono" 
+                    />
+                    <p class="text-[11px] text-surface-500 mt-1.5 leading-tight">
+                        Masukkan nomor faktur sesuai preferensi Anda. Jika dikosongkan, sistem akan otomatis menggunakan kode AR-xxxx.
+                    </p>
+                </div>
+
                 <div class="flex gap-3">
                     <div class="flex-1">
                         <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Member</label>

@@ -237,44 +237,72 @@ export class StoreService {
       // await this.journalConfigService.installJournalConfigs(manager, customStoreUuid, savedUser.uuid);
 
       // 5. SETTINGS
+      // Menyiapkan konfigurasi bawaan dari sistem
+      const defaultSettingsConfig: Record<string, any> = {
+        store_name: dto.name || 'Toko AA',
+        store_phone: dto.phone || '-',
+        store_address: dto.address || '-',
+        store_footer_msg: '',
+        store_logo_url: logoPath || '',
+        theme_primary_color: '#2563eb',
+        layout_mode: 'topbar',
+        sync_enabled: 'false',
+        sync_mode: 'automatic',
+        sync_url: '',
+        sale_tax_enabled: 'false',
+        sale_tax_percentage: '0',
+        sale_tax_method: 'exclusive',
+        sale_allow_negative_stock: 'false',
+        sale_require_customer: 'false',
+        invoice_number_type: 'system',
+        invoice_prefix: 'INV-',
+        invoice_length: '5',
+        invoice_suffix: '',
+        receipt_template: 'thermal_standard',
+        receipt_show_cashier: 'true',
+        receipt_show_customer: 'true',
+        receipt_header_text: '',
+        buy_require_supplier: 'true',
+        buy_auto_approve: 'true',
+        buy_default_due_days: '30',
+        purchase_invoice_number_type: 'system',
+        purchase_invoice_prefix: 'PO-',
+        purchase_invoice_length: '5',
+        purchase_invoice_suffix: '',
+        ar_invoice_number_type: 'numeric',
+        ar_invoice_prefix: 'INV-',
+        ar_invoice_length: '5',
+        ar_invoice_suffix: '',
+        ap_invoice_number_type: 'numeric',
+        ap_invoice_prefix: 'INV-',
+        ap_invoice_length: '5',
+        ap_invoice_suffix: ''
+      };
+
+      // Tambahkan nama file logo original jika ada
+      if (originalName) {
+        defaultSettingsConfig['store_logo_filename'] = originalName;
+      }
+
+      // Menimpa pengaturan default jika ada data spesifik dari request (dto)
       if (dto.settings && dto.settings.length > 0) {
-        const settingEntities = dto.settings.map((s) =>
-          manager.create(StoreSettingEntity, {
-            uuid: generateStoreSettingUuid(customStoreUuid),
-            storeUuid: savedStore.uuid,
-            key: s.key,
-            value: s.value,
-            createdBy: savedUser.uuid,
-          }),
-        );
-        await manager.save(settingEntities);
+        dto.settings.forEach((s) => {
+          defaultSettingsConfig[s.key] = s.value;
+        });
       }
 
-      const initialSettings: Partial<StoreSettingEntity>[] = [];
-
-      if (logoPath) {
-        initialSettings.push(manager.create(StoreSettingEntity, {
+      // Mapping object ke entitas database (TypeORM) lalu simpan
+      const settingEntities = Object.entries(defaultSettingsConfig).map(([key, value]) => {
+        return manager.create(StoreSettingEntity, {
           uuid: generateStoreSettingUuid(customStoreUuid),
           storeUuid: savedStore.uuid,
-          key: 'store_logo_url',
-          value: logoPath,
-        }));
-        initialSettings.push(manager.create(StoreSettingEntity, {
-          uuid: generateStoreSettingUuid(customStoreUuid),
-          storeUuid: savedStore.uuid,
-          key: 'store_logo_filename',
-          value: originalName ?? '',
-        }));
-        initialSettings.push(manager.create(StoreSettingEntity, {
-          uuid: generateStoreSettingUuid(customStoreUuid),
-          storeUuid: savedStore.uuid,
-          key: 'theme_primary_color',
-          value: '#2563eb',
+          key: key,
+          value: String(value), // Pastikan menjadi string agar sesuai dengan tipe data kolom
           createdBy: savedUser.uuid,
-        }));
-      }
+        });
+      });
 
-      await manager.save(initialSettings);
+      await manager.save(settingEntities);
 
       // 6. TOKEN 
       const tokens = await this.authService.getTokens(savedUser.uuid, savedUser.username);

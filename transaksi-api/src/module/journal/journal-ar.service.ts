@@ -20,6 +20,25 @@ export class JournalArService {
         const customJournalUuid = `${storeUuid}-JRN-${generateLocalUuid()}`;
         const code = await this.journalService.generateCode('AR', storeUuid); 
         
+        // --- TAMBAHAN UNTUK FAKTUR KUSTOM ---
+        // Ambil nilai custom invoice dari payload kasir/frontend
+        const customInvoiceCode = details.custom_journal_code || details.invoice_code;
+
+        // Validasi: Jangan sampai No Faktur Manual yang sudah pernah ada terpakai lagi
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            const existingInvoice = await manager.createQueryBuilder(JournalDetailEntity, 'd')
+                .innerJoin(JournalEntity, 'j', 'j.code = d.journalCode')
+                .where('j.code LIKE :pattern', { pattern: '%AR%' })
+                .andWhere('d.key = :key', { key: 'invoice_code' })
+                .andWhere('d.value = :val', { val: customInvoiceCode })
+                .getOne();
+
+            if (existingInvoice) {
+                throw new BadRequestException(`Nomor Faktur Piutang "${customInvoiceCode}" sudah digunakan. Silakan gunakan nomor lain.`);
+            }
+        }
+        // ------------------------------------
+
         const journal = manager.create(JournalEntity, {
           uuid: customJournalUuid,
           code,
@@ -31,10 +50,23 @@ export class JournalArService {
 
         const detailEntities: JournalDetailEntity[] = [];
 
+        // --- SIMPAN FAKTUR KUSTOM KE DETAIL ---
+        if (customInvoiceCode && customInvoiceCode.trim() !== '') {
+            detailEntities.push(manager.create(JournalDetailEntity, {
+                uuid: generateJournalDetailUuid(storeUuid),
+                key: 'invoice_code',
+                value: customInvoiceCode,
+                journalCode: code,
+                createdBy: userId,
+            }));
+        }
+
         // PENGAMANAN: Buka bungkus detail jika dari frontend terkirim berlapis
         const dataDetails = details?.details ? details.details : details;
 
         Object.entries(dataDetails).forEach(([key, value]) => {
+          // Abaikan field custom code agar tidak ganda
+          if (key === 'custom_journal_code' || key === 'invoice_code') return;
           if (value === null || value === undefined) return;
   
           let valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -164,9 +196,12 @@ export class JournalArService {
           if (itemMemberUuidKey) memberUuid = main.detailsMap[itemMemberUuidKey];
       }
 
+      const invoiceCode = main.detailsMap['invoice_code'] || main.code;
+
       return {
         uuid: main.uuid,
         code: main.code,
+        invoiceCode: invoiceCode,
         date: main.createdAt,
         type: 'AR',
         total: total,

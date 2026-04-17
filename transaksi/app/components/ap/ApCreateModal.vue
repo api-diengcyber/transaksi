@@ -25,6 +25,7 @@ const suppliers = ref([]);
 
 // 1. Inisialisasi state transaksi utama
 const transaction = reactive({
+    invoiceCode: '', // [BARU] Field untuk nomor faktur kustom
     amount: null,
     supplierUuid: null,
     contactName: '',
@@ -58,6 +59,7 @@ onMounted(async () => {
 // Reset Form saat modal dibuka/ditutup
 watch(() => props.visible, (newVal) => {
     if (newVal) {
+        transaction.invoiceCode = ''; // [BARU] Reset nomor faktur
         transaction.amount = null;
         transaction.supplierUuid = null;
         transaction.contactName = '';
@@ -123,6 +125,8 @@ const processTransaction = async () => {
         }
 
         const payload = {
+            // [BARU] Menyisipkan Nomor Faktur Kustom ke Backend
+            custom_journal_code: transaction.invoiceCode || undefined,
             details: {
                 amount: transaction.amount,
                 dp_amount: paymentData.value.cashAmount || 0,
@@ -148,6 +152,7 @@ const processTransaction = async () => {
         } else if (journalService.createTransaction) {
              // Fallback apabila backend belum memecah routing API khusus AP
             await journalService.createTransaction({
+                custom_journal_code: payload.custom_journal_code,
                 details: { ...payload.details, transaction_type: 'AP' }
             });
         } else {
@@ -159,7 +164,8 @@ const processTransaction = async () => {
         handleClose(); 
     } catch (e) {
         console.error("Gagal simpan AP:", e);
-        toast.add({ severity: 'error', summary: 'Gagal', detail: e.response?.data?.message || e.message || 'Terjadi kesalahan sistem', life: 3000 });
+        // Menangkap error duplikat faktur dari backend
+        toast.add({ severity: 'error', summary: 'Gagal Menyimpan', detail: e.response?.data?.message || e.message || 'Terjadi kesalahan sistem', life: 5000 });
     } finally {
         processing.value = false;
     }
@@ -194,6 +200,18 @@ const processTransaction = async () => {
 
             <div class="p-6 space-y-5 overflow-y-auto scrollbar-thin">
                 
+                <div class="bg-surface-50 p-4 border border-surface-200 rounded-lg">
+                    <label class="text-xs font-bold text-surface-600 uppercase mb-1 block">Nomor Faktur / Invoice Hutang</label>
+                    <InputText 
+                        v-model="transaction.invoiceCode" 
+                        placeholder="Biarkan kosong untuk penomoran otomatis" 
+                        class="w-full !text-sm uppercase font-mono" 
+                    />
+                    <p class="text-[11px] text-surface-500 mt-1.5 leading-tight">
+                        Masukkan nomor faktur tagihan dari supplier. Jika dikosongkan, sistem akan otomatis menggunakan kode AP-xxxx.
+                    </p>
+                </div>
+
                 <div class="flex gap-3">
                     <div class="flex-1">
                         <label class="text-xs font-bold text-surface-500 uppercase mb-1 block">Data Supplier</label>

@@ -26,10 +26,6 @@
       "output": "dist"
     },
     "asar": true,
-    "asarUnpack": [
-      "bin/mysql/**/*",
-      "bin/mysql/darwin/**/*"
-    ],
     "files": [
       "src/**/*",
       "package.json",
