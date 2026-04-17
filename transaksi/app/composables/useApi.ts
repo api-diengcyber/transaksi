@@ -60,7 +60,8 @@ export const useApi = async (url: string, options: any = {}) => {
         // Kadang backend mengembalikan 404 jika user/toko sudah dihapus dari database tapi token masih valid
         if (error.response?.status === 404 || error.response?.status === 403) {
             console.error('Resource not found or access denied. Forcing logout.');
-            forceLogout();
+            throw error;
+            // forceLogout();
         }
 
         throw error;
