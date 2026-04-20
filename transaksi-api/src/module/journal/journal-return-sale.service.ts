@@ -116,8 +116,11 @@ export class JournalReturnSaleService {
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
 
-  async getReport(storeUuid: string) {
-    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+  async getReport(storeUuid: string, queryParams?: any) {
+    const { page = 1, limit = 15, search = '', startDate, endDate } = queryParams || {};
+
+    // 1. Query builder untuk mengambil jurnal RET_SALE
+    const qb = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndMapMany(
         'journal.details', 
         JournalDetailEntity, 
@@ -125,48 +128,113 @@ export class JournalReturnSaleService {
         'detail.journalCode = journal.code'
       )
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
-      .andWhere('journal.code LIKE :type', { type: `%RET_SALE%` })
-      .orderBy('journal.createdAt', 'DESC')
-      .getMany();
+      .andWhere('journal.code LIKE :ret', { ret: `%RET_SALE%` });
+    
+    // 2. Filter Tanggal
+    if (startDate && endDate) {
+       qb.andWhere('journal.createdAt BETWEEN :startDate AND :endDate', { 
+           startDate: `${startDate} 00:00:00`, 
+           endDate: `${endDate} 23:59:59` 
+       });
+    }
 
-    return journals.map(journal => {
+    const journals = await qb.orderBy('journal.createdAt', 'DESC').getMany();
+
+    // 3. Format details ke object map
+    const formattedJournals = journals.map(journal => {
       const detailsMap = (journal['details'] || []).reduce((acc: any, curr: any) => {
         acc[curr.key] = curr.value;
         return acc;
       }, {});
+      return { ...journal, detailsMap };
+    });
 
-      // 1. Ekstrak Pelanggan
-      let memberName = detailsMap['member'] || detailsMap['member_name'] || detailsMap['customer'] || detailsMap['pelanggan'];
+    // 4. Proses Ekstraksi Data
+    const allReturns = formattedJournals.map(ret => {
+      // Ekstrak Member / Pelanggan
+      let memberName = ret.detailsMap['member'] || ret.detailsMap['member_name'] || ret.detailsMap['customer'] || ret.detailsMap['pelanggan'];
+      let memberUuid = ret.detailsMap['member_uuid'] || ret.detailsMap['customer_uuid'];
+      
       if (!memberName) {
-         const itemMemberKey = Object.keys(detailsMap).find(k => (k.startsWith('member_name#') || k.startsWith('member#')) && !k.includes('uuid'));
-         if (itemMemberKey) memberName = detailsMap[itemMemberKey];
+         const itemMemberKey = Object.keys(ret.detailsMap).find(k => (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid'));
+         if (itemMemberKey) memberName = ret.detailsMap[itemMemberKey];
       }
 
-      // 2. Ekstrak Rincian Barang yang Diretur
+      // Ekstrak Items Retur
       const items: any[] = [];
       let idx = 0;
-      // Mencari key seperti item_name#0, qty_return#0, dll
-      while (detailsMap[`item_name#${idx}`] || detailsMap[`name#${idx}`]) {
+      while (ret.detailsMap[`item_name#${idx}`] || ret.detailsMap[`product_name#${idx}`] || ret.detailsMap[`name#${idx}`]) {
           items.push({
-              name: detailsMap[`item_name#${idx}`] || detailsMap[`name#${idx}`],
-              qty: Number(detailsMap[`qty_return#${idx}`] || detailsMap[`qty#${idx}`] || 1),
-              price: Number(detailsMap[`price#${idx}`] || detailsMap[`sell_price#${idx}`] || 0),
-              subtotal: Number(detailsMap[`subtotal#${idx}`] || 0)
+              name: ret.detailsMap[`item_name#${idx}`] || ret.detailsMap[`product_name#${idx}`] || ret.detailsMap[`name#${idx}`],
+              qty: Number(ret.detailsMap[`qty#${idx}`] || 1),
+              price: Number(ret.detailsMap[`sell_price#${idx}`] || ret.detailsMap[`price#${idx}`] || 0),
+              subtotal: Number(ret.detailsMap[`subtotal#${idx}`] || 0)
           });
           idx++;
       }
 
+      if (items.length === 0 && ret.detailsMap['items']) {
+         try {
+             const parsed = JSON.parse(ret.detailsMap['items']);
+             parsed.forEach((p: any) => items.push({
+                 name: p.item_name || p.product_name || p.name,
+                 qty: Number(p.qty || 1),
+                 price: Number(p.sell_price || p.price || 0),
+                 subtotal: Number(p.subtotal || (Number(p.qty || 1) * Number(p.sell_price || p.price || 0)))
+             }));
+         } catch(e) {}
+      }
+
       return {
-        uuid: journal.uuid,
-        code: journal.code,
-        date: journal.createdAt,
-        type: 'RET_SALE',
-        totalReturn: Number(detailsMap['grand_total'] || detailsMap['amount'] || 0),
+        uuid: ret.uuid,
+        code: ret.code,
+        date: ret.createdAt,
+        referenceCode: ret.detailsMap['reference_journal_code'] || ret.detailsMap['reference_no'] || null,
+        total: Number(ret.detailsMap['grand_total'] || ret.detailsMap['amount'] || 0),
+        notes: ret.detailsMap['notes'] || '',
         member: memberName || 'Pelanggan Umum',
-        refCode: detailsMap['reference_journal_code'] || null, // Referensi Kode SALE asli
-        notes: detailsMap['notes'] || '',
-        items: items // Daftar barang retur
+        memberUuid: memberUuid || null,
+        items: items
       };
     });
+
+    // 5. Pencarian Global
+    let filteredReturns = allReturns;
+    if (search) {
+        const lowerSearch = search.toLowerCase();
+        filteredReturns = allReturns.filter(r => 
+            r.code.toLowerCase().includes(lowerSearch) ||
+            (r.referenceCode && r.referenceCode.toLowerCase().includes(lowerSearch)) ||
+            r.member.toLowerCase().includes(lowerSearch)
+        );
+    }
+
+    // 6. Summary Kalkulasi
+    let totalNilaiRetur = 0;
+    let totalItemRetur = 0;
+
+    filteredReturns.forEach(ret => {
+        totalNilaiRetur += ret.total;
+        if (ret.items && ret.items.length > 0) {
+            totalItemRetur += ret.items.reduce((sum, i) => sum + (i.qty || 0), 0);
+        }
+    });
+
+    const summary = { totalNilaiRetur, totalItemRetur };
+
+    // 7. Paginasi Server Side
+    const totalRecords = filteredReturns.length;
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const paginatedData = filteredReturns.slice(startIndex, startIndex + Number(limit));
+
+    return {
+        data: paginatedData,
+        summary,
+        meta: {
+            total: totalRecords,
+            page: Number(page),
+            limit: Number(limit)
+        }
+    };
   }
 }

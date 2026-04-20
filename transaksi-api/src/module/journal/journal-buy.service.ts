@@ -166,9 +166,11 @@ export class JournalBuyService {
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
 
-  async getReport(storeUuid: string) {
-    // 1. Ambil semua jurnal yang berkaitan dengan Pembelian, Bayar Hutang, dan Returnya
-    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+  async getReport(storeUuid: string, queryParams?: any) {
+    const { page = 1, limit = 15, search = '', startDate, endDate } = queryParams || {};
+
+    // 1. Ambil semua jurnal Pembelian, Pembayaran Hutang, dan Returnya
+    const qb = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndMapMany(
         'journal.details', 
         JournalDetailEntity, 
@@ -176,15 +178,19 @@ export class JournalBuyService {
         'detail.journalCode = journal.code'
       )
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
-      .andWhere('(journal.code LIKE :buy OR journal.code LIKE :payap OR journal.code LIKE :retbuy)', { 
-          buy: `%BUY%`, 
-          payap: `%PAY_AP%`,
-          retbuy: `%RET_BUY%`
-      })
-      .orderBy('journal.createdAt', 'DESC')
-      .getMany();
+      .andWhere('(journal.code LIKE :buy OR journal.code LIKE :payap)', { buy: `%BUY%`, payap: `%PAY_AP%` });
+    
+    // Filter berdasarkan periode tanggal jika disediakan
+    if (startDate && endDate) {
+       qb.andWhere('journal.createdAt BETWEEN :startDate AND :endDate', { 
+           startDate: `${startDate} 00:00:00`, 
+           endDate: `${endDate} 23:59:59` 
+       });
+    }
 
-    // 2. Format details ke object map agar mudah dibaca
+    const journals = await qb.orderBy('journal.createdAt', 'DESC').getMany();
+
+    // 2. Format details ke object map
     const formattedJournals = journals.map(journal => {
       const detailsMap = (journal['details'] || []).reduce((acc: any, curr: any) => {
         acc[curr.key] = curr.value;
@@ -193,37 +199,78 @@ export class JournalBuyService {
       return { ...journal, detailsMap };
     });
 
-    // 3. Pisahkan Jurnal berdasarkan prefix
-    const mainPurchases = formattedJournals.filter(j => j.code.includes('BUY') && !j.code.includes('RET_BUY'));
+    // =====================================================================
+    // 3. LOGIKA SUPPLIER: AMBIL NAMA DARI DATABASE JIKA ADA SUPPLIER_UUID
+    // =====================================================================
+    const uniqueSupplierUuids = [...new Set(formattedJournals.map(j => j.detailsMap['supplier_uuid'] || j.detailsMap['vendor_uuid']).filter(Boolean))];
+    let dbSuppliersMap: Record<string, string> = {};
+
+    if (uniqueSupplierUuids.length > 0) {
+        try {
+            // Lakukan query untuk mengambil nama supplier dari database
+            // NOTE: Sesuaikan nama tabel 'supplier' dan kolom 'name' (atau 'company') dengan skema database Anda
+            const suppliersList = await this.dataSource.query(
+                `SELECT uuid, name FROM user WHERE uuid IN (?)`,
+                [uniqueSupplierUuids]
+            );
+            suppliersList.forEach((s: any) => {
+                // Gunakan s.name atau s.company tergantung field mana yang menyimpan nama supplier
+                dbSuppliersMap[s.uuid] = s.name; 
+            });
+        } catch (e) {
+            console.warn('Gagal memuat nama supplier dari database:', e);
+        }
+    }
+    // =====================================================================
+
+    // Pisah-pisahkan berdasarkan jenisnya
+    const mainBuys = formattedJournals.filter(j => j.code.includes('BUY') && !j.code.includes('RET_BUY'));
     const returns = formattedJournals.filter(j => j.code.includes('RET_BUY'));
     const payments = formattedJournals.filter(j => j.code.includes('PAY_AP'));
 
-    // 4. Proses data Induk BUY
-    return mainPurchases.map(main => {
-      // Ekstrak Informasi Supplier
-      let supplierName = main.detailsMap['supplier'] || main.detailsMap['supplier_name'] || main.detailsMap['vendor'];
-      let supplierUuid = main.detailsMap['supplier_uuid'];
+    // 4. Proses Ekstraksi Data Induk BUY
+    const allBuys = mainBuys.map(main => {
       
-      if (!supplierName) {
-         const itemSupKey = Object.keys(main.detailsMap).find(k => (k.startsWith('supplier_name#') || k.startsWith('supplier#')) && !k.includes('uuid'));
-         if (itemSupKey) supplierName = main.detailsMap[itemSupKey];
+      // TERAPKAN ATURAN SUPPLIER
+      const supplierUuid = main.detailsMap['supplier_uuid'] || main.detailsMap['vendor_uuid'] || null;
+      const supplierText = main.detailsMap['supplier_name'] || main.detailsMap['supplier'] || main.detailsMap['vendor'];
+      
+      let finalSupplierName = 'Supplier Umum';
+      if (supplierUuid && dbSuppliersMap[supplierUuid]) {
+          // Jika ada UUID dan ada di DB -> Pakai nama dari Database
+          finalSupplierName = dbSuppliersMap[supplierUuid];
+      } else if (supplierText) {
+          // Jika tidak ada UUID -> Pakai teks 'supplier_name'
+          finalSupplierName = supplierText;
       }
 
       // Ekstrak Daftar Barang (Items)
       const items: any[] = [];
       let idx = 0;
-      while (main.detailsMap[`item_name#${idx}`] || main.detailsMap[`name#${idx}`]) {
+      while (main.detailsMap[`item_name#${idx}`] || main.detailsMap[`product_name#${idx}`] || main.detailsMap[`name#${idx}`]) {
           items.push({
-              name: main.detailsMap[`item_name#${idx}`] || main.detailsMap[`name#${idx}`],
+              name: main.detailsMap[`item_name#${idx}`] || main.detailsMap[`product_name#${idx}`] || main.detailsMap[`name#${idx}`],
               qty: Number(main.detailsMap[`qty#${idx}`] || 1),
               price: Number(main.detailsMap[`buy_price#${idx}`] || main.detailsMap[`price#${idx}`] || 0),
               subtotal: Number(main.detailsMap[`subtotal#${idx}`] || 0)
           });
           idx++;
       }
+      
+      if (items.length === 0 && main.detailsMap['items']) {
+         try {
+             const parsed = JSON.parse(main.detailsMap['items']);
+             parsed.forEach((p: any) => items.push({
+                 name: p.item_name || p.product_name || p.name,
+                 qty: Number(p.qty || 1),
+                 price: Number(p.buy_price || p.price || 0),
+                 subtotal: Number(p.subtotal || (Number(p.qty || 1) * Number(p.buy_price || p.price || 0)))
+             }));
+         } catch(e) {}
+      }
 
-      // Ekstrak Histori Bayar Hutang (PAY_AP)
-      const purchasePayments = payments
+      // Ekstrak Pembayaran Hutang
+      const buyPayments = payments
           .filter(p => p.detailsMap['reference_journal_code'] === main.code)
           .map(p => ({
             code: p.code,
@@ -233,8 +280,8 @@ export class JournalBuyService {
             notes: p.detailsMap['notes'] || ''
           }));
 
-      // Ekstrak Histori Retur Beli (RET_BUY)
-      const purchaseReturns = returns
+      // Ekstrak Retur
+      const buyReturns = returns
           .filter(r => r.detailsMap['reference_journal_code'] === main.code)
           .map(r => ({
             code: r.code,
@@ -248,8 +295,7 @@ export class JournalBuyService {
       const dp = Number(main.detailsMap['amount_cash'] || 0);
       const invoiceCode = main.detailsMap['invoice_code'] || main.code;
       
-      // Kalkulasi Lunas/Belum
-      const totalPaid = isCredit ? (dp + purchasePayments.reduce((sum, p) => sum + p.amount, 0)) : total;
+      const totalPaid = isCredit ? (dp + buyPayments.reduce((sum, p) => sum + p.amount, 0)) : total;
 
       return {
         uuid: main.uuid,
@@ -260,17 +306,62 @@ export class JournalBuyService {
         total: total,
         dp: isCredit ? dp : total,
         paid: totalPaid,
-        remaining: isCredit ? (total - totalPaid) : 0,
+        remaining: isCredit ? (total - totalPaid) : 0, 
+        paymentMethod: main.detailsMap['payment_method'] || 'CASH',
         isCredit: isCredit,
-        supplier: supplierName || 'Supplier Umum',
-        supplierUuid: supplierUuid || null,
-        referenceNo: main.detailsMap['reference_no'] || null, // Nota Fisik dari Supplier
+        supplier: finalSupplierName,       // Sudah menggunakan nama yang benar dari DB atau Fallback Teks
+        supplierUuid: supplierUuid,
+        referenceNo: main.detailsMap['reference_no'] || null,
         notes: main.detailsMap['notes'] || '',
-        items: items,
-        payments: purchasePayments,
-        returns: purchaseReturns
+        items: items, 
+        payments: buyPayments, 
+        returns: buyReturns 
       };
     });
+
+    // 5. Fitur Search Global Server Side (Lebih Akurat)
+    let filteredBuys = allBuys;
+    if (search) {
+        const lowerSearch = search.toLowerCase();
+        filteredBuys = allBuys.filter(b => 
+            b.code.toLowerCase().includes(lowerSearch) ||
+            b.invoiceCode.toLowerCase().includes(lowerSearch) ||
+            b.supplier.toLowerCase().includes(lowerSearch) // Mencari dari nama final yang sudah difilter
+        );
+    }
+
+    // 6. Kalkulasi Ringkasan (Summary) 
+    let totalPembelian = 0;
+    let totalTunai = 0;
+    let totalKredit = 0;
+    let totalItemDibeli = 0;
+
+    filteredBuys.forEach(buy => {
+        totalPembelian += buy.total;
+        if (buy.isCredit) totalKredit += buy.total;
+        else totalTunai += buy.total;
+
+        if (buy.items && buy.items.length > 0) {
+            totalItemDibeli += buy.items.reduce((sum, i) => sum + (i.qty || 0), 0);
+        }
+    });
+
+    const summary = { totalPembelian, totalTunai, totalKredit, totalItemDibeli };
+
+    // 7. Paginasi Server Side
+    const totalRecords = filteredBuys.length;
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const paginatedData = filteredBuys.slice(startIndex, startIndex + Number(limit));
+
+    return {
+        data: paginatedData,
+        summary,
+        meta: {
+            total: totalRecords,
+            page: Number(page),
+            limit: Number(limit)
+        }
+    };
   }
 
   async getBuyByCode(storeUuid: string, code: string) {

@@ -86,9 +86,10 @@ export const useJournalService = () => {
         });
     };
     
-    const findAllByType = async (type: string) => {
+    const findAllByType = async (type: string, params: any = {}) => {
         return await useApi(`${API_BASE}/report/${type}`, {
-            method: 'GET'
+            method: 'GET',
+            params
         });
     };
 

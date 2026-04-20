@@ -134,9 +134,11 @@ export class JournalArService {
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
 
-  async getReport(storeUuid: string) {
-    // 1. Ambil semua jurnal yang berhubungan dengan Piutang (AR & PAY_AR)
-    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+  async getReport(storeUuid: string, queryParams?: any) {
+    const { page = 1, limit = 15, search = '', startDate, endDate } = queryParams || {};
+
+    // 1. Ambil jurnal Penjualan (SALE) dan Pembayaran Piutang (PAY_AR)
+    const qb = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndMapMany(
         'journal.details', 
         JournalDetailEntity, 
@@ -144,11 +146,19 @@ export class JournalArService {
         'detail.journalCode = journal.code'
       )
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
-      .andWhere('journal.code LIKE :type', { type: `%AR%` }) // Menangkap 'AR' dan 'PAY_AR'
-      .orderBy('journal.createdAt', 'DESC')
-      .getMany();
+      .andWhere('(journal.code LIKE :sale OR journal.code LIKE :payar)', { sale: `%SALE%`, payar: `%PAY_AR%` });
+    
+    // 2. Filter Tanggal
+    if (startDate && endDate) {
+       qb.andWhere('journal.createdAt BETWEEN :startDate AND :endDate', { 
+           startDate: `${startDate} 00:00:00`, 
+           endDate: `${endDate} 23:59:59` 
+       });
+    }
 
-    // 2. Mapping detail ke dalam bentuk object agar mudah diakses
+    const journals = await qb.orderBy('journal.createdAt', 'DESC').getMany();
+
+    // 3. Format details ke object map
     const formattedJournals = journals.map(journal => {
       const detailsMap = (journal['details'] || []).reduce((acc: any, curr: any) => {
         acc[curr.key] = curr.value;
@@ -157,45 +167,51 @@ export class JournalArService {
       return { ...journal, detailsMap };
     });
 
-    // 3. Pisahkan Jurnal Induk (AR Murni) dan Jurnal Pembayaran (PAY_AR)
-    const mainAr = formattedJournals.filter(j => j.code.includes('AR') && !j.code.includes('PAY_AR'));
-    const payAr = formattedJournals.filter(j => j.code.includes('PAY_AR'));
+    // 4. Filter HANYA Penjualan Kredit (Piutang)
+    const mainSales = formattedJournals.filter(j => 
+        j.code.includes('SALE') && 
+        !j.code.includes('RET_SALE') && 
+        (j.detailsMap['is_credit'] === 'true' || j.detailsMap['is_credit'] === true)
+    );
+    const payments = formattedJournals.filter(j => j.code.includes('PAY_AR'));
+    const returns = formattedJournals.filter(j => j.code.includes('RET_SALE'));
 
-    // 4. Susun respons akhir yang sudah disarangkan (Nested)
-    return mainAr.map(main => {
-      // Cari semua pembayaran yang merujuk pada kode tagihan AR ini
-      const payments = payAr
-        .filter(p => p.detailsMap['reference_journal_code'] === main.code)
-        .map(p => ({
-          code: p.code,
-          date: p.createdAt,
-          amount: Number(p.detailsMap['amount'] || p.detailsMap['nominal_ar_paid'] || 0),
-          method: p.detailsMap['payment_method'] || 'CASH',
-          notes: p.detailsMap['notes'] || ''
-        }));
-
-      // Kalkulasi Keuangan
-      const total = Number(main.detailsMap['amount'] || main.detailsMap['grand_total'] || 0);
-      const dp = Number(main.detailsMap['dp_amount'] || main.detailsMap['amount_cash'] || 0);
-      const totalPaid = dp + payments.reduce((sum, p) => sum + p.amount, 0);
-
-      // Ekstrak Informasi Pelanggan
+    // 5. Proses Ekstraksi Data AR
+    const allAR = mainSales.map(main => {
       let memberName = main.detailsMap['member'] || main.detailsMap['member_name'] || main.detailsMap['customer'] || main.detailsMap['pelanggan'];
       let memberUuid = main.detailsMap['member_uuid'] || main.detailsMap['customer_uuid'];
-
+      
       if (!memberName) {
-         const itemMemberKey = Object.keys(main.detailsMap).find(k => 
-           (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid')
-         );
+         const itemMemberKey = Object.keys(main.detailsMap).find(k => (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid'));
          if (itemMemberKey) memberName = main.detailsMap[itemMemberKey];
       }
 
-      if (!memberUuid) {
-          const itemMemberUuidKey = Object.keys(main.detailsMap).find(k => k.startsWith('member_uuid#') || k.startsWith('customer_uuid#'));
-          if (itemMemberUuidKey) memberUuid = main.detailsMap[itemMemberUuidKey];
-      }
+      // Ekstrak Pembayaran/Cicilan Piutang
+      const salePayments = payments
+          .filter(p => p.detailsMap['reference_journal_code'] === main.code)
+          .map(p => ({
+            code: p.code,
+            date: p.createdAt,
+            amount: Number(p.detailsMap['amount'] || p.detailsMap['nominal_ar_paid'] || 0),
+            method: p.detailsMap['payment_method'] || 'CASH',
+            notes: p.detailsMap['notes'] || ''
+          }));
 
+      // Ekstrak Retur (Bisa Mengurangi Piutang)
+      const saleReturns = returns
+          .filter(r => r.detailsMap['reference_journal_code'] === main.code)
+          .map(r => ({
+            code: r.code,
+            date: r.createdAt,
+            amount: Number(r.detailsMap['grand_total'] || r.detailsMap['amount'] || 0)
+          }));
+
+      const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || 0);
+      const dp = Number(main.detailsMap['amount_cash'] || 0);
       const invoiceCode = main.detailsMap['invoice_code'] || main.code;
+      
+      const totalPaid = dp + salePayments.reduce((sum, p) => sum + p.amount, 0);
+      const remaining = total - totalPaid;
 
       return {
         uuid: main.uuid,
@@ -206,16 +222,51 @@ export class JournalArService {
         total: total,
         dp: dp,
         paid: totalPaid,
-        remaining: total - totalPaid,
-        isPaidOff: (total - totalPaid) <= 0.01, // Lunas jika sisa <= 0
-        member: memberName || 'Pelanggan Umum / Tidak Diketahui',
+        remaining: remaining > 0 ? remaining : 0, // Pastikan tidak minus jika lunas
+        member: memberName || 'Pelanggan Umum',
         memberUuid: memberUuid || null,
-        dueDate: main.detailsMap['due_date'] || null,
-        refCode: main.detailsMap['reference_journal_code'] || null, // Jurnal sumber (cth: SALE-xxx)
-        referenceNo: main.detailsMap['reference_no'] || null, // Nota eksternal (cth: INV-001)
-        notes: main.detailsMap['notes'] || '',
-        payments: payments // <--- KUNCI: Detail cicilan langsung disarangkan di sini
+        payments: salePayments, 
+        returns: saleReturns 
       };
     });
+
+    // 6. Pencarian Global
+    let filteredAR = allAR;
+    if (search) {
+        const lowerSearch = search.toLowerCase();
+        filteredAR = allAR.filter(s => 
+            s.code.toLowerCase().includes(lowerSearch) ||
+            s.invoiceCode.toLowerCase().includes(lowerSearch) ||
+            s.member.toLowerCase().includes(lowerSearch)
+        );
+    }
+
+    // 7. Summary Kalkulasi
+    let totalPiutang = 0;
+    let totalTerbayar = 0;
+    let totalSisaPiutang = 0;
+
+    filteredAR.forEach(ar => {
+        totalPiutang += ar.total;
+        totalTerbayar += ar.paid;
+        totalSisaPiutang += ar.remaining;
+    });
+
+    const summary = { totalPiutang, totalTerbayar, totalSisaPiutang };
+
+    // 8. Paginasi Server Side
+    const totalRecords = filteredAR.length;
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const paginatedData = filteredAR.slice(startIndex, startIndex + Number(limit));
+
+    return {
+        data: paginatedData,
+        summary,
+        meta: {
+            total: totalRecords,
+            page: Number(page),
+            limit: Number(limit)
+        }
+    };
   }
 }

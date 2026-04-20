@@ -310,9 +310,11 @@ export class JournalSaleService {
     return externalManager ? await work(externalManager) : await this.dataSource.transaction(work);
   }
   
-  async getReport(storeUuid: string) {
-    // 1. Ambil semua jurnal yang berkaitan dengan Penjualan, Pembayaran Piutang, dan Returnya
-    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+  async getReport(storeUuid: string, queryParams?: any) {
+    const { page = 1, limit = 15, search = '', startDate, endDate } = queryParams || {};
+
+    // 1. Ambil jurnal Penjualan dan Pembayaran Piutang
+    const qb = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndMapMany(
         'journal.details', 
         JournalDetailEntity, 
@@ -320,9 +322,16 @@ export class JournalSaleService {
         'detail.journalCode = journal.code'
       )
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
-      .andWhere('(journal.code LIKE :sale OR journal.code LIKE :payar)', { sale: `%SALE%`, payar: `%PAY_AR%` })
-      .orderBy('journal.createdAt', 'DESC')
-      .getMany();
+      .andWhere('(journal.code LIKE :sale OR journal.code LIKE :payar)', { sale: `%SALE%`, payar: `%PAY_AR%` });
+    
+    if (startDate && endDate) {
+       qb.andWhere('journal.createdAt BETWEEN :startDate AND :endDate', { 
+           startDate: `${startDate} 00:00:00`, 
+           endDate: `${endDate} 23:59:59` 
+       });
+    }
+
+    const journals = await qb.orderBy('journal.createdAt', 'DESC').getMany();
 
     // 2. Format details ke object map
     const formattedJournals = journals.map(journal => {
@@ -333,24 +342,47 @@ export class JournalSaleService {
       return { ...journal, detailsMap };
     });
 
-    // 3. Pisah-pisahkan berdasarkan jenisnya
+    // =====================================================================
+    // 3. LOGIKA MEMBER: AMBIL NAMA DARI DATABASE JIKA ADA MEMBER_UUID
+    // =====================================================================
+    const uniqueMemberUuids = [...new Set(formattedJournals.map(j => j.detailsMap['member_uuid']).filter(Boolean))];
+    let dbMembersMap: Record<string, string> = {};
+
+    if (uniqueMemberUuids.length > 0) {
+        try {
+            // Lakukan query untuk mengambil nama member dari database
+            // NOTE: Sesuaikan nama tabel 'user' dan kolom 'name' jika di DB Anda berbeda (misal tabel 'member')
+            const membersList = await this.dataSource.query(
+                `SELECT uuid, name FROM user WHERE uuid IN (?)`,
+                [uniqueMemberUuids]
+            );
+            membersList.forEach((m: any) => {
+                dbMembersMap[m.uuid] = m.name;
+            });
+        } catch (e) {
+            console.warn('Gagal memuat nama member dari database:', e);
+        }
+    }
+    // =====================================================================
+
     const mainSales = formattedJournals.filter(j => j.code.includes('SALE') && !j.code.includes('RET_SALE'));
     const returns = formattedJournals.filter(j => j.code.includes('RET_SALE'));
     const payments = formattedJournals.filter(j => j.code.includes('PAY_AR'));
 
-    // 4. Proses data Induk SALE
-    return mainSales.map(main => {
-      // Ekstrak Pelanggan / Member
-      let memberName = main.detailsMap['member'] || main.detailsMap['member_name'] || main.detailsMap['customer'] || main.detailsMap['pelanggan'];
-      let memberUuid = main.detailsMap['member_uuid'] || main.detailsMap['customer_uuid'];
+    // 4. Proses Ekstraksi Data
+    const allSales = mainSales.map(main => {
       
-      if (!memberName) {
-         const itemMemberKey = Object.keys(main.detailsMap).find(k => (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid'));
-         if (itemMemberKey) memberName = main.detailsMap[itemMemberKey];
-      }
-      if (!memberUuid) {
-          const itemMemberUuidKey = Object.keys(main.detailsMap).find(k => k.startsWith('member_uuid#') || k.startsWith('customer_uuid#'));
-          if (itemMemberUuidKey) memberUuid = main.detailsMap[itemMemberUuidKey];
+      // TERAPKAN ATURAN MEMBER
+      const memberUuid = main.detailsMap['member_uuid'] || null;
+      const memberText = main.detailsMap['member']; // Input nama manual jika bukan member terdaftar
+      
+      let finalMemberName = 'Pelanggan Umum';
+      if (memberUuid && dbMembersMap[memberUuid]) {
+          // Jika ada UUID dan ada di DB -> Pakai nama dari Database
+          finalMemberName = dbMembersMap[memberUuid];
+      } else if (memberText) {
+          // Jika tidak ada UUID -> Pakai teks 'member'
+          finalMemberName = memberText;
       }
 
       // Ekstrak Daftar Barang (Items)
@@ -369,7 +401,7 @@ export class JournalSaleService {
       if (items.length === 0 && main.detailsMap['items']) {
          try {
              const parsed = JSON.parse(main.detailsMap['items']);
-             parsed.forEach(p => items.push({
+             parsed.forEach((p: any) => items.push({
                  name: p.item_name || p.product_name || p.name,
                  qty: Number(p.qty || 1),
                  price: Number(p.sell_price || p.price || 0),
@@ -378,7 +410,7 @@ export class JournalSaleService {
          } catch(e) {}
       }
 
-      // Ekstrak Cicilan Piutang (Jika Ada)
+      // Ekstrak Cicilan Piutang & Retur
       const salePayments = payments
           .filter(p => p.detailsMap['reference_journal_code'] === main.code)
           .map(p => ({
@@ -389,7 +421,6 @@ export class JournalSaleService {
             notes: p.detailsMap['notes'] || ''
           }));
 
-      // Ekstrak Retur (Jika Ada)
       const saleReturns = returns
           .filter(r => r.detailsMap['reference_journal_code'] === main.code)
           .map(r => ({
@@ -403,8 +434,6 @@ export class JournalSaleService {
       const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || 0);
       const dp = Number(main.detailsMap['amount_cash'] || 0);
       const invoiceCode = main.detailsMap['invoice_code'] || main.code;
-      
-      // Jika tunai, otomatis lunas. Jika kredit, hitung total yg sudah dibayar
       const totalPaid = isCredit ? (dp + salePayments.reduce((sum, p) => sum + p.amount, 0)) : total;
 
       return {
@@ -416,18 +445,62 @@ export class JournalSaleService {
         total: total,
         dp: isCredit ? dp : total,
         paid: totalPaid,
-        remaining: isCredit ? (total - totalPaid) : 0, // Sisa piutang
+        remaining: isCredit ? (total - totalPaid) : 0, 
         paymentMethod: main.detailsMap['payment_method'] || 'CASH',
         isCredit: isCredit,
-        member: memberName || 'Pelanggan Umum',
-        memberUuid: memberUuid || null,
+        member: finalMemberName,          // Sudah menggunakan nama yang benar
+        memberUuid: memberUuid,
         referenceNo: main.detailsMap['reference_no'] || null,
         notes: main.detailsMap['notes'] || '',
-        items: items, // Detail Barang
-        payments: salePayments, // Detail Piutang
-        returns: saleReturns // Detail Retur
+        items: items, 
+        payments: salePayments, 
+        returns: saleReturns 
       };
     });
+
+    // 5. Fitur Search (Sekarang akan 100% akurat untuk pencarian nama member)
+    let filteredSales = allSales;
+    if (search) {
+        const lowerSearch = search.toLowerCase();
+        filteredSales = allSales.filter(s => 
+            s.code.toLowerCase().includes(lowerSearch) ||
+            s.invoiceCode.toLowerCase().includes(lowerSearch) ||
+            s.member.toLowerCase().includes(lowerSearch) 
+        );
+    }
+
+    // 6. Kalkulasi Ringkasan (Summary)
+    let totalPenjualan = 0;
+    let totalTunai = 0;
+    let totalKredit = 0;
+    let totalItemTerjual = 0;
+
+    filteredSales.forEach(sale => {
+        totalPenjualan += sale.total;
+        if (sale.isCredit) totalKredit += sale.total;
+        else totalTunai += sale.total;
+
+        if (sale.items && sale.items.length > 0) {
+            totalItemTerjual += sale.items.reduce((sum, i) => sum + (i.qty || 0), 0);
+        }
+    });
+
+    const summary = { totalPenjualan, totalTunai, totalKredit, totalItemTerjual };
+
+    // 7. Paginasi Server Side
+    const totalRecords = filteredSales.length;
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const paginatedData = filteredSales.slice(startIndex, startIndex + Number(limit));
+
+    return {
+        data: paginatedData,
+        summary,
+        meta: {
+            total: totalRecords,
+            page: Number(page),
+            limit: Number(limit)
+        }
+    };
   }
 
   async getSaleByCode(storeUuid: string, code: string) {

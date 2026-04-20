@@ -135,23 +135,26 @@ export class JournalController {
     @GetStore() storeUuid: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,    
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
   ) {
     const normalizedType = type.toUpperCase();
     switch (normalizedType) {
       case 'ALL':
         return this.journalService.findAll(storeUuid, startDate, endDate);
       case 'SALE':
-        return this.journalSaleService.getReport(storeUuid);
+        return this.journalSaleService.getReport(storeUuid, { page, limit, search, startDate, endDate });
       case 'BUY':
-        return this.journalBuyService.getReport(storeUuid);
-      case 'AP':
-        return this.journalApService.getReport(storeUuid);
-      case 'AR':
-        return this.journalArService.getReport(storeUuid);
+        return this.journalBuyService.getReport(storeUuid, { page, limit, search, startDate, endDate });
       case 'RET_SALE': 
-        return this.journalReturnSaleService.getReport(storeUuid);
+        return this.journalReturnSaleService.getReport(storeUuid, { page, limit, search, startDate, endDate });
       case 'RET_BUY': 
-        return this.journalReturnBuyService.getReport(storeUuid);
+        return this.journalReturnBuyService.getReport(storeUuid, { page, limit, search, startDate, endDate });
+      case 'AR':
+        return this.journalArService.getReport(storeUuid, { page, limit, search, startDate, endDate });
+      case 'AP':
+        return this.journalApService.getReport(storeUuid, { page, limit, search, startDate, endDate });
       default:
         throw new BadRequestException(`Tipe report '${normalizedType}' tidak valid atau belum diimplementasikan.`);
     }
