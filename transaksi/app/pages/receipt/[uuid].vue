@@ -53,7 +53,7 @@ onMounted(async () => {
 
             // Gabungkan menjadi format yang mudah dirender template
             transaction.value = {
-                invoice_number: j.code,
+                invoice_number: getVal('invoice_code') || j.code,
                 created_at: j.createdAt,
                 customer_name: getVal('customer_name') || 'Umum',
                 payment_method: getVal('payment_method'),
