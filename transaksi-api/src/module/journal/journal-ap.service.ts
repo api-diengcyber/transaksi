@@ -136,7 +136,7 @@ export class JournalApService {
   async getReport(storeUuid: string, queryParams?: any) {
     const { page = 1, limit = 15, search = '', startDate, endDate } = queryParams || {};
 
-    // 1. Ambil jurnal Pembelian (BUY) dan Pembayaran Hutang (PAY_AP)
+    // 1. Ambil jurnal Induk Hutang (AP) dan Pembayaran Hutang (PAY_AP)
     const qb = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndMapMany(
         'journal.details', 
@@ -145,7 +145,8 @@ export class JournalApService {
         'detail.journalCode = journal.code'
       )
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
-      .andWhere('(journal.code LIKE :buy OR journal.code LIKE :payap)', { buy: `%BUY%`, payap: `%PAY_AP%` });
+      // Fokus pada kode AP dan PAY_AP
+      .andWhere('(journal.code LIKE :ap OR journal.code LIKE :payap)', { ap: `%AP%`, payap: `%PAY_AP%` });
     
     // 2. Filter Tanggal
     if (startDate && endDate) {
@@ -166,22 +167,48 @@ export class JournalApService {
       return { ...journal, detailsMap };
     });
 
-    // 4. Filter HANYA Pembelian Kredit (Hutang)
-    const mainBuys = formattedJournals.filter(j => 
-        j.code.includes('BUY') && 
-        !j.code.includes('RET_BUY') && 
-        (j.detailsMap['is_credit'] === 'true' || j.detailsMap['is_credit'] === true)
-    );
+    // =====================================================================
+    // 4. LOGIKA SUPPLIER: AMBIL NAMA DARI DATABASE JIKA ADA SUPPLIER_UUID
+    // =====================================================================
+    const uniqueSupplierUuids = [...new Set(formattedJournals.map(j => j.detailsMap['supplier_uuid'] || j.detailsMap['vendor_uuid']).filter(Boolean))];
+    let dbSuppliersMap: Record<string, string> = {};
+
+    if (uniqueSupplierUuids.length > 0) {
+        try {
+            // NOTE: Sesuaikan nama tabel 'supplier' dan kolom 'name' jika di DB Anda berbeda
+            const suppliersList = await this.dataSource.query(
+                `SELECT uuid, name FROM supplier WHERE uuid IN (?)`,
+                [uniqueSupplierUuids]
+            );
+            suppliersList.forEach((s: any) => {
+                dbSuppliersMap[s.uuid] = s.name;
+            });
+        } catch (e) {
+            console.warn('Gagal memuat nama supplier dari database:', e);
+        }
+    }
+    // =====================================================================
+
+    // Pisahkan data utama (AP) dari data cicilan (PAY_AP)
+    const mainAPs = formattedJournals.filter(j => j.code.includes('AP') && !j.code.includes('PAY_AP'));
     const payments = formattedJournals.filter(j => j.code.includes('PAY_AP'));
-    const returns = formattedJournals.filter(j => j.code.includes('RET_BUY'));
 
     // 5. Proses Ekstraksi Data AP
-    const allAP = mainBuys.map(main => {
-      let supplierName = main.detailsMap['supplier'] || main.detailsMap['supplier_name'] || main.detailsMap['vendor'];
-      let supplierUuid = main.detailsMap['supplier_uuid'] || main.detailsMap['vendor_uuid'];
+    const allAP = mainAPs.map(main => {
+      
+      // Tentukan Nama Supplier yang Benar (Dari DB atau Teks)
+      const supplierUuid = main.detailsMap['supplier_uuid'] || main.detailsMap['vendor_uuid'] || null;
+      let supplierText = main.detailsMap['supplier'] || main.detailsMap['supplier_name'] || main.detailsMap['vendor'];
+      
+      let finalSupplierName = 'Supplier Umum';
+      if (supplierUuid && dbSuppliersMap[supplierUuid]) {
+          finalSupplierName = dbSuppliersMap[supplierUuid];
+      } else if (supplierText) {
+          finalSupplierName = supplierText;
+      }
 
       // Ekstrak Pembayaran/Cicilan Hutang
-      const buyPayments = payments
+      const apPayments = payments
           .filter(p => p.detailsMap['reference_journal_code'] === main.code)
           .map(p => ({
             code: p.code,
@@ -191,20 +218,13 @@ export class JournalApService {
             notes: p.detailsMap['notes'] || ''
           }));
 
-      // Ekstrak Retur (Bisa Mengurangi Hutang)
-      const buyReturns = returns
-          .filter(r => r.detailsMap['reference_journal_code'] === main.code)
-          .map(r => ({
-            code: r.code,
-            date: r.createdAt,
-            amount: Number(r.detailsMap['grand_total'] || r.detailsMap['amount'] || 0)
-          }));
-
-      const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || 0);
-      const dp = Number(main.detailsMap['amount_cash'] || 0);
-      const invoiceCode = main.detailsMap['invoice_code'] || main.code;
+      // Menghitung Total dan Sisa
+      const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || main.detailsMap['nominal_ap'] || 0);
+      const dp = Number(main.detailsMap['amount_cash'] || main.detailsMap['dp'] || 0);
+      const invoiceCode = main.detailsMap['invoice_code'] || main.detailsMap['reference_no'] || main.code;
+      const dueDate = main.detailsMap['due_date'] || main.detailsMap['dueDate'] || null;
       
-      const totalPaid = dp + buyPayments.reduce((sum, p) => sum + p.amount, 0);
+      const totalPaid = dp + apPayments.reduce((sum, p) => sum + p.amount, 0);
       const remaining = total - totalPaid;
 
       return {
@@ -216,15 +236,17 @@ export class JournalApService {
         total: total,
         dp: dp,
         paid: totalPaid,
-        remaining: remaining > 0 ? remaining : 0, // Pastikan tidak minus jika lunas
-        supplier: supplierName || 'Supplier Umum',
-        supplierUuid: supplierUuid || null,
-        payments: buyPayments, 
-        returns: buyReturns 
+        remaining: remaining > 0 ? remaining : 0, // Pastikan tidak minus
+        supplier: finalSupplierName, 
+        supplierUuid: supplierUuid,
+        payments: apPayments, 
+        dueDate: dueDate, 
+        // Retur biasanya di-handle terpisah di RET_BUY, kecuali ada jurnal khusus RET_AP.
+        returns: [] 
       };
     });
 
-    // 6. Pencarian Global
+    // 6. Pencarian Global (Sekarang akurat untuk supplier name)
     let filteredAP = allAP;
     if (search) {
         const lowerSearch = search.toLowerCase();

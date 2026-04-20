@@ -131,9 +131,17 @@ definePageMeta({ layout: 'default' });
 </script>
 
 <template>
-    <div class="">
-        <Toast />
-        <ConfirmDialog />
+    <Toast />
+    <ConfirmDialog />
+    
+    <div class="p-6 bg-surface-50 min-h-screen">
+
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-surface-900">Manajemen Produk</h1>
+                <p class="text-sm text-surface-500">Kelola produk disini.</p>
+            </div>
+        </div>
 
         <div class="flex flex-wrap items-end gap-3 mb-6 border-b border-surface-300">
             <button 

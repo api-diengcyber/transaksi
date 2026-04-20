@@ -10,7 +10,8 @@ const props = defineProps({
   cart: { type: Array, required: true },
   grandTotal: { type: Number, required: true },
   members: { type: Array, required: true },
-  users: { type: Array, required: true }
+  users: { type: Array, required: true },
+  transactionDate: { type: Date, required: true }
 });
 
 const emit = defineEmits(['update:visible', 'checkout-success']);
@@ -22,7 +23,6 @@ const journalService = useJournalService();
 const processing = ref(false);
 
 const transactionMeta = reactive({
-  transactionDate: new Date(),
   cashierUuid: authStore.user?.uuid || null,
   memberUuid: null,
   customerName: '', 
@@ -134,7 +134,7 @@ const processCheckout = async (isPrint = false) => {
             notes: catatan,
             status: isCreditSale.value ? 'PENDING' : 'COMPLETED',
             amount_cash: paymentData.value.cashAmount,
-            transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
+            transaction_date: props.transactionDate ? props.transactionDate.toISOString() : new Date().toISOString(),
             cashier_uuid: transactionMeta.cashierUuid, 
             
             // [REVISI] Hanya mengirimkan jika pengguna mengetikkan nomor manual

@@ -151,7 +151,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col gap-6">
+    <div class="p-6 bg-surface-50 min-h-screen flex flex-col gap-6">
         <Toast position="bottom-right" />
         <ConfirmDialog />
 

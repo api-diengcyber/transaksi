@@ -719,6 +719,7 @@ defineExpose({ refreshData });
             :cart="cart" 
             :grandTotal="grandTotal" 
             :suppliers="suppliers"
+            :transactionDate="transactionDate"
             @purchase-success="handlePurchaseSuccess"
         />
 

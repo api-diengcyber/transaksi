@@ -9,7 +9,8 @@ const props = defineProps({
   visible: { type: Boolean, required: true },
   cart: { type: Array, required: true },
   grandTotal: { type: Number, required: true },
-  suppliers: { type: Array, required: true }
+  suppliers: { type: Array, required: true },
+  transactionDate: { type: Date, required: true },
 });
 
 const emit = defineEmits(['update:visible', 'checkout-success']);
@@ -21,7 +22,6 @@ const journalService = useJournalService();
 const processing = ref(false);
 
 const transactionMeta = reactive({
-  transactionDate: new Date(),
   supplierUuid: null,
   manualInvoiceCode: ''
 });
@@ -113,7 +113,7 @@ const processCheckout = async () => {
             notes: catatan,
             status: isCreditSale.value ? 'PENDING' : 'COMPLETED',
             amount_cash: paymentData.value.cashAmount,
-            transaction_date: transactionMeta.transactionDate ? transactionMeta.transactionDate.toISOString() : new Date().toISOString(),
+            transaction_date: props.transactionDate ? props.transactionDate.toISOString() : new Date().toISOString(),
             
             // Mengirim parameter jika diisi oleh user
             ...(transactionMeta.manualInvoiceCode.trim() && { custom_journal_code: transactionMeta.manualInvoiceCode.trim() }),

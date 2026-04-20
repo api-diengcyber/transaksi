@@ -31,7 +31,7 @@ export class JournalService {
         journal: journalData,
         details: details || []
     };
-}
+  }
 
   async generateCode(prefix: string, storeUuid: string) {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -73,31 +73,64 @@ export class JournalService {
 
     const journals = await query.getMany();
 
-    // Grouping data by date
+    // 1. Buat Map Chart & Pre-fill (Isi semua tanggal dari start sampai end dengan nilai 0)
     const chartMap = new Map();
+    let currDate = new Date(`${startDate}T00:00:00`);
+    const lastDate = new Date(`${endDate}T00:00:00`);
 
+    // Looping berurutan untuk mengisi setiap hari
+    while (currDate <= lastDate) {
+      // Format ke YYYY-MM-DD dengan aman (Local Timezone)
+      const year = currDate.getFullYear();
+      const month = String(currDate.getMonth() + 1).padStart(2, '0');
+      const day = String(currDate.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
+
+      chartMap.set(dateString, { 
+        date: dateString, 
+        sale: 0, 
+        buy: 0, 
+        ret_sale: 0, 
+        ret_buy: 0, 
+        ap: 0, 
+        ar: 0 
+      });
+
+      // Tambah 1 hari
+      currDate.setDate(currDate.getDate() + 1);
+    }
+
+    // 2. Timpa data 0 dengan data transaksi asli dari database
     journals.forEach((j: any) => {
-      const date = j.createdAt.toISOString().split('T')[0];
-      if (!chartMap.has(date)) {
-        chartMap.set(date, { 
-          date, sale: 0, buy: 0, ret_sale: 0, ret_buy: 0, ap: 0, ar: 0 
-        });
+      // Ambil tanggal dari createdAt database dengan aman
+      const jDate = new Date(j.createdAt);
+      const year = jDate.getFullYear();
+      const month = String(jDate.getMonth() + 1).padStart(2, '0');
+      const day = String(jDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      // Pastikan tanggal tersebut ada di dalam rentang Map kita
+      if (chartMap.has(dateStr)) {
+        const entry = chartMap.get(dateStr);
+        const detailsMap = j.details.reduce((acc: any, curr: any) => { 
+            acc[curr.key] = curr.value; 
+            return acc; 
+        }, {});
+        
+        // Ambil nilai nominal (grand_total atau amount)
+        const value = Number(detailsMap['grand_total'] || detailsMap['amount'] || 0);
+
+        // Filter klasifikasi kode jurnal
+        if (j.code.includes('SALE') && !j.code.includes('RET')) entry.sale += value;
+        else if (j.code.includes('BUY') && !j.code.includes('RET')) entry.buy += value;
+        else if (j.code.includes('RET_SALE')) entry.ret_sale += value;
+        else if (j.code.includes('RET_BUY')) entry.ret_buy += value;
+        else if (j.code.includes('AP') && !j.code.includes('PAY')) entry.ap += value;
+        else if (j.code.includes('AR') && !j.code.includes('PAY')) entry.ar += value;
       }
-
-      const entry = chartMap.get(date);
-      const detailsMap = j.details.reduce((acc, curr) => { acc[curr.key] = curr.value; return acc; }, {});
-      
-      // Ambil nilai nominal (grand_total atau amount)
-      const value = Number(detailsMap['grand_total'] || detailsMap['amount'] || 0);
-
-      if (j.code.includes('SALE') && !j.code.includes('RET')) entry.sale += value;
-      else if (j.code.includes('BUY') && !j.code.includes('RET')) entry.buy += value;
-      else if (j.code.includes('RET_SALE')) entry.ret_sale += value;
-      else if (j.code.includes('RET_BUY')) entry.ret_buy += value;
-      else if (j.code.includes('AP') && !j.code.includes('PAY')) entry.ap += value;
-      else if (j.code.includes('AR') && !j.code.includes('PAY')) entry.ar += value;
     });
 
+    // 3. Ubah kembali Map ke format Array yang siap dipakai grafik
     return Array.from(chartMap.values());
   }
   

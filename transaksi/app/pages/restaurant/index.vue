@@ -91,8 +91,15 @@ definePageMeta({ layout: 'default' });
 </script>
 
 <template>
-    <div class="h-[calc(100vh-5rem)]">
-        
+    <div class="p-6 bg-surface-50 min-h-screen">
+
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-surface-900">Manajemen Restaurant</h1>
+                <p class="text-sm text-surface-500">Kelola restaurant disini.</p>
+            </div>
+        </div>
+
         <div class="flex items-end gap-3 mb-6 border-b border-surface-300">
 
             <button 

@@ -395,6 +395,7 @@ export class JournalStokService {
         });
     });
 
+    // Gunakan Array alih-alih Set untuk mengambil data product dari repository
     let managedProducts: any[] = []; 
     if (productUuidsToFetch.size > 0) {
         managedProducts = await this.dataSource.getRepository('ProductEntity')
@@ -403,43 +404,78 @@ export class JournalStokService {
             .andWhere("p.isManageStock = true") 
             .getMany();
     }
-    const managedProductUuids = new Set(managedProducts.map(p => p.uuid));
+    
+    // Buat Map untuk lookup nama dan unit produk secara langsung DARI DATABASE
+    // Ini jauh lebih aman dan akurat daripada mengandalkan teks dari journal detail
+    const managedProductMap = new Map();
+    managedProducts.forEach(p => {
+        managedProductMap.set(p.uuid, {
+            name: p.name || p.productName || 'Unknown Product',
+            unit: p.unitName || p.unit || 'Pcs'
+        });
+    });
 
     journals.forEach(j => {
-      const detailsMap = j.details.reduce((acc, curr) => { acc[curr.key] = curr.value; return acc; }, {});
+      const detailsMap = j.details.reduce((acc: any, curr: any) => { 
+          acc[curr.key] = curr.value; 
+          return acc; 
+      }, {});
       
       let idx = 0;
-      while (detailsMap[`product_uuid#${idx}`] || detailsMap[`stok_product_uuid#${idx}`]) {
+      // Perbaiki kondisi while: Cek apakah key 'product_uuid#idx' ATAU 'stok_product_uuid#idx' ada
+      while (
+        detailsMap.hasOwnProperty(`product_uuid#${idx}`) || 
+        detailsMap.hasOwnProperty(`stok_product_uuid#${idx}`)
+      ) {
         const pUuid = detailsMap[`product_uuid#${idx}`] || detailsMap[`stok_product_uuid#${idx}`];
         
-        if (!managedProductUuids.has(pUuid)) {
+        // Lewati jika produk tidak ada di map produk yang dikelola stoknya
+        if (!managedProductMap.has(pUuid)) {
             idx++;
             continue; 
         }
 
-        const pName = detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`] || 'Unknown';
-        const qty = Number(detailsMap[`qty#${idx}`] || detailsMap[`qty_return#${idx}`] || detailsMap[`stok_qty_plus#${idx}`] || detailsMap[`stok_qty_min#${idx}`] || 0);
-        const unit = detailsMap[`unit_name#${idx}`] || 'Unit';
+        // AMBIL NAMA DAN UNIT DARI DATABASE (Lebih aman!)
+        const dbProduct = managedProductMap.get(pUuid);
+        // Fallback ke detail journal jika di DB entah kenapa kosong, lalu fallback ke 'Unknown'
+        const pName = dbProduct.name !== 'Unknown Product' ? dbProduct.name : (detailsMap[`item_name#${idx}`] || detailsMap[`product_name#${idx}`] || 'Unknown');
+        const unit = dbProduct.unit !== 'Pcs' ? dbProduct.unit : (detailsMap[`unit_name#${idx}`] || 'Unit');
+
+        // Ambil QTY
+        const qty = Number(detailsMap[`qty#${idx}`] || detailsMap[`qty_return#${idx}`] || detailsMap[`stok_qty_plus#${idx}`] || detailsMap[`stok_qty_min#${idx}`] || detailsMap[`actual_qty#${idx}`] || 0);
 
         if (!inventoryMap.has(pUuid)) {
           inventoryMap.set(pUuid, { 
-            uuid: pUuid, name: pName, unit: unit,
-            stockIn: 0, stockOut: 0, adjustment: 0, finalStock: 0 
+            uuid: pUuid, 
+            name: pName, 
+            unit: unit,
+            stockIn: 0, 
+            stockOut: 0, 
+            adjustment: 0, 
+            finalStock: 0 
           });
         }
 
         const item = inventoryMap.get(pUuid);
 
+        // Update nilai berdasarkan jenis transaksi
         if (j.code.startsWith('BUY') || j.code.startsWith('RET_SALE') || j.code.startsWith('STOCK_IN')) {
           item.stockIn += qty;
         } else if (j.code.startsWith('SALE') || j.code.startsWith('RET_BUY') || j.code.startsWith('STOCK_OUT')) {
           item.stockOut += qty;
         } else if (j.code.startsWith('ADJ') || j.code.startsWith('OPN')) {
-          if (detailsMap[`stok_qty_plus#${idx}`]) item.adjustment += qty;
-          if (detailsMap[`stok_qty_min#${idx}`]) item.adjustment -= qty;
+            // Logika adjustment/opname biasanya menyimpan selisih
+            // Jika ada stok_qty_plus, berarti nambah. Jika stok_qty_min berarti kurang.
+            if (detailsMap.hasOwnProperty(`stok_qty_plus#${idx}`)) {
+                 item.adjustment += qty;
+            } else if (detailsMap.hasOwnProperty(`stok_qty_min#${idx}`)) {
+                 item.adjustment -= qty;
+            } else if (detailsMap.hasOwnProperty(`difference#${idx}`)) {
+                 item.adjustment += Number(detailsMap[`difference#${idx}`]);
+            }
         }
         
-        idx++;
+        idx++; // Lanjut ke item berikutnya di jurnal ini
       }
     });
 

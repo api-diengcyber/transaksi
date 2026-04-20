@@ -137,7 +137,7 @@ export class JournalArService {
   async getReport(storeUuid: string, queryParams?: any) {
     const { page = 1, limit = 15, search = '', startDate, endDate } = queryParams || {};
 
-    // 1. Ambil jurnal Penjualan (SALE) dan Pembayaran Piutang (PAY_AR)
+    // 1. Ambil jurnal Induk Piutang (AR) dan Pembayaran Piutang (PAY_AR)
     const qb = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
       .leftJoinAndMapMany(
         'journal.details', 
@@ -146,7 +146,8 @@ export class JournalArService {
         'detail.journalCode = journal.code'
       )
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
-      .andWhere('(journal.code LIKE :sale OR journal.code LIKE :payar)', { sale: `%SALE%`, payar: `%PAY_AR%` });
+      // Sekarang berfokus pada kode AR dan PAY_AR
+      .andWhere('(journal.code LIKE :ar OR journal.code LIKE :payar)', { ar: `%AR%`, payar: `%PAY_AR%` });
     
     // 2. Filter Tanggal
     if (startDate && endDate) {
@@ -167,27 +168,53 @@ export class JournalArService {
       return { ...journal, detailsMap };
     });
 
-    // 4. Filter HANYA Penjualan Kredit (Piutang)
-    const mainSales = formattedJournals.filter(j => 
-        j.code.includes('SALE') && 
-        !j.code.includes('RET_SALE') && 
-        (j.detailsMap['is_credit'] === 'true' || j.detailsMap['is_credit'] === true)
-    );
+    // =====================================================================
+    // 4. LOGIKA MEMBER: AMBIL NAMA DARI DATABASE JIKA ADA MEMBER_UUID
+    // =====================================================================
+    const uniqueMemberUuids = [...new Set(formattedJournals.map(j => j.detailsMap['member_uuid'] || j.detailsMap['customer_uuid']).filter(Boolean))];
+    let dbMembersMap: Record<string, string> = {};
+
+    if (uniqueMemberUuids.length > 0) {
+        try {
+            // NOTE: Sesuaikan nama tabel 'user' dengan tabel asli member Anda jika berbeda
+            const membersList = await this.dataSource.query(
+                `SELECT uuid, name FROM user WHERE uuid IN (?)`,
+                [uniqueMemberUuids]
+            );
+            membersList.forEach((m: any) => {
+                dbMembersMap[m.uuid] = m.name;
+            });
+        } catch (e) {
+            console.warn('Gagal memuat nama member dari database:', e);
+        }
+    }
+    // =====================================================================
+
+    // Pisahkan data utama (AR) dari data cicilan (PAY_AR)
+    const mainARs = formattedJournals.filter(j => j.code.includes('AR') && !j.code.includes('PAY_AR'));
     const payments = formattedJournals.filter(j => j.code.includes('PAY_AR'));
-    const returns = formattedJournals.filter(j => j.code.includes('RET_SALE'));
 
     // 5. Proses Ekstraksi Data AR
-    const allAR = mainSales.map(main => {
-      let memberName = main.detailsMap['member'] || main.detailsMap['member_name'] || main.detailsMap['customer'] || main.detailsMap['pelanggan'];
-      let memberUuid = main.detailsMap['member_uuid'] || main.detailsMap['customer_uuid'];
+    const allAR = mainARs.map(main => {
       
-      if (!memberName) {
+      // Tentukan Nama Member yang Benar (Dari DB atau Teks)
+      const memberUuid = main.detailsMap['member_uuid'] || main.detailsMap['customer_uuid'] || null;
+      let memberText = main.detailsMap['member'] || main.detailsMap['member_name'] || main.detailsMap['customer'] || main.detailsMap['pelanggan'];
+      
+      if (!memberText) {
          const itemMemberKey = Object.keys(main.detailsMap).find(k => (k.startsWith('member_name#') || k.startsWith('member#') || k.startsWith('customer#')) && !k.includes('uuid'));
-         if (itemMemberKey) memberName = main.detailsMap[itemMemberKey];
+         if (itemMemberKey) memberText = main.detailsMap[itemMemberKey];
+      }
+
+      let finalMemberName = 'Pelanggan Umum';
+      if (memberUuid && dbMembersMap[memberUuid]) {
+          finalMemberName = dbMembersMap[memberUuid];
+      } else if (memberText) {
+          finalMemberName = memberText;
       }
 
       // Ekstrak Pembayaran/Cicilan Piutang
-      const salePayments = payments
+      const arPayments = payments
           .filter(p => p.detailsMap['reference_journal_code'] === main.code)
           .map(p => ({
             code: p.code,
@@ -197,20 +224,13 @@ export class JournalArService {
             notes: p.detailsMap['notes'] || ''
           }));
 
-      // Ekstrak Retur (Bisa Mengurangi Piutang)
-      const saleReturns = returns
-          .filter(r => r.detailsMap['reference_journal_code'] === main.code)
-          .map(r => ({
-            code: r.code,
-            date: r.createdAt,
-            amount: Number(r.detailsMap['grand_total'] || r.detailsMap['amount'] || 0)
-          }));
-
-      const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || 0);
-      const dp = Number(main.detailsMap['amount_cash'] || 0);
-      const invoiceCode = main.detailsMap['invoice_code'] || main.code;
+      // Menghitung Total dan Sisa
+      const total = Number(main.detailsMap['grand_total'] || main.detailsMap['amount'] || main.detailsMap['nominal_ar'] || 0);
+      const dp = Number(main.detailsMap['amount_cash'] || main.detailsMap['dp'] || 0);
+      const invoiceCode = main.detailsMap['invoice_code'] || main.detailsMap['reference_no'] || main.code;
+      const dueDate = main.detailsMap['due_date'] || main.detailsMap['dueDate'] || null;
       
-      const totalPaid = dp + salePayments.reduce((sum, p) => sum + p.amount, 0);
+      const totalPaid = dp + arPayments.reduce((sum, p) => sum + p.amount, 0);
       const remaining = total - totalPaid;
 
       return {
@@ -222,15 +242,18 @@ export class JournalArService {
         total: total,
         dp: dp,
         paid: totalPaid,
-        remaining: remaining > 0 ? remaining : 0, // Pastikan tidak minus jika lunas
-        member: memberName || 'Pelanggan Umum',
-        memberUuid: memberUuid || null,
-        payments: salePayments, 
-        returns: saleReturns 
+        remaining: remaining > 0 ? remaining : 0, // Pastikan tidak minus
+        member: finalMemberName, 
+        memberUuid: memberUuid,
+        payments: arPayments, 
+        dueDate: dueDate, 
+        // Mengosongkan returns karena Anda meminta fokus ke kode AR, biasanya retur masuk di SALE.
+        // Jika AR Anda memiliki relasi RET_AR, tambahkan query terpisah seperti PAY_AR
+        returns: [] 
       };
     });
 
-    // 6. Pencarian Global
+    // 6. Pencarian Global (Sekarang akurat untuk member name)
     let filteredAR = allAR;
     if (search) {
         const lowerSearch = search.toLowerCase();

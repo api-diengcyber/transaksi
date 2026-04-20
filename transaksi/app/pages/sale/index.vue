@@ -58,6 +58,7 @@ const currentPage = ref(1);
 const limit = 12;
 const totalPages = ref(1);
 const totalProducts = ref(0);
+const transactionDate = ref(new Date());
 
 // --- COMPUTED ---
 const taxMethod = computed(() => authStore.getSetting('sale_tax_method', 'exclusive'));
@@ -92,6 +93,7 @@ const gridContainerClass = computed(() => {
 // --- ACTIONS & FORMATTERS ---
 const handleCheckoutSuccess = async () => {
     cart.value = [];
+    transactionDate.value = new Date();
     await loadProducts(); // Refresh stok barang
 };
 
@@ -405,6 +407,20 @@ defineExpose({ refreshData });
                     <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600"><i class="pi pi-shop text-xl"></i></div>
                     <div><h1 class="text-lg font-bold leading-tight">{{ authStore.activeStore?.name || 'Point of Sale' }}</h1></div>
                 </div>
+
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center bg-surface-50 border border-surface-200 rounded-lg px-2 h-10 shadow-sm">
+                        <i class="pi pi-calendar text-surface-400 mr-2 text-sm"></i>
+                        <Calendar 
+                            v-model="transactionDate" 
+                            dateFormat="dd M yy" 
+                            showTime 
+                            hourFormat="24"
+                            class="!border-0 !w-44 !bg-transparent"
+                            inputClass="!border-0 !bg-transparent !p-0 !text-sm !font-semibold !text-surface-700 focus:!ring-0 cursor-pointer"
+                        />
+                    </div>
+                </div>
             </div>
             
             <div class="p-3 border-b border-surface-100 flex flex-col md:flex-row gap-2 bg-surface-0">
@@ -671,6 +687,7 @@ defineExpose({ refreshData });
         :grandTotal="grandTotal" 
         :members="members" 
         :users="users"
+        :transactionDate="transactionDate"
         @checkout-success="handleCheckoutSuccess"
     />
 
