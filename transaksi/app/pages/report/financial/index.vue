@@ -4,6 +4,9 @@ import { useToast } from 'primevue/usetoast';
 import ProfitLossTab from '~/components/financial/ProfitLossTab.vue';
 import BalanceSheetTab from '~/components/financial/BalanceSheetTab.vue';
 import { useAccountService } from '#imports';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 
 const accountService = useAccountService(); 
 const toast = useToast();
@@ -18,6 +21,7 @@ const dates = ref([
     new Date() // Hari ini
 ]);
 
+// Menu Laporan (Sidebar)
 const tabs = ref([
     { label: 'Laba Rugi (Profit & Loss)', icon: 'pi pi-chart-line' },
     { label: 'Neraca (Balance Sheet)', icon: 'pi pi-building' }
@@ -75,7 +79,7 @@ const loadData = async () => {
         const start = dates.value[0]!.toISOString();
         const end = dates.value[1]!.toISOString();
         
-        // Panggil Backend (yang sudah difix sebelumnya)
+        // Panggil Backend
         const response = await accountService.getFinancialReport(start, end);
         rawData.value = Array.isArray(response) ? response : (response as any).data || [];
         
@@ -97,33 +101,75 @@ onMounted(() => {
 
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="text-2xl font-black text-surface-900 flex items-center gap-2">
-                    <i class="pi pi-chart-bar text-blue-600"></i> Laporan Keuangan
+                <h1 class="text-2xl font-black text-surface-900 flex items-center gap-2 m-0">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                        <i class="pi pi-book text-xl"></i>
+                    </div>
+                    Laporan Keuangan
                 </h1>
-                <p class="text-sm text-surface-500">Neraca Saldo dan Laba Rugi Periode Berjalan</p>
+                <p class="text-sm text-surface-500 mt-2">Neraca Saldo dan Laba Rugi Periode Berjalan</p>
             </div>
             
-            <div class="flex items-center gap-3 bg-white p-2 rounded-xl border border-surface-200 shadow-sm">
-                <Calendar v-model="dates" selectionMode="range" :manualInput="false" showIcon placeholder="Pilih Periode" class="w-full md:w-64" />
-                <Button icon="pi pi-search" label="Filter" @click="loadData" :loading="loading" />
+            <div class="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-2xl border border-surface-200 shadow-sm w-full md:w-auto">
+                <Calendar v-model="dates" selectionMode="range" :manualInput="false" showIcon placeholder="Pilih Periode" class="w-full sm:w-64" inputClass="!rounded-xl !py-2 !text-sm" />
+                <Button icon="pi pi-search" label="Terapkan" @click="loadData" :loading="loading" class="!rounded-xl shadow-sm w-full sm:w-auto" severity="primary" />
+                <Button icon="pi pi-cog" label="" @click="router.push('/setting?tab=config_journal')"  :loading="loading" class="!rounded-xl shadow-sm" severity="secondary" />
             </div>
         </div>
 
-        <div class="mb-6">
-            <TabMenu :model="tabs" v-model:activeIndex="activeTab" class="w-full" />
-        </div>
+        <div class="flex flex-col lg:flex-row gap-6 flex-1 items-start">
+            
+            <div class="w-full lg:w-72 bg-white rounded-2xl shadow-sm border border-surface-200 p-3 shrink-0 lg:sticky lg:top-24">
+                <div class="text-xs font-bold text-surface-500 uppercase tracking-widest mb-3 px-3 mt-2">Jenis Laporan</div>
+                <div class="flex flex-col gap-1.5">
+                    <button 
+                        v-for="(tab, index) in tabs" 
+                        :key="index"
+                        @click="activeTab = index"
+                        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-left outline-none"
+                        :class="activeTab === index 
+                            ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100 font-bold' 
+                            : 'text-surface-600 hover:bg-surface-100 hover:text-surface-900 border border-transparent'"
+                    >
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0" 
+                             :class="activeTab === index ? 'bg-blue-200/50 text-blue-700' : 'bg-surface-100 text-surface-500'">
+                            <i :class="tab.icon" class="text-[15px]"></i>
+                        </div>
+                        <span class="flex-1">{{ tab.label }}</span>
+                        <i v-if="activeTab === index" class="pi pi-chevron-right text-[10px] text-blue-500"></i>
+                    </button>
+                </div>
+            </div>
 
-        <div class="flex-1 overflow-auto">
-            <ProfitLossTab 
-                v-if="activeTab === 0" 
-                :data="profitLossData" 
-            />
+            <div class="flex-1 w-full bg-white rounded-2xl shadow-sm border border-surface-200 min-h-[500px] overflow-hidden">
+                <div v-if="loading" class="flex flex-col items-center justify-center h-96 text-surface-500">
+                    <i class="pi pi-spin pi-spinner text-4xl mb-4 text-blue-500"></i>
+                    <p class="text-sm font-medium">Menghitung data laporan...</p>
+                </div>
 
-            <BalanceSheetTab 
-                v-if="activeTab === 1" 
-                :data="balanceSheetData" 
-            />
+                <div v-else class="animate-fade-in">
+                    <ProfitLossTab 
+                        v-if="activeTab === 0" 
+                        :data="profitLossData" 
+                    />
+                    <BalanceSheetTab 
+                        v-if="activeTab === 1" 
+                        :data="balanceSheetData" 
+                    />
+                </div>
+            </div>
+
         </div>
 
     </div>
 </template>
+
+<style scoped>
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>

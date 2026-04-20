@@ -119,6 +119,7 @@ const items = ref([
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
             { label: 'Media', icon: 'pi pi-image', route: '/media' }, 
             { label: 'Promo', icon: 'pi pi-gift', route: '/promo' }, 
+            { label: 'Akun', icon: 'pi pi-list', route: '/account' }, 
         ]
     },
     { 
@@ -132,7 +133,7 @@ const items = ref([
             { label: 'Retur beli', icon: 'pi pi-refresh', route: '/return/buy' }, 
             { label: 'Piutang', icon: 'pi pi-arrow-circle-down', route: '/ar' }, 
             { label: 'Hutang', icon: 'pi pi-arrow-circle-up', route: '/ap' }, 
-            { label: 'Keuangan', icon: 'pi pi-book', route: '/financial' }, 
+            { label: 'Jurnal', icon: 'pi pi-book', route: '/journal' }, 
         ]
     },
     { 
