@@ -1,41 +1,103 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import { useJournalService } from '~/composables/useJournalService';
+import { useMemberService } from '~/composables/useMemberService';
 
 const journalService = useJournalService();
+const memberService = useMemberService(); 
 const toast = useToast();
 
 const returns = ref([]); 
+const members = ref([]); 
 const loading = ref(true);
 const processing = ref(false);
-const filters = ref({ global: { value: null, matchMode: 'contains' } });
+const expandedRows = ref({}); 
 
-// --- MODAL STATE ---
+// --- STATE PAGINASI, PENCARIAN & TANGGAL API ---
+const pagination = ref({ page: 1, limit: 15 });
+const totalRecords = ref(0);
+const searchGlobalQuery = ref('');
+
+// Inisialisasi filter tanggal (Default: 30 hari terakhir)
+const today = new Date();
+const lastMonth = new Date();
+lastMonth.setDate(today.getDate() - 30);
+const dates = ref([lastMonth, today]); 
+
+// --- STATE SUMMARY (Diberikan dari Server) ---
+const summary = ref({
+    totalNilaiRetur: 0,
+    totalItemRetur: 0
+});
+
+// --- MODAL STATE (PEMBUATAN RETUR BARU) ---
 const showReturnModal = ref(false);
-const searchQuery = ref('');
+const searchSaleQuery = ref('');
 const selectedSale = ref(null);
 const returnCart = ref([]);
 const returnNotes = ref('');
 
-// --- LOAD DATA (Hanya Load Histori Retur Saja) ---
+// --- FETCH MASTER MEMBER ---
+const loadMembers = async () => {
+    try {
+        let mData = null;
+        if (memberService.getMembers) mData = await memberService.getMembers();
+        else if (memberService.getAllMembers) mData = await memberService.getAllMembers();
+        let mList = mData?.data?.data || mData?.data || mData || [];
+        members.value = Array.isArray(mList) ? mList : [];
+    } catch (e) {
+        console.error("Gagal memuat master member", e);
+    }
+};
+
+// --- LOAD TRANSAKSI RETURN PENJUALAN (HISTORI API) ---
 const loadData = async () => {
     loading.value = true;
     try {
-        const response = await journalService.findAllByType('RET_SALE');
-        const dataList = response?.data?.data || response?.data || response || [];
-        returns.value = dataList;
+        if (members.value.length === 0) await loadMembers();
+
+        // Format tanggal untuk dikirim ke API
+        const startDate = dates.value?.[0] ? dates.value[0].toISOString().split('T')[0] : undefined;
+        const endDate = dates.value?.[1] ? dates.value[1].toISOString().split('T')[0] : undefined;
+
+        // Panggil API beserta parameter
+        const response = await journalService.findAllByType('RET_SALE', {
+            page: pagination.value.page,
+            limit: pagination.value.limit,
+            search: searchGlobalQuery.value,
+            startDate: startDate,
+            endDate: endDate
+        });
+
+        const resData = response || {};
+        const dataList = resData?.data || [];
+        
+        // Update summary & paginasi dari backend
+        if (resData?.summary) summary.value = resData.summary;
+        if (resData?.meta) totalRecords.value = resData.meta.total;
+
+        // Cocokkan ID Member
+        returns.value = dataList.map(item => {
+            let finalMemberName = item.member;
+            if (item.memberUuid && members.value.length > 0) {
+                const dbMember = members.value.find(m => m.uuid === item.memberUuid);
+                if (dbMember) finalMemberName = dbMember.name || dbMember.username || finalMemberName;
+            }
+            return { ...item, member: finalMemberName };
+        });
+
     } catch (e) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat histori retur', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Gagal memuat Histori Return Penjualan', life: 3000 });
         returns.value = [];
     } finally {
         loading.value = false;
     }
 };
 
-// --- COMPUTED ---
-const totalRefundGlobal = computed(() => returns.value.reduce((sum, r) => sum + (r.totalReturn || 0), 0));
+// --- COMPUTED PEMBUATAN RETUR ---
 const totalItemRefund = computed(() => {
-    return returnCart.value.reduce((sum, item) => sum + (item.price * item.qty_return), 0);
+    return returnCart.value.reduce((sum, item) => sum + ((item.price || item.sell_price) * item.qty_return), 0);
 });
 
 const isProcessDisabled = computed(() => {
@@ -45,33 +107,36 @@ const isProcessDisabled = computed(() => {
     return !hasReturnQty || processing.value;
 });
 
-// --- ACTIONS (PENCARIAN FAKTUR MELALUI API) ---
+// --- ACTIONS MODAL PEMBUATAN RETUR ---
 const searchSale = async () => {
-    const q = searchQuery.value.trim().toUpperCase();
+    const q = searchSaleQuery.value.trim().toUpperCase();
     if (!q) {
         toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Masukkan kode faktur penjualan!', life: 2000 });
         return;
     }
 
     try {
-        // HIT API PENCARIAN BERDASARKAN KODE
         const response = await journalService.getSaleByCode(q);
         const data = response?.data || response;
 
         if (data && data.code) {
             selectedSale.value = data;
             
-            // Data sudah rapi dari Backend, langsung masukkan ke cart!
+            // Format ulang items ke bentuk cart
             if (data.items && data.items.length > 0) {
-                returnCart.value = data.items;
+                returnCart.value = data.items.map(item => ({
+                    ...item,
+                    qty_bought: item.qty, // Pindahkan qty beli
+                    qty_return: 0         // Default retur 0
+                }));
                 toast.add({ severity: 'success', summary: 'Ditemukan', detail: 'Faktur Penjualan berhasil dimuat', life: 2000 });
             } else {
-                toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Faktur ditemukan tapi tidak ada daftar barang.', life: 3000 });
+                toast.add({ severity: 'warn', summary: 'Kosong', detail: 'Faktur ditemukan tapi tidak ada rincian barang.', life: 3000 });
                 selectedSale.value = null;
                 returnCart.value = [];
             }
         } else {
-            toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Faktur tidak ditemukan dalam sistem.', life: 3000 });
+            toast.add({ severity: 'error', summary: 'Tidak Ditemukan', detail: 'Faktur tidak ditemukan.', life: 3000 });
             selectedSale.value = null;
             returnCart.value = [];
         }
@@ -93,18 +158,18 @@ const processReturn = async () => {
             details: {
                 reference_journal_code: selectedSale.value.code,
                 member: selectedSale.value.member || 'Pelanggan Umum',
+                member_uuid: selectedSale.value.memberUuid || null,
                 notes: returnNotes.value || 'Retur Pelanggan',
                 grand_total: totalItemRefund.value,
                 items: itemsToReturn 
             }
         };
 
-        // Buat transaksi RET_SALE
         await journalService.createReturnSaleTransaction(payload.details);
 
         toast.add({ severity: 'success', summary: 'Sukses', detail: 'Retur Penjualan Berhasil Diproses', life: 3000 });
         closeModal();
-        await loadData();
+        await loadData(); // Auto refresh grid
 
     } catch (e) {
         toast.add({ severity: 'error', summary: 'Gagal', detail: 'Gagal memproses retur', life: 3000 });
@@ -115,7 +180,7 @@ const processReturn = async () => {
 
 const openModal = async () => {
     showReturnModal.value = true;
-    searchQuery.value = '';
+    searchSaleQuery.value = '';
     selectedSale.value = null;
     returnCart.value = [];
     returnNotes.value = '';
@@ -123,7 +188,32 @@ const openModal = async () => {
 
 const closeModal = () => { showReturnModal.value = false; };
 
-const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+// --- EVENT HANDLERS GRID HISTORI ---
+const onPage = (event) => {
+    pagination.value.page = event.page + 1;
+    pagination.value.limit = event.rows;
+    loadData();
+};
+
+let searchTimeout = null;
+const onSearch = () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        pagination.value.page = 1; 
+        loadData();
+    }, 600);
+};
+
+// Watcher merespon perubahan tanggal filter
+watch(dates, (newDates) => {
+    if (!newDates || (newDates[0] && newDates[1])) {
+        pagination.value.page = 1;
+        loadData();
+    }
+});
+
+// --- UTILS ---
+const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
 const formatDate = (dateString) => (!dateString) ? '-' : new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' });
 
 onMounted(() => { loadData(); });
@@ -138,54 +228,70 @@ onMounted(() => { loadData(); });
                     <div class="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
                         <i class="pi pi-replay text-lg"></i>
                     </div>
-                    Manajemen Retur Jual
+                    Return Penjualan
                 </h1>
-                <p class="text-sm text-surface-500 mt-1">Kelola pengembalian barang dari pelanggan dan pengembalian dana.</p>
+                <p class="text-sm text-surface-500 mt-1">Kelola pembuatan nota retur dan pantau histori rincian barang yang dikembalikan.</p>
             </div>
-            
             <div class="flex gap-2">
                 <Button label="Refresh Data" icon="pi pi-sync" severity="secondary" outlined size="small" @click="loadData" :loading="loading" class="!rounded-xl shadow-sm bg-white" />
-                <Button label="Buat Retur Baru" icon="pi pi-plus" severity="warning" size="small" @click="openModal" class="!rounded-xl shadow-sm" />
+                <Button label="Buat Retur Baru" icon="pi pi-plus" size="small" @click="openModal" class="!bg-orange-600 !border-orange-600 !rounded-xl shadow-sm" />
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-surface-200 flex items-center gap-4 border-l-4 border-l-orange-500">
-                <div class="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 shrink-0">
-                    <i class="pi pi-replay text-xl"></i>
-                </div>
-                <div>
-                    <div class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Total Transaksi Retur</div>
-                    <div class="text-xl font-black text-surface-900">{{ returns.length }} Nota</div>
-                </div>
+                <div class="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 shrink-0"><i class="pi pi-wallet text-xl"></i></div>
+                <div><div class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Total Nilai Retur Filter</div><div class="text-xl font-black text-surface-900">{{ formatCurrency(summary.totalNilaiRetur) }}</div></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-surface-200 flex items-center gap-4 border-l-4 border-l-rose-500">
+                <div class="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0"><i class="pi pi-box text-xl"></i></div>
+                <div><div class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Total Qty Barang Retur</div><div class="text-xl font-black text-rose-600">{{ summary.totalItemRetur }} Item</div></div>
             </div>
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-surface-200 flex items-center gap-4">
-                <div class="w-12 h-12 rounded-full bg-surface-100 flex items-center justify-center text-surface-500 shrink-0">
-                    <i class="pi pi-wallet text-xl"></i>
-                </div>
-                <div>
-                    <div class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Total Nilai Refund</div>
-                    <div class="text-xl font-black text-orange-600">{{ formatCurrency(totalRefundGlobal) }}</div>
-                </div>
+                <div class="w-12 h-12 rounded-full bg-surface-100 flex items-center justify-center text-surface-500 shrink-0"><i class="pi pi-file text-xl"></i></div>
+                <div><div class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Total Nota Retur Filter</div><div class="text-xl font-black text-surface-900">{{ totalRecords }} Transaksi</div></div>
             </div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-surface-200 flex-1 flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-surface-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-0/50">
-                <div class="relative w-full sm:w-96">
-                    <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
-                    <input v-model="filters['global'].value" type="text" placeholder="Cari Kode Retur atau Pelanggan..." class="w-full pl-10 pr-4 py-2 border border-surface-200 rounded-xl text-sm focus:ring-orange-500 focus:border-orange-500 transition-colors" />
+            
+            <div class="p-4 border-b border-surface-100 flex flex-col xl:flex-row justify-between items-center gap-4 bg-surface-0/50">
+                <div class="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                    <div class="relative w-full sm:w-72">
+                        <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"></i>
+                        <input v-model="searchGlobalQuery" @input="onSearch" type="text" placeholder="Cari Kode Retur/Faktur/Pelanggan..." class="w-full pl-10 pr-4 py-2 border border-surface-200 rounded-xl text-sm focus:ring-orange-500 focus:border-orange-500 transition-colors" />
+                    </div>
+                    
+                    <div class="w-full sm:w-auto">
+                        <DatePicker 
+                            v-model="dates" 
+                            selectionMode="range" 
+                            :manualInput="false" 
+                            dateFormat="dd/mm/yy" 
+                            showIcon 
+                            iconDisplay="input"
+                            placeholder="Pilih Rentang Tanggal"
+                            class="w-full sm:w-[260px] date-filter-custom"
+                        />
+                    </div>
+                </div>
+
+                <div class="text-xs font-medium text-surface-500 bg-surface-100 px-3 py-1.5 rounded-lg border border-surface-200">
+                    Menampilkan <span class="font-bold text-surface-900">{{ totalRecords }}</span> nota retur
                 </div>
             </div>
 
             <DataTable 
+                v-model:expandedRows="expandedRows"
                 :value="returns" 
                 dataKey="code"
                 :loading="loading"
+                lazy
                 paginator 
-                :rows="15" 
+                :totalRecords="totalRecords"
+                :rows="pagination.limit" 
                 :rowsPerPageOptions="[15, 30, 50]"
-                :filters="filters"
+                @page="onPage"
                 stripedRows
                 responsiveLayout="scroll"
                 class="p-datatable-sm flex-1 text-sm border-none"
@@ -193,56 +299,117 @@ onMounted(() => { loadData(); });
             >
                 <template #empty>
                     <div class="flex flex-col items-center justify-center py-16 px-4 text-surface-500">
-                        <div class="w-20 h-20 bg-surface-100 rounded-full flex items-center justify-center mb-4"><i class="pi pi-check-circle text-4xl text-orange-400"></i></div>
-                        <h3 class="text-lg font-bold text-surface-700">Belum Ada Retur</h3>
-                        <p class="text-sm mt-1 max-w-sm text-center">Data histori retur penjualan akan tampil di sini.</p>
+                        <div class="w-20 h-20 bg-surface-100 rounded-full flex items-center justify-center mb-4"><i class="pi pi-inbox text-4xl text-surface-400"></i></div>
+                        <h3 class="text-lg font-bold text-surface-700">Belum Ada Transaksi</h3>
+                        <p class="text-sm mt-1 max-w-sm text-center">Histori return penjualan belum tersedia atau tidak ditemukan berdasarkan pencarian.</p>
                     </div>
                 </template>
 
-                <Column field="code" header="Informasi Retur" sortable style="min-width: 14rem">
+                <Column expander style="width: 3rem" />
+
+                <Column field="code" header="No Retur & Faktur Asli" sortable style="min-width: 14rem">
                     <template #body="{ data }">
                         <div class="flex flex-col gap-1 py-1">
-                            <div class="font-bold font-mono text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md inline-block w-max border border-orange-100">{{ data.code }}</div>
-                            <div v-if="data.refCode" class="text-[10px] text-surface-500 flex items-center gap-1 mt-1">
-                                <i class="pi pi-link text-[9px]"></i> Asal Nota: <span class="font-medium font-mono">{{ data.refCode }}</span>
+                            <div class="font-bold font-mono text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md inline-block w-max border border-orange-100 shadow-sm">
+                                <i class="pi pi-replay text-[10px] mr-1"></i> {{ data.code }}
                             </div>
-                            <div class="text-xs text-surface-500 flex items-center gap-1 mt-0.5">
-                                <i class="pi pi-calendar text-[10px]"></i> {{ formatDate(data.date) }}
+                            <div v-if="data.referenceCode" class="text-[10px] text-surface-500 flex items-center gap-1 mt-0.5">
+                                <i class="pi pi-receipt text-[9px]"></i> Asal: <span class="font-bold font-mono text-surface-700">{{ data.referenceCode }}</span>
                             </div>
                         </div>
                     </template>
                 </Column>
                 
+                <Column field="date" header="Tgl. Transaksi" sortable style="min-width: 10rem">
+                    <template #body="{ data }">
+                        <div class="text-sm text-surface-700 flex items-center gap-1.5 font-medium">
+                            <i class="pi pi-calendar text-[11px] text-surface-400"></i> {{ formatDate(data.date) }}
+                        </div>
+                    </template>
+                </Column>
+
                 <Column field="member" header="Pelanggan" sortable style="min-width: 12rem">
                      <template #body="{ data }">
                         <div class="flex items-center gap-2">
-                            <div class="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-xs font-bold text-surface-600 uppercase">{{ data.member?.substring(0, 1) || '?' }}</div>
-                            <span class="font-bold text-surface-800">{{ data.member || 'Umum' }}</span>
+                            <div class="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-xs font-bold text-surface-600 uppercase">
+                                {{ data.member.substring(0, 1) }}
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="font-bold text-surface-800">{{ data.member }}</span>
+                            </div>
                         </div>
                     </template>
                 </Column>
 
-                <Column field="notes" header="Catatan" style="min-width: 14rem">
+                <Column header="Total Refund Dana" alignFrozen="right" style="min-width: 10rem">
                     <template #body="{ data }">
-                        <span class="text-xs text-surface-600 italic">"{{ data.notes || '-' }}"</span>
+                        <div class="font-black text-sm text-rose-600">{{ formatCurrency(data.total) }}</div>
+                        <div class="text-[10px] text-surface-500 mt-0.5">{{ data.items ? data.items.length : 0 }} Jenis Barang</div>
                     </template>
                 </Column>
-                
-                <Column header="Total Nilai Refund" alignFrozen="right" class="text-right" style="min-width: 10rem">
-                    <template #body="{ data }">
-                        <span class="font-black text-sm text-orange-600">{{ formatCurrency(data.totalReturn) }}</span>
-                    </template>
-                </Column>
+
+                <template #expansion="slotProps">
+                    <div class="p-4 bg-surface-100/50 border-y border-surface-200">
+                        <div class="bg-white p-4 rounded-xl border border-surface-200 shadow-sm w-full max-w-4xl">
+                            <div class="flex justify-between items-center mb-3 border-b border-surface-100 pb-2">
+                                <h5 class="text-sm font-bold text-orange-800 flex items-center gap-2 m-0">
+                                    <i class="pi pi-box"></i> Rincian Barang Diretur
+                                </h5>
+                            </div>
+
+                            <div v-if="!slotProps.data.items || slotProps.data.items.length === 0" class="p-4 text-center text-surface-400 italic text-xs">
+                                Rincian barang tidak ditemukan.
+                            </div>
+
+                            <div v-else class="overflow-x-auto rounded-lg border border-surface-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-surface-50 text-surface-600 border-b border-surface-200 uppercase text-[10px]">
+                                        <tr>
+                                            <th class="px-4 py-2 font-bold text-center w-12">No</th>
+                                            <th class="px-4 py-2 font-bold">Nama Barang</th>
+                                            <th class="px-4 py-2 font-bold text-right">Harga Jual</th>
+                                            <th class="px-4 py-2 font-bold text-center">Qty Retur</th>
+                                            <th class="px-4 py-2 font-bold text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-surface-100">
+                                        <tr v-for="(item, index) in slotProps.data.items" :key="index">
+                                            <td class="px-4 py-2 text-center text-surface-400">{{ index + 1 }}</td>
+                                            <td class="px-4 py-2 font-semibold text-surface-800">{{ item.name }}</td>
+                                            <td class="px-4 py-2 text-right">{{ formatCurrency(item.price) }}</td>
+                                            <td class="px-4 py-2 text-center"><span class="bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded border border-rose-200">{{ item.qty }}</span></td>
+                                            <td class="px-4 py-2 text-right font-bold text-rose-600">{{ formatCurrency(item.subtotal) }}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="bg-surface-50 border-t border-surface-200 font-bold">
+                                        <tr>
+                                            <td colspan="4" class="px-4 py-3 text-right uppercase text-[10px] text-surface-500">Total Pengembalian Uang</td>
+                                            <td class="px-4 py-3 text-right text-sm text-rose-700">{{ formatCurrency(slotProps.data.total) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            
+                            <div v-if="slotProps.data.notes" class="mt-4 p-3 bg-orange-50 border border-orange-100 rounded-lg flex items-start gap-2">
+                                <i class="pi pi-info-circle text-orange-500 mt-0.5"></i>
+                                <div>
+                                    <span class="block text-[10px] font-bold uppercase text-orange-700 mb-0.5">Catatan / Alasan Retur:</span>
+                                    <p class="text-xs text-orange-900 m-0">{{ slotProps.data.notes }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
             </DataTable>
         </div>
 
-        <Dialog v-model:visible="showReturnModal" header="Proses Retur Penjualan" :modal="true" class="w-[95vw] sm:w-[600px]" :pt="{ root: { class: '!rounded-2xl !border-0 !shadow-2xl' }, header: { class: '!bg-surface-50 !border-b !border-surface-200 !pb-4' }, content: { class: '!p-0' } }">
+        <Dialog v-model:visible="showReturnModal" header="Buat Retur Penjualan Baru" :modal="true" class="w-[95vw] sm:w-[600px]" :pt="{ root: { class: '!rounded-2xl !border-0 !shadow-2xl' }, header: { class: '!bg-surface-50 !border-b !border-surface-200 !pb-4' }, content: { class: '!p-0' } }">
             <div class="flex flex-col h-full bg-surface-50/30">
                 
                 <div class="p-4 border-b border-surface-200 bg-white">
-                    <label class="text-xs font-bold text-surface-600 uppercase block mb-1">Cari Kode Faktur Jual (SALE-xxx)</label>
+                    <label class="text-xs font-bold text-surface-600 uppercase block mb-1">Cari Kode Faktur Penjualan (SALE-xxx)</label>
                     <div class="flex gap-2">
-                        <InputText v-model="searchQuery" placeholder="Cth: SALE-12345..." class="w-full font-mono text-sm" @keydown.enter="searchSale" />
+                        <InputText v-model="searchSaleQuery" placeholder="Cth: SALE-250101..." class="w-full font-mono text-sm" @keydown.enter="searchSale" />
                         <Button icon="pi pi-search" severity="secondary" @click="searchSale" />
                     </div>
                 </div>
@@ -251,20 +418,20 @@ onMounted(() => { loadData(); });
                     <div class="mb-4 p-3 bg-orange-50 border border-orange-100 rounded-xl">
                         <div class="text-[10px] text-orange-600 font-bold uppercase mb-1">Informasi Faktur Asli</div>
                         <div class="font-mono font-bold text-orange-900">{{ selectedSale.code }}</div>
-                        <div class="text-xs text-orange-800 mt-0.5">Pelanggan: <span class="font-bold">{{ selectedSale.member || 'Umum' }}</span></div>
+                        <div class="text-xs text-orange-800 mt-0.5">Pelanggan: <span class="font-bold">{{ selectedSale.member || 'Pelanggan Umum' }}</span></div>
                     </div>
 
-                    <h4 class="text-sm font-bold text-surface-800 mb-2">Pilih Barang yang Diretur</h4>
+                    <h4 class="text-sm font-bold text-surface-800 mb-2">Pilih Barang yang Dikembalikan</h4>
                     <div class="space-y-3">
                         <div v-for="(item, idx) in returnCart" :key="idx" class="p-3 bg-white border border-surface-200 rounded-xl shadow-sm">
                             <div class="flex justify-between items-start mb-2 border-b border-surface-100 pb-2">
                                 <div>
                                     <div class="font-bold text-sm text-surface-800">{{ item.name }}</div>
-                                    <div class="text-[10px] text-surface-500 mt-0.5">Dibeli: <span class="font-bold text-surface-700">{{ item.qty_bought }} {{ item.unitName }}</span> ({{ formatCurrency(item.price) }}/{{ item.unitName }})</div>
+                                    <div class="text-[10px] text-surface-500 mt-0.5">Max Beli: <span class="font-bold text-surface-700">{{ item.qty_bought }}</span> x {{ formatCurrency(item.price || item.sell_price) }}</div>
                                 </div>
                                 <div class="text-right">
-                                    <div class="text-[10px] uppercase text-surface-400 font-bold">Total Refund Item</div>
-                                    <div class="font-black text-orange-600">{{ formatCurrency(item.price * item.qty_return) }}</div>
+                                    <div class="text-[10px] uppercase text-surface-400 font-bold">Subtotal Refund</div>
+                                    <div class="font-black text-orange-600">{{ formatCurrency((item.price || item.sell_price) * item.qty_return) }}</div>
                                 </div>
                             </div>
                             
@@ -281,19 +448,19 @@ onMounted(() => { loadData(); });
 
                     <div class="mt-4 flex flex-col gap-1">
                         <label class="text-xs font-bold text-surface-600 uppercase">Catatan Alasan Retur</label>
-                        <Textarea v-model="returnNotes" rows="2" class="w-full !text-sm resize-none" placeholder="Cth: Barang cacat pabrik..." />
+                        <Textarea v-model="returnNotes" rows="2" class="w-full !text-sm resize-none" placeholder="Cth: Barang pecah saat dikirim..." />
                     </div>
                 </div>
 
                 <div v-else class="p-8 text-center text-surface-400 italic text-sm">
-                    Silakan cari Faktur Penjualan terlebih dahulu.
+                    Silakan input dan cari Kode Faktur terlebih dahulu di atas.
                 </div>
             </div>
 
             <template #footer>
                 <div class="flex items-center justify-between w-full pt-3 border-t border-surface-200 px-4 pb-4">
                     <div class="text-left">
-                        <span class="text-[10px] uppercase font-bold text-surface-500 block mb-0.5">Total Pengembalian Dana</span>
+                        <span class="text-[10px] uppercase font-bold text-surface-500 block mb-0.5">Total Refund Disetujui</span>
                         <span class="text-xl font-black text-orange-600">{{ formatCurrency(totalItemRefund) }}</span>
                     </div>
                     <div class="flex gap-2">
@@ -308,6 +475,17 @@ onMounted(() => { loadData(); });
 </template>
 
 <style scoped>
+.p-datatable .p-datatable-tbody > tr.p-highlight {
+    background-color: #fff7ed !important; 
+}
+
+:deep(.date-filter-custom .p-inputtext) {
+    border-radius: 0.75rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    font-size: 0.875rem !important;
+}
+
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background-color: rgba(249, 115, 22, 0.3); border-radius: 20px; }

@@ -93,14 +93,17 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-surface-50 transition-colors duration-300">
-        
-        <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div class="p-4 md:p-6 min-h-screen flex flex-col h-full bg-surface-50 transition-colors duration-300">
+
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-                <h1 class="text-2xl md:text-3xl font-bold text-surface-900  tracking-tight">Laporan Keuangan</h1>
-                <p class="text-surface-500 mt-1 text-sm">Neraca Saldo dan Laba Rugi Periode Berjalan</p>
+                <h1 class="text-2xl font-black text-surface-900 flex items-center gap-2">
+                    <i class="pi pi-chart-bar text-blue-600"></i> Laporan Keuangan
+                </h1>
+                <p class="text-sm text-surface-500">Neraca Saldo dan Laba Rugi Periode Berjalan</p>
             </div>
-            <div class="flex gap-2">
+            
+            <div class="flex items-center gap-3 bg-white p-2 rounded-xl border border-surface-200 shadow-sm">
                 <Calendar v-model="dates" selectionMode="range" :manualInput="false" showIcon placeholder="Pilih Periode" class="w-full md:w-64" />
                 <Button icon="pi pi-search" label="Filter" @click="loadData" :loading="loading" />
             </div>

@@ -134,7 +134,7 @@ const processTransaction = async () => {
         await journalService.createArTransaction(payload);
 
         toast.add({ 
-            severity: 'success', 
+            severity: 'danger', 
             summary: 'Berhasil', 
             detail: 'Transaksi Piutang berhasil dicatat.', 
             life: 3000 
@@ -168,7 +168,7 @@ const processTransaction = async () => {
             
             <div class="flex justify-between items-center px-6 py-4 border-b border-surface-200 bg-surface-50">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-emerald-600 bg-emerald-100 shadow-sm border border-emerald-200">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-red-600 bg-red-100 shadow-sm border border-red-200">
                         <i class="pi pi-arrow-up-right text-lg font-bold"></i>
                     </div>
                     <div>
@@ -259,7 +259,7 @@ const processTransaction = async () => {
                     label="Simpan Tagihan" 
                     icon="pi pi-check" 
                     class="flex-[2] !h-11 !text-base !font-bold shadow-md" 
-                    severity="success"
+                    severity="danger"
                     :loading="processing" 
                     :disabled="!canSave"
                     @click="processTransaction" 

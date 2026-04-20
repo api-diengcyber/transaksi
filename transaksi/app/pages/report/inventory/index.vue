@@ -86,11 +86,17 @@ onMounted(() => loadData());
 
 <template>
     <div class="min-h-screen bg-surface-50 p-4 md:p-6 font-sans">
-        <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <h1 class="text-2xl font-bold text-surface-900 flex items-center gap-2">
-                <i class="pi pi-box text-surface-900"></i> Laporan Inventori & Grafik
-            </h1>
-            <Calendar v-model="dateRange" selectionMode="range" showIcon @date-select="loadData" class="shadow-sm" />
+
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-black text-surface-900 flex items-center gap-2">
+                    <i class="pi pi-box text-blue-600"></i> Laporan Inventori & Grafik
+                </h1>
+            </div>
+            
+            <div class="flex items-center gap-3 bg-white p-2 rounded-xl border border-surface-200 shadow-sm">
+                <Calendar v-model="dateRange" selectionMode="range" showIcon @date-select="loadData" class="shadow-sm" />
+            </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

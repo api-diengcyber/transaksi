@@ -87,14 +87,8 @@ const manajemenMenu = [
 ];
 
 const laporanMenu = [
-    { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale', color: 'text-emerald-500 bg-emerald-50' },
-    { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy', color: 'text-blue-500 bg-blue-50' },
-    { label: 'Retur Jual', icon: 'pi pi-replay', route: '/report/return/sale', color: 'text-rose-500 bg-rose-50' },
-    { label: 'Retur Beli', icon: 'pi pi-replay', route: '/report/return/buy', color: 'text-pink-500 bg-pink-50' },
-    { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar', color: 'text-amber-500 bg-amber-50' },
-    { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap', color: 'text-orange-500 bg-orange-50' },
-    { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory', color: 'text-cyan-500 bg-cyan-50' },
     { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph', color: 'text-purple-500 bg-purple-50' },
+    { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory', color: 'text-cyan-500 bg-cyan-50' },
     { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial', color: 'text-indigo-500 bg-indigo-50' },
 ];
 

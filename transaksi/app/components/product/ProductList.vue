@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
+import ProductBarcodePrintModal from '~/components/product/ProductBarcodePrintModal.vue';
 
 const emit = defineEmits(['create', 'edit']);
 
@@ -24,6 +25,9 @@ const totalRecords = ref(0);
 const searchQuery = ref('');
 let searchTimeout = null;
 const lazyParams = ref({ page: 1, limit: 10 });
+
+const selectedProducts = ref([]);
+const showBarcodeModal = ref(false);
 
 // --- FETCH DATA ---
 const fetchCategories = async () => {
@@ -133,6 +137,14 @@ const formatCurrency = (value) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value || 0);
 };
 
+const openBarcodePrintModal = () => {
+    if (selectedProducts.value.length === 0) {
+        toast.add({ severity: 'warn', summary: 'Pilih Produk', detail: 'Pilih minimal 1 produk terlebih dahulu', life: 3000 });
+        return;
+    }
+    showBarcodeModal.value = true;
+};
+
 // --- STATE BARU ---
 const showBreakModal = ref(false);
 const selectedProductToBreak = ref(null);
@@ -159,6 +171,24 @@ onMounted(async () => {
 </script>
 
 <template>
+
+    <div class="flex mb-3">
+        <Button label="Tambah Produk" icon="pi pi-plus" @click="emit('create')" class="whitespace-nowrap mr-4" />
+        <div>
+                <Button 
+                label="Cetak Barcode" 
+                icon="pi pi-barcode" 
+                severity="secondary" 
+                outlined
+                :disabled="selectedProducts.length === 0"
+                @click="openBarcodePrintModal" 
+                />
+                <span class="text-xs text-surface-500 ml-2" v-if="selectedProducts.length > 0">
+                {{ selectedProducts.length }} produk dipilih
+                </span>
+        </div>
+    </div>
+
     <div class="card bg-surface-0 p-5 rounded-xl border border-surface-200">
         
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -172,12 +202,12 @@ onMounted(async () => {
                     <InputIcon class="pi pi-search" />
                     <InputText v-model="searchQuery" @input="onSearch" placeholder="Cari nama atau barcode..." class="w-full" />
                 </IconField>
-                <Button label="Tambah Produk" icon="pi pi-plus" @click="emit('create')" class="whitespace-nowrap" />
             </div>
         </div>
 
         <DataTable 
             v-model:expandedRows="expandedRows" 
+            v-model:selection="selectedProducts"
             :value="products" 
             dataKey="uuid"
             :loading="loading"
@@ -196,6 +226,8 @@ onMounted(async () => {
                     <p>Data produk tidak ditemukan.</p>
                 </div>
             </template>
+
+            <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
 
             <Column expander style="width: 3rem" />
 
@@ -439,6 +471,11 @@ onMounted(async () => {
         :sourceProduct="selectedProductToBreak"
         @success="handleBreakSuccess"
     />
+
+    <ProductBarcodePrintModal 
+            v-model:visible="showBarcodeModal" 
+            :selectedProducts="selectedProducts" 
+        />
 </template>
 
 <style scoped>

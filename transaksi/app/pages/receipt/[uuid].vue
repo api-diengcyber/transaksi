@@ -67,7 +67,7 @@ onMounted(async () => {
         // Otomatis buka dialog print setelah render selesai
         setTimeout(() => {
             window.print();
-        }, 500);
+        }, 2000);
     } catch (e) {
         console.error("Gagal memuat transaksi", e);
     } finally {

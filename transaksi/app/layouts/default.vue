@@ -22,8 +22,9 @@ const toggleSidebarState = () => {
     if (isSidebarCollapsed.value) expandedSidebarKeys.value = {};
 };
 
-// [BARU] STATE UNTUK MULTI-WINDOW TABS
+// [BARU] STATE UNTUK MULTI-WINDOW TABS & FULLSCREEN
 const openTabs = ref([]);
+const isFullscreen = ref(false);
 
 // Fungsi Menutup Tab
 const closeTab = (index, event) => {
@@ -38,6 +39,24 @@ const closeTab = (index, event) => {
     } else if (openTabs.value.length === 0) {
         router.push('/'); 
     }
+};
+
+// [BARU] FUNGSI FULLSCREEN
+const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+};
+
+// Listener untuk mendeteksi perubahan status fullscreen (jika user menekan tombol ESC)
+const handleFullscreenChange = () => {
+    isFullscreen.value = !!document.fullscreenElement;
 };
 
 // Computed Data
@@ -79,6 +98,9 @@ onMounted(async () => {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         isDark.value = (theme === 'dark' || (!theme && prefersDark));
         document.documentElement.classList.toggle('dark', isDark.value);
+        
+        // Listener Fullscreen
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
     }
 });
 
@@ -94,9 +116,6 @@ const items = ref([
             { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, 
             { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, 
             { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, 
-            // { label: 'Bank & Rekening', icon: 'pi pi-building-columns', route: '/bank' }, 
-            // { label: 'Member', icon: 'pi pi-user', route: '/member' }, 
-            // { label: 'Supplier', icon: 'pi pi-address-book', route: '/supplier' }, 
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
             { label: 'Media', icon: 'pi pi-image', route: '/media' }, 
             { label: 'Promo', icon: 'pi pi-gift', route: '/promo' }, 
@@ -121,14 +140,8 @@ const items = ref([
         icon: 'pi pi-chart-bar', 
         key: 'report',
         items: [
-             { label: 'Penjualan', icon: 'pi pi-percentage', route: '/report/sale' }, 
-             { label: 'Pembelian', icon: 'pi pi-wallet', route: '/report/buy' }, 
-             { label: 'Retur jual', icon: 'pi pi-replay', route: '/report/return/sale' }, 
-             { label: 'Retur beli', icon: 'pi pi-replay', route: '/report/return/buy' }, 
-             { label: 'Piutang', icon: 'pi pi-file-excel', route: '/report/ar' }, 
-             { label: 'Hutang', icon: 'pi pi-file-pdf', route: '/report/ap' }, 
-             { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory' }, 
              { label: 'Analisa POS', icon: 'pi pi-chart-pie', route: '/report/graph' }, 
+             { label: 'Stok / Gudang', icon: 'pi pi-database', route: '/report/inventory' }, 
              { label: 'Keuangan', icon: 'pi pi-file-pdf', route: '/report/financial' }, 
         ]
     },
@@ -145,6 +158,19 @@ const findMenuItem = (path, menuItems) => {
     }
     return null;
 };
+
+// [DIUBAH] Generate nama komponen untuk keperluan KeepAlive
+// Ini diasumsikan path route sesuai dengan nama komponen, misal '/sale' -> 'sale'
+const getComponentNameFromRoute = (routePath) => {
+    if (routePath === '/') return 'index';
+    const cleanPath = routePath.replace(/^\//, '').replace(/\//g, '-');
+    return cleanPath;
+};
+
+// Daftar nama komponen yang di-cache (ditambahkan otomatis dari openTabs)
+const cachedComponents = computed(() => {
+    return openTabs.value.map(tab => getComponentNameFromRoute(tab.route));
+});
 
 watch(() => route.path, (newPath) => {
     if (layoutMode.value !== 'multiwindow') return;
@@ -220,11 +246,10 @@ const storeItems = computed(() => {
 });
 const toggleStoreMenu = (event) => storeMenu.value.toggle(event);
 
-// --- MENU ACTIONS (TERMASUK TOMBOL UPDATE) ---
+// --- MENU ACTIONS ---
 const profileMenu = ref();
 const profileItems = ref([
     { label: 'Pengaturan Toko', icon: 'pi pi-cog', command: () => router.push('/setting') },
-    // [BARU] Tambahkan menu Update Aplikasi di bawah pengaturan
     { label: 'Update Aplikasi', icon: 'pi pi-cloud-download', command: () => router.push('/setting/update') },
     { separator: true },
     { label: 'Logout', icon: 'pi pi-sign-out', class: 'text-red-600 font-bold', command: async () => await authService.logout() }
@@ -267,10 +292,10 @@ const isRouteActive = (item) => {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col bg-surface-50  transition-colors duration-300">
+    <div class="min-h-screen flex flex-col bg-surface-50 transition-colors duration-300">
         
         <aside v-if="layoutMode === 'sidebar' || layoutMode === 'multiwindow'" 
-               class="hidden lg:flex fixed top-0 left-0 h-screen bg-surface-0  flex-col z-50 transition-all duration-300 shadow-xl border-r border-surface-200 "
+               class="hidden lg:flex fixed top-0 left-0 h-screen bg-surface-0 flex-col z-50 transition-all duration-300 shadow-xl border-r border-surface-200 "
                :class="isSidebarCollapsed ? 'w-20' : 'w-64'">
             
             <div class="h-16 flex items-center justify-between px-3 border-b border-white/10 shadow-sm shrink-0" 
@@ -292,7 +317,7 @@ const isRouteActive = (item) => {
             </div>
 
             <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 scrollbar-thin">
-                <div v-if="layoutMode === 'multiwindow' && !isSidebarCollapsed" class="px-2 pb-2 text-xs font-bold text-surface-400 uppercase tracking-widest">
+                <div v-if="layoutMode === 'multiwindow' && !isSidebarCollapsed" class="px-2 pb-2 pt-2 text-xs font-bold text-surface-400 uppercase tracking-widest">
                     Explorer
                 </div>
 
@@ -319,11 +344,11 @@ const isRouteActive = (item) => {
                             <i v-show="!isSidebarCollapsed" class="pi pi-chevron-down text-[10px] transition-transform duration-300 opacity-60" :class="{'rotate-180': expandedSidebarKeys[item.key]}"></i>
                         </button>
                         <div v-show="expandedSidebarKeys[item.key] && !isSidebarCollapsed" class="pl-3 mt-1 space-y-0.5 overflow-hidden transition-all animate-fade-in-down">
-                            <div class="border-l-2 border-surface-100  ml-2.5 pl-2 py-1 space-y-1">
+                            <div class="border-l-2 border-surface-100 ml-2.5 pl-2 py-1 space-y-1">
                                 <NuxtLink v-for="sub in item.items" :key="sub.label" :to="sub.route"
                                     class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
-                                    :class="isRouteActive(sub) ? 'text-primary-700  font-bold bg-primary-50/50' : 'text-surface-500  hover:text-surface-900 hover:bg-surface-50'">
-                                    <span class="w-1.5 h-1.5 rounded-full transition-colors shrink-0" :class="isRouteActive(sub) ? 'bg-primary-500' : 'bg-surface-300 '"></span>
+                                    :class="isRouteActive(sub) ? 'text-primary-700 font-bold bg-primary-50/50' : 'text-surface-500 hover:text-surface-900 hover:bg-surface-50'">
+                                    <span class="w-1.5 h-1.5 rounded-full transition-colors shrink-0" :class="isRouteActive(sub) ? 'bg-primary-500' : 'bg-surface-300'"></span>
                                     <span class="whitespace-nowrap">{{ sub.label }}</span>
                                 </NuxtLink>
                             </div>
@@ -331,11 +356,11 @@ const isRouteActive = (item) => {
                     </div>
                 </template>
             </div>
-            <div class="p-4 border-t border-surface-200  bg-surface-50/50 ">
+            <div class="p-4 border-t border-surface-200 bg-surface-50/50">
                 <div class="flex items-center gap-3 group cursor-pointer" :class="isSidebarCollapsed ? 'justify-center' : ''" @click="toggleProfile" aria-haspopup="true" aria-controls="profile_menu">
-                    <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-surface-0 !text-primary-700 font-bold border border-surface-200  shadow-sm shrink-0" shape="circle" />
+                    <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-surface-0 !text-primary-700 font-bold border border-surface-200 shadow-sm shrink-0" shape="circle" />
                     <div v-show="!isSidebarCollapsed" class="flex-1 overflow-hidden transition-all duration-300">
-                        <div class="text-xs font-bold text-surface-700  truncate">{{ authStore.user?.username || 'User' }}</div>
+                        <div class="text-xs font-bold text-surface-700 truncate">{{ authStore.user?.username || 'User' }}</div>
                         <div class="text-[10px] text-surface-500 truncate">Klik untuk menu</div>
                     </div>
                     <i v-show="!isSidebarCollapsed" class="pi pi-cog text-surface-400 group-hover:text-primary-500 transition-colors"></i>
@@ -350,7 +375,7 @@ const isRouteActive = (item) => {
                 'lg:ml-0': layoutMode === 'topbar' || layoutMode === 'tabs'
              }">
             
-            <header v-if="layoutMode === 'topbar'" class="sticky top-0 z-50 shadow-xl  bg-primary-600 border-b border-primary-700  px-2 md:px-4 backdrop-blur-md bg-opacity-95"  :style="`background-color: var(--app-primary-color);`">
+            <header v-if="layoutMode === 'topbar'" class="sticky top-0 z-50 shadow-xl bg-primary-600 border-b border-primary-700 px-2 md:px-4 backdrop-blur-md bg-opacity-95"  :style="`background-color: var(--app-primary-color);`">
                 <div class="flex items-center h-16 w-full max-w-screen-2xl mx-auto" :style="`background-color: var(--app-primary-color); border-color: color-mix(in srgb, var(--app-primary-color) 90%, black);`">
                     
                     <NuxtLink to="/" class="flex items-center gap-3 group pl-2 shrink-0">
@@ -387,13 +412,17 @@ const isRouteActive = (item) => {
                     <div class="flex items-center gap-3 pr-2 shrink-0">
                         <div class="hidden sm:block" v-if="authStore.flatStores && authStore.flatStores.length > 1">
                             <button @click="toggleStoreMenu" 
-                                class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-100  hover:bg-surface-200 text-surface-700  text-sm transition-colors border border-surface-200 ">
+                                class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-100 hover:bg-surface-200 text-surface-700 text-sm transition-colors border border-surface-200 ">
                                 <i class="pi pi-building text-primary-600"></i>
                                 <span class="font-medium max-w-[150px] truncate">{{ authStore.activeStore?.name }}</span>
                                 <i class="pi pi-chevron-down text-xs opacity-70"></i>
                             </button>
                         </div>
+                        
+                        <Button :icon="isFullscreen ? 'pi pi-window-minimize' : 'pi pi-window-maximize'" text rounded severity="tertiary" class="!w-10 !h-10 text-white hover:bg-surface-0 hidden lg:flex" @click="toggleFullscreen" v-tooltip.bottom="isFullscreen ? 'Keluar Fullscreen' : 'Layar Penuh'" />
+                        
                         <Button :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" text rounded severity="tertiary" class="!w-10 !h-10 text-white hover:bg-surface-0" @click="toggleDarkMode" />
+                        
                         <div class="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-surface-0 rounded-full transition-colors" @click="toggleProfile" aria-haspopup="true" aria-controls="profile_menu">
                             <span class="hidden md:block text-sm text-white hover:text-gray-900 font-medium mr-1">Halo, {{ authStore.user?.username || 'User' }}</span>
                             <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" class="!bg-surface-0 !text-primary-600 font-bold" shape="circle" />
@@ -404,11 +433,11 @@ const isRouteActive = (item) => {
             </header>
 
             <header v-if="layoutMode !== 'topbar'" 
-                    class="sticky top-0 z-40 h-16 border-b border-surface-200  px-4 flex items-center justify-between lg:justify-end" 
+                    class="sticky top-0 z-40 h-16 border-b border-surface-200 px-4 flex items-center justify-between lg:justify-end" 
                     :class="layoutMode === 'multiwindow' ? 'hidden lg:flex !h-14 !bg-surface-0 border-b shadow-none' : ''"
                     :style="layoutMode !== 'multiwindow' ? `background-color: var(--app-primary-color);` : ''">
                 
-                <div class="lg:hidden flex items-center gap-2" :class="layoutMode === 'multiwindow' ? 'text-surface-800 ' : ''">
+                <div class="lg:hidden flex items-center gap-2" :class="layoutMode === 'multiwindow' ? 'text-surface-800' : ''">
                     <span class="font-bold text-lg" :class="layoutMode === 'multiwindow' ? 'text-primary-600' : 'text-white'">{{ storeName }}</span>
                 </div>
 
@@ -421,25 +450,30 @@ const isRouteActive = (item) => {
                 </div>
 
                 <div v-if="layoutMode === 'multiwindow'" class="hidden lg:flex items-center mr-auto">
-                    <div class="text-sm font-medium text-surface-500 ">
-                        {{ storeName }} <span class="mx-1">/</span> <span class="text-surface-900 ">{{ route.meta.title || route.name || 'Dashboard' }}</span>
+                    <div class="text-sm font-medium text-surface-500">
+                        {{ storeName }} <span class="mx-1">/</span> <span class="text-surface-900">{{ route.meta.title || route.name || 'Dashboard' }}</span>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3">
                     <div class="hidden sm:block" v-if="authStore.flatStores && authStore.flatStores.length > 1">
                         <button @click="toggleStoreMenu" 
-                            class="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-surface-200 text-sm transition-colors border border-surface-200 "
-                            :class="layoutMode === 'multiwindow' ? 'bg-surface-0  text-surface-700 ' : 'bg-surface-100  text-surface-700 '">
+                            class="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-surface-200 text-sm transition-colors border border-surface-200"
+                            :class="layoutMode === 'multiwindow' ? 'bg-surface-0 text-surface-700' : 'bg-surface-100 text-surface-700'">
                             <i class="pi pi-building text-primary-600"></i>
                             <span class="font-medium max-w-[150px] truncate">{{ authStore.activeStore?.name }}</span>
                             <i class="pi pi-chevron-down text-xs opacity-70"></i>
                         </button>
                     </div>
                     
+                    <Button :icon="isFullscreen ? 'pi pi-window-minimize' : 'pi pi-window-maximize'" text rounded severity="tertiary" 
+                            class="!w-10 !h-10 hover:bg-surface-0 hidden lg:flex" 
+                            :class="layoutMode === 'multiwindow' ? 'text-surface-600 hover:!bg-surface-200' : 'text-white'"
+                            @click="toggleFullscreen" v-tooltip.bottom="isFullscreen ? 'Keluar Fullscreen' : 'Layar Penuh'" />
+
                     <Button :icon="isDark ? 'pi pi-sun' : 'pi pi-moon'" text rounded severity="tertiary" 
                             class="!w-10 !h-10 hover:bg-surface-0" 
-                            :class="layoutMode === 'multiwindow' ? 'text-surface-600  hover:!bg-surface-200' : 'text-white'"
+                            :class="layoutMode === 'multiwindow' ? 'text-surface-600 hover:!bg-surface-200' : 'text-white'"
                             @click="toggleDarkMode" />
                     
                     <div class="flex items-center gap-2 cursor-pointer p-1.5 rounded-full transition-colors"
@@ -449,7 +483,7 @@ const isRouteActive = (item) => {
                          ]" 
                          @click="toggleProfile" aria-haspopup="true" aria-controls="profile_menu">
                         <Avatar :label="authStore.user?.username?.charAt(0).toUpperCase() || 'U'" 
-                                class="font-bold border border-surface-200 " 
+                                class="font-bold border border-surface-200" 
                                 :class="layoutMode === 'multiwindow' ? 'bg-surface-200 text-surface-700' : 'bg-primary-100 text-primary-700'"
                                 shape="circle" />
                     </div>
@@ -457,14 +491,14 @@ const isRouteActive = (item) => {
             </header>
 
             <div v-if="layoutMode === 'multiwindow'" 
-                 class="hidden lg:flex w-full h-9 bg-surface-100  border-b border-surface-200  overflow-x-auto items-end px-2 gap-1 scrollbar-hide">
+                 class="hidden lg:flex w-full h-9 bg-surface-100 border-b border-surface-200 overflow-x-auto items-end px-2 gap-1 scrollbar-hide">
                 
                 <div v-for="(tab, index) in openTabs" :key="tab.route" 
                      @click="router.push(tab.route)"
                      class="group flex items-center gap-2 px-3 h-8 min-w-[120px] max-w-[200px] text-xs cursor-pointer select-none transition-all rounded-t-md border-t border-x"
                      :class="route.path === tab.route 
-                        ? 'bg-surface-0  border-surface-200  border-t-primary-500 text-primary-600  font-bold shadow-sm relative z-10' 
-                        : 'bg-surface-200/50  border-transparent text-surface-500  hover:bg-surface-200'">
+                        ? 'bg-surface-0 border-surface-200 border-t-primary-500 text-primary-600 font-bold shadow-sm relative z-10' 
+                        : 'bg-surface-200/50 border-transparent text-surface-500 hover:bg-surface-200'">
                     
                     <i :class="[tab.icon, 'text-[10px]']"></i>
                     <span class="truncate flex-1">{{ tab.label }}</span>
@@ -481,17 +515,23 @@ const isRouteActive = (item) => {
                     layoutMode === 'tabs' ? 'pb-24' : 'pb-24',
                     layoutMode === 'multiwindow' ? '!p-0 lg:!p-4 bg-surface-0/50' : ''
                   ]"> 
-                <NuxtPage />
+                
+                <router-view v-slot="{ Component }">
+                    <keep-alive :include="layoutMode === 'multiwindow' ? cachedComponents : []">
+                        <component :is="Component" :key="route.fullPath" />
+                    </keep-alive>
+                </router-view>
+                
             </main>
 
-            <footer class="border-t border-surface-200  py-6 mt-auto hidden md:block" :class="layoutMode === 'tabs' ? 'mb-20' : ''">
+            <footer class="border-t border-surface-200 py-6 mt-auto hidden md:block" :class="layoutMode === 'tabs' ? 'mb-20' : ''">
                 <div class="container mx-auto px-4 text-center text-sm text-surface-500">
                     &copy; 2026 {{ storeName }}. <span class="text-primary-600 font-bold">Powered by RetailApp</span>.
                 </div>
             </footer>
         </div>
 
-        <nav class="fixed bottom-0 left-0 right-0 border-t border-surface-200  z-50 bg-surface-0  pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
+        <nav class="fixed bottom-0 left-0 right-0 border-t border-surface-200 z-50 bg-surface-0 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
              :class="layoutMode === 'tabs' ? 'flex' : 'lg:hidden flex'">
              
             <div class="flex justify-around items-center h-16 w-full" :class="layoutMode === 'tabs' ? 'max-w-screen-xl mx-auto' : ''">
@@ -511,20 +551,20 @@ const isRouteActive = (item) => {
             </div>
         </nav>
 
-        <Menu ref="storeMenu" :model="storeItems" :popup="true" class="w-64 bg-surface-0 " />
-        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-56 bg-surface-0 " />
-        <Menu ref="desktopMenuRef" :model="desktopSubItems" :popup="true" class="mt-2 w-48 bg-surface-0 " />
-        <Menu ref="mobileMenuRef" :model="mobileSubItems" :popup="true" class="!w-48 !mb-2 bg-surface-0 " />
+        <Menu ref="storeMenu" :model="storeItems" :popup="true" class="w-64 bg-surface-0" />
+        <Menu ref="profileMenu" id="profile_menu" :model="profileItems" :popup="true" class="mt-2 w-56 bg-surface-0" />
+        <Menu ref="desktopMenuRef" :model="desktopSubItems" :popup="true" class="mt-2 w-48 bg-surface-0" />
+        <Menu ref="mobileMenuRef" :model="mobileSubItems" :popup="true" class="!w-48 !mb-2 bg-surface-0" />
 
-        <div v-if="isSwitchingStore" class="fixed inset-0 z-[9999] bg-surface-50/90  backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
+        <div v-if="isSwitchingStore" class="fixed inset-0 z-[9999] bg-surface-50/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
             <div class="relative mb-6">
                 <i class="pi pi-spin pi-spinner text-6xl text-primary-600"></i>
                 <div class="absolute inset-0 flex items-center justify-center">
                     <i class="pi pi-building text-xl text-primary-600"></i>
                 </div>
             </div>
-            <div class="text-2xl font-bold text-surface-900  mb-2">Mengganti Toko</div>
-            <div class="text-surface-600  text-lg">
+            <div class="text-2xl font-bold text-surface-900 mb-2">Mengganti Toko</div>
+            <div class="text-surface-600 text-lg">
                 Masuk ke <span class="font-bold text-primary-600">{{ targetStoreName }}</span>...
             </div>
         </div>
