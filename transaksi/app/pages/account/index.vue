@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, watch } from 'vue';
+
+// Sesuaikan path import ini ke lokasi folder components Anda
 import AccountCreateEditModal from '~/components/account/AccountCreateEditModal.vue';
 import AccountGroup from '~/components/account/AccountGroup.vue';
 
@@ -197,7 +199,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col relative bg-surface-0">
+  <div class="p-4 min-h-screen flex flex-col relative bg-surface-0">
     
     <div class="sticky top-0 z-30 px-4 pt-4 pb-2 bg-surface-0 backdrop-blur-md border-b border-gray-200 transition-all">
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">

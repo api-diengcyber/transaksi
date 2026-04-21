@@ -7,8 +7,8 @@ import { JournalDetailEntity } from '../../common/entities/journal_detail/journa
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { generateProductUuid, generateVariantUuid, generatePriceUuid } from '../../common/utils/generate_uuid_util'; 
-import { ShelveEntity } from 'src/common/entities/shelve/shelve.entity';
 import { JournalStokService } from '../journal/journal-stok.service'; 
+import { ShelveEntity } from '../../common/entities/shelve/shelve.entity';
 
 @Injectable()
 export class ProductService {
@@ -261,7 +261,7 @@ export class ProductService {
 
     const [data, total] = await this.productRepo.findAndCount({
       where: whereCondition,
-      relations: ['variants', 'unit', 'prices', 'variants.prices', 'shelves', 'brand'],
+      relations: ['variants', 'unit', 'prices', 'variants.prices', 'shelves', 'brand', 'recipes'],
       order: { name: 'ASC' },
       skip: skip,
       take: limit,

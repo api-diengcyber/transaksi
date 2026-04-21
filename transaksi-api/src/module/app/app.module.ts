@@ -25,6 +25,7 @@ import { DashboardModule } from '../dashboard/dashboard.module';
 import { SystemModule } from '../system/system.module';
 import { PaymentMethodModule } from '../payment_method/payment-method.module';
 import { PromoModule } from '../promo/promo.module';
+import { RecipeModule } from '../recipe/recipe.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { PromoModule } from '../promo/promo.module';
     IeModule,
     PaymentMethodModule,
     PromoModule,
+    RecipeModule,
     SystemUpdateModule,
     SystemModule,
   ],

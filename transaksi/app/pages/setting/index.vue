@@ -38,7 +38,6 @@ const menuItems = [
   { id: "purchase", label: "Pembelian", icon: "pi pi-truck", desc: "Supplier dan persetujuan" },
   { id: "ar", label: "Piutang", icon: "pi pi-truck", desc: "Piutang" },
   { id: "ap", label: "Hutang", icon: "pi pi-truck", desc: "Hutang" },
-  { id: "config_journal", label: "Konfigurasi Jurnal", icon: "pi pi-cog", desc: "Konfigurasi Jurnal" },
 ];
 
 const settings = reactive({
@@ -318,7 +317,6 @@ definePageMeta({ layout: "default" });
             <PurchaseTab v-if="activeTab === 'purchase'" :settings="settings" />
             <ReceivableTab v-if="activeTab === 'ar'" :settings="settings" />
             <PayableTab v-if="activeTab === 'ap'" :settings="settings" />
-            <JournalSettingTab v-if="activeTab === 'config_journal'" :settings="settings" />
           </div>
         </main>
       </div>

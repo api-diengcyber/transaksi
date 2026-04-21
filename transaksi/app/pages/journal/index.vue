@@ -20,15 +20,9 @@ interface Journal {
 }
 
 // --- SERVICES & STATE --- //
-// Mengambil fungsi CRUD dari useJournalService
-const { 
-    findAll: fetchJournals, 
-    createManual, 
-    remove: removeJournal 
-} = useJournalService(); 
-
+const { findAll: fetchJournals, createManual, remove: removeJournal } = useJournalService(); 
 const { findAll: fetchConfigs } = useJournalConfigService();
-const { getAll } = useAccountService(); // Memanggil master akun
+const { getAll } = useAccountService();
 const toast = useToast();
 
 const journals = ref<Journal[]>([]);
@@ -44,13 +38,10 @@ const dates = ref<Date[]>([
     new Date(now.getFullYear(), now.getMonth() + 1, 0)
 ]);
 
-// --- MODAL STATE (BUAT JURNAL UMUM) ---
+// --- MODAL STATE ---
 const isModalOpen = ref(false);
 const isSubmitting = ref(false);
-const form = ref({
-    date: new Date(),
-    note: '',
-});
+const form = ref({ date: new Date(), note: '' });
 const formEntries = ref<{ account: Account | null; debit: number; credit: number }[]>([
     { account: null, debit: 0, credit: 0 },
     { account: null, debit: 0, credit: 0 }
@@ -68,11 +59,10 @@ const totalFormDebit = computed(() => formEntries.value.reduce((sum, e) => sum +
 const totalFormCredit = computed(() => formEntries.value.reduce((sum, e) => sum + (e.credit || 0), 0));
 const isFormBalanced = computed(() => totalFormDebit.value === totalFormCredit.value && totalFormDebit.value > 0);
 
-// --- LOGIC MAPPING (Core Accounting Logic) ---
+// --- LOGIC MAPPING ---
 const processLedgerEntries = (journalCode: string, rawDetails: any[]): LedgerEntry[] => {
     const transactionType = journalCode.split('-')[0];
 
-    // MAPPING UNTUK JURNAL MANUAL
     if (transactionType === 'MANUAL') {
         const manualEntriesStr = rawDetails.find(d => d.key === 'manual_entries')?.value;
         if (manualEntriesStr) {
@@ -88,7 +78,6 @@ const processLedgerEntries = (journalCode: string, rawDetails: any[]): LedgerEnt
         }
     }
 
-    // MAPPING UNTUK SISTEM TRANSAKSI OTOMATIS (SALE/BUY/AP/AR)
     const relevantConfigs = journalConfigs.value.filter(c => c.transactionType === transactionType);
     if (!relevantConfigs.length) return [];
 
@@ -176,11 +165,10 @@ const applyTemplate = () => {
     if (!selectedTemplate.value) return;
     const tpl = selectedTemplate.value as any;
     formEntries.value = tpl.entries.map((e: any) => {
-        // Cari akun asli dari master database berdasarkan code/name template
         const matchAcc = masterAccounts.value.find(acc => acc.code === e.code) || { code: e.code, name: e.name };
         return {
             account: matchAcc,
-            debit: e.debit > 0 ? 0 : 0, // Set 0, biarkan user isi nominal
+            debit: e.debit > 0 ? 0 : 0, 
             credit: e.credit > 0 ? 0 : 0
         };
     });
@@ -192,7 +180,6 @@ const removeRow = (idx: number) => formEntries.value.splice(idx, 1);
 const submitJournal = async () => {
     if (!isFormBalanced.value) return;
     
-    // Validasi akun kosong
     const invalidEntry = formEntries.value.find(e => !e.account);
     if (invalidEntry) {
         toast.add({ severity: 'warn', summary: 'Peringatan', detail: 'Ada baris yang belum dipilih akunnya.', life: 3000 });
@@ -212,9 +199,7 @@ const submitJournal = async () => {
 
     isSubmitting.value = true;
     try {
-        // MENGGUNAKAN SERVICE: createManual
         await createManual(payload);
-        
         toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Jurnal Umum berhasil disimpan.', life: 3000 });
         isModalOpen.value = false;
         loadData();
@@ -229,9 +214,7 @@ const deleteJournal = async (uuid: string) => {
     if(!confirm('Apakah Anda yakin ingin menghapus jurnal ini? Tindakan ini akan membalikkan catatan buku besar.')) return;
     
     try {
-        // MENGGUNAKAN SERVICE: remove
         await removeJournal(uuid);
-        
         toast.add({ severity: 'success', summary: 'Berhasil', detail: 'Jurnal berhasil dihapus.', life: 3000 });
         loadData();
     } catch (e) {
@@ -248,226 +231,267 @@ watch(dates, loadData);
 </script>
 
 <template>
-    <div class="flex flex-col h-full bg-surface-0 rounded-xl">
+    <div class="p-6 flex flex-col h-full bg-slate-50/50 min-h-screen">
         
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 p-1">
-            <div class="flex items-center gap-2">
-                <div class="bg-indigo-100 p-2 rounded-lg text-indigo-600">
-                    <i class="pi pi-book text-lg"></i>
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 flex items-center justify-center bg-white text-indigo-600 rounded-2xl shadow-sm border border-slate-200/60">
+                    <i class="pi pi-book text-xl"></i>
                 </div>
                 <div>
-                    <h3 class="font-bold text-sm">Jurnal Umum</h3>
-                    <p class="text-xs text-gray-500">Rekapitulasi dan Input Transaksi Keuangan</p>
+                    <h2 class="text-xl font-bold text-slate-800">Jurnal Umum</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">Rekapitulasi dan input transaksi akuntansi</p>
                 </div>
             </div>
 
-            <div class="flex items-center gap-2">
-                <Button 
-                    icon="pi pi-plus" 
-                    label="Buat Jurnal" 
-                    class="p-button-sm p-button-indigo shadow-sm !text-xs !py-2" 
-                    @click="openModal" 
-                />
-                <div class="flex items-center gap-2 bg-surface-0 p-1 rounded-xl border border-surface-200 shadow-sm ml-2">
-                    <div class="px-2 py-1 bg-gray-50 rounded-lg flex items-center gap-2">
-                        <i class="pi pi-calendar text-gray-400 text-xs"></i>
+            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <div class="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm flex-1 md:flex-none">
+                    <div class="pl-2 flex items-center gap-2 text-slate-400">
+                        <i class="pi pi-calendar text-sm"></i>
                         <Calendar 
                             v-model="dates" 
                             selectionMode="range" 
                             dateFormat="dd M yy" 
                             :manualInput="false"
                             hideOnRangeSelection
-                            class="w-48 p-inputtext-sm text-xs border-none bg-transparent" 
-                            placeholder="Periode"
+                            class="w-48 p-inputtext-sm text-sm border-none bg-transparent shadow-none" 
+                            placeholder="Pilih Periode"
                         />
                     </div>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
                     <button 
                         @click="loadData" 
-                        class="w-8 h-8 flex items-center justify-center rounded hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"
-                        title="Refresh"
+                        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors"
+                        v-tooltip="'Refresh Data'"
                     >
                         <i :class="['pi pi-refresh', loading ? 'pi-spin' : '']"></i>
                     </button>
                 </div>
+                
+                <button 
+                    @click="openModal" 
+                    class="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-medium rounded-xl shadow-sm transition-all"
+                >
+                    <i class="pi pi-plus"></i>
+                    Buat Jurnal
+                </button>
             </div>
         </div>
 
-        <DataTable 
-            v-model:expandedRows="expandedRows"
-            :value="journals" 
-            dataKey="uuid"
-            :loading="loading"
-            paginator :rows="10"
-            :rowsPerPageOptions="[10, 20, 50]"
-            class="p-datatable-sm text-sm border border-surface-200 rounded-xl overflow-hidden shadow-sm"
-            rowHover
-        >
-            <template #empty>
-                <div class="flex flex-col items-center justify-center py-12 text-gray-400">
-                    <i class="pi pi-inbox text-4xl mb-2 opacity-50"></i>
-                    <span class="text-sm">Tidak ada data jurnal pada periode ini.</span>
-                </div>
-            </template>
-
-            <Column expander style="width: 3rem" />
-
-            <Column field="createdAt" header="Tanggal" sortable style="width: 15%">
-                <template #body="{ data }">
-                    <span class="font-semibold text-gray-700">{{ formatDate(data.createdAt) }}</span>
-                </template>
-            </Column>
-
-            <Column field="code" header="No. Referensi / Tipe" sortable style="width: 25%">
-                <template #body="{ data }">
-                    <div class="flex flex-col gap-1 items-start">
-                        <span class="font-mono font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs border border-indigo-100">
-                            {{ data.code }}
-                        </span>
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-500 uppercase">
-                            {{ data.code.split('-')[0] }}
-                        </span>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex-1">
+            <DataTable 
+                v-model:expandedRows="expandedRows"
+                :value="journals" 
+                dataKey="uuid"
+                :loading="loading"
+                paginator :rows="10"
+                :rowsPerPageOptions="[10, 20, 50]"
+                class="custom-datatable text-sm"
+                rowHover
+            >
+                <template #empty>
+                    <div class="flex flex-col items-center justify-center py-16 text-slate-400">
+                        <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+                            <i class="pi pi-inbox text-2xl text-slate-300"></i>
+                        </div>
+                        <span class="text-sm font-medium text-slate-500">Tidak ada data jurnal pada periode ini.</span>
                     </div>
                 </template>
-            </Column>
 
-            <Column header="Keterangan" style="width: 25%">
-                <template #body="{ data }">
-                    <span class="text-gray-600 text-xs line-clamp-2">{{ data.note !== '-' ? data.note : 'Jurnal Sistem' }}</span>
-                </template>
-            </Column>
+                <Column expander style="width: 4rem" class="pl-4" />
 
-             <Column header="Total Nilai" class="text-right" style="width: 15%">
-                <template #body="{ data }">
-                    <span class="font-mono font-bold text-gray-700">Rp {{ formatCurrency(data.totalAmount) }}</span>
-                </template>
-            </Column>
+                <Column field="createdAt" header="TANGGAL" sortable style="width: 15%">
+                    <template #body="{ data }">
+                        <span class="font-medium text-slate-700">{{ formatDate(data.createdAt) }}</span>
+                    </template>
+                </Column>
 
-            <Column header="Aksi" class="text-center" style="width: 10%">
-                <template #body="{ data }">
-                    <Button 
-                        v-if="data.code.startsWith('MANUAL')" 
-                        icon="pi pi-trash" 
-                        severity="danger" 
-                        text rounded 
-                        aria-label="Hapus" 
-                        @click="deleteJournal(data.uuid)" 
-                    />
-                    <i v-else-if="data.isMapped" class="pi pi-check-circle text-emerald-500 text-lg" title="Sistem"></i>
-                    <i v-else class="pi pi-exclamation-triangle text-amber-500 text-lg" title="Error Config"></i>
-                </template>
-            </Column>
-
-            <template #expansion="{ data }">
-                <div class="bg-gray-50 p-4 border-y border-gray-200">
-                    <div class="max-w-4xl mx-auto bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                        <div class="grid grid-cols-12 bg-gray-100 text-[11px] uppercase font-bold text-gray-500 py-2 px-4 border-b">
-                            <div class="col-span-2">Kode Akun</div>
-                            <div class="col-span-6">Nama Akun</div>
-                            <div class="col-span-2 text-right">Debit</div>
-                            <div class="col-span-2 text-right">Kredit</div>
+                <Column field="code" header="REFERENSI" sortable style="width: 25%">
+                    <template #body="{ data }">
+                        <div class="flex flex-col items-start gap-1.5">
+                            <span class="font-mono text-sm font-semibold text-indigo-600">
+                                {{ data.code }}
+                            </span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider bg-slate-100 text-slate-500 uppercase">
+                                {{ data.code.split('-')[0] }}
+                            </span>
                         </div>
+                    </template>
+                </Column>
 
-                        <div v-if="data.ledgerEntries.length > 0">
-                            <div v-for="(entry, idx) in data.ledgerEntries" :key="idx" class="grid grid-cols-12 text-xs py-2 px-4 border-b border-gray-50 items-center">
-                                <div class="col-span-2 font-mono text-gray-500">{{ entry.account_code }}</div>
-                                <div class="col-span-6 font-medium text-gray-700">
-                                    <span v-if="entry.credit > 0" class="inline-block w-4"></span> {{ entry.account_name }}
+                <Column header="KETERANGAN" style="width: 25%">
+                    <template #body="{ data }">
+                        <span class="text-slate-600 text-sm line-clamp-2 leading-snug">
+                            {{ data.note !== '-' ? data.note : 'Jurnal Sistem Otomatis' }}
+                        </span>
+                    </template>
+                </Column>
+
+                <Column header="TOTAL NILAI" class="text-right" style="width: 15%">
+                    <template #body="{ data }">
+                        <span class="font-mono font-bold text-slate-800">Rp {{ formatCurrency(data.totalAmount) }}</span>
+                    </template>
+                </Column>
+
+                <Column header="AKSI" class="text-center" style="width: 10%">
+                    <template #body="{ data }">
+                        <button 
+                            v-if="data.code.startsWith('MANUAL')" 
+                            @click.stop="deleteJournal(data.uuid)"
+                            class="w-8 h-8 rounded-full flex items-center justify-center text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            title="Hapus Jurnal Manual"
+                        >
+                            <i class="pi pi-trash"></i>
+                        </button>
+                        <div v-else class="flex justify-center">
+                            <div v-if="data.isMapped" class="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-500" v-tooltip="'Jurnal Sistem (Valid)'">
+                                <i class="pi pi-check"></i>
+                            </div>
+                            <div v-else class="w-8 h-8 rounded-full flex items-center justify-center bg-amber-50 text-amber-500" v-tooltip="'Konfigurasi Akun Belum Lengkap'">
+                                <i class="pi pi-exclamation-triangle"></i>
+                            </div>
+                        </div>
+                    </template>
+                </Column>
+
+                <template #expansion="{ data }">
+                    <div class="bg-slate-50/80 p-6 border-y border-slate-200 shadow-inner">
+                        <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
+                            
+                            <div class="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+
+                            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Detail Buku Besar</span>
+                                <span class="text-xs text-slate-400 font-mono">{{ data.code }}</span>
+                            </div>
+
+                            <div class="grid grid-cols-12 text-[11px] uppercase font-bold text-slate-400 py-3 px-6 border-b border-slate-200 bg-white">
+                                <div class="col-span-2">Kode Akun</div>
+                                <div class="col-span-6">Nama Akun</div>
+                                <div class="col-span-2 text-right">Debit</div>
+                                <div class="col-span-2 text-right">Kredit</div>
+                            </div>
+
+                            <div v-if="data.ledgerEntries.length > 0" class="bg-white">
+                                <div v-for="(entry, idx) in data.ledgerEntries" :key="idx" 
+                                    class="grid grid-cols-12 text-sm py-3 px-6 border-b border-slate-50 items-center hover:bg-slate-50/50 transition-colors group">
+                                    <div class="col-span-2 font-mono text-slate-500">{{ entry.account_code }}</div>
+                                    <div class="col-span-6 font-medium text-slate-700 flex items-center gap-2">
+                                        <div v-if="entry.credit > 0" class="w-4 h-px bg-slate-300"></div> 
+                                        {{ entry.account_name }}
+                                    </div>
+                                    <div class="col-span-2 text-right font-mono text-slate-700">{{ entry.debit > 0 ? formatCurrency(entry.debit) : '' }}</div>
+                                    <div class="col-span-2 text-right font-mono text-slate-700">{{ entry.credit > 0 ? formatCurrency(entry.credit) : '' }}</div>
                                 </div>
-                                <div class="col-span-2 text-right font-mono">{{ entry.debit > 0 ? formatCurrency(entry.debit) : '' }}</div>
-                                <div class="col-span-2 text-right font-mono">{{ entry.credit > 0 ? formatCurrency(entry.credit) : '' }}</div>
+                                
+                                <div class="grid grid-cols-12 bg-indigo-50/30 text-sm py-4 px-6 border-t border-slate-200">
+                                    <div class="col-span-8 text-right pr-6 font-bold text-slate-600">Total</div>
+                                    <div class="col-span-2 text-right font-mono font-bold text-indigo-700">{{ formatCurrency(data.totalAmount) }}</div>
+                                    <div class="col-span-2 text-right font-mono font-bold text-indigo-700">{{ formatCurrency(data.totalAmount) }}</div>
+                                </div>
                             </div>
-                            <div class="grid grid-cols-12 bg-gray-50 text-xs font-bold text-gray-800 py-2 px-4 border-t">
-                                <div class="col-span-8 text-right pr-4">Total:</div>
-                                <div class="col-span-2 text-right text-indigo-700">{{ formatCurrency(data.totalAmount) }}</div>
-                                <div class="col-span-2 text-right text-indigo-700">{{ formatCurrency(data.totalAmount) }}</div>
+                            <div v-else class="py-8 text-center text-slate-400 text-sm">
+                                Belum ada jurnal akun yang terpetakan untuk transaksi ini.
                             </div>
                         </div>
                     </div>
-                </div>
-            </template>
-        </DataTable>
+                </template>
+            </DataTable>
+        </div>
 
-        <Dialog v-model:visible="isModalOpen" header="Buat Jurnal Umum Manual" :modal="true" :style="{ width: '800px' }" class="p-fluid">
+        <Dialog v-model:visible="isModalOpen" header="Catat Jurnal Umum" :modal="true" :style="{ width: '850px' }" class="custom-dialog p-fluid">
             
-            <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Transaksi</label>
-                    <Calendar v-model="form.date" dateFormat="dd M yy" showIcon class="w-full" />
+                    <label class="block text-xs font-bold text-slate-600 mb-1.5 uppercase tracking-wide">Tanggal Transaksi</label>
+                    <Calendar v-model="form.date" dateFormat="dd M yy" showIcon class="w-full shadow-sm" />
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Pilih Template (Opsional)</label>
+                    <label class="block text-xs font-bold text-slate-600 mb-1.5 uppercase tracking-wide">Template Cepat (Opsional)</label>
                     <Dropdown 
                         v-model="selectedTemplate" 
                         :options="journalTemplates" 
                         optionLabel="label" 
-                        placeholder="Pilih Template Cepat" 
-                        class="w-full"
+                        placeholder="Pilih template untuk autofill" 
+                        class="w-full shadow-sm"
                         @change="applyTemplate" 
                         showClear
                     />
                 </div>
-                <div class="col-span-2">
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Catatan / Keterangan</label>
-                    <InputText v-model="form.note" placeholder="Contoh: Pembayaran gaji bulan berjalan..." />
+                <div class="col-span-1 md:col-span-2">
+                    <label class="block text-xs font-bold text-slate-600 mb-1.5 uppercase tracking-wide">Keterangan / Catatan</label>
+                    <InputText v-model="form.note" placeholder="Tuliskan keterangan detail transaksi..." class="shadow-sm" />
                 </div>
             </div>
 
-            <div class="border border-gray-200 rounded-lg overflow-hidden mt-6">
+            <div class="border border-slate-200 rounded-xl overflow-hidden mb-2">
                 <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-100 text-gray-600 text-xs uppercase">
+                    <thead class="bg-slate-100/80 text-slate-600 text-xs uppercase font-bold border-b border-slate-200">
                         <tr>
-                            <th class="px-4 py-2 w-1/2">Pilih Akun</th>
-                            <th class="px-4 py-2 w-1/5">Debit</th>
-                            <th class="px-4 py-2 w-1/5">Kredit</th>
-                            <th class="px-4 py-2 text-center w-[50px]"></th>
+                            <th class="px-5 py-3 w-[45%]">Pilih Akun</th>
+                            <th class="px-4 py-3 w-[22%] text-right">Debit (Rp)</th>
+                            <th class="px-4 py-3 w-[22%] text-right">Kredit (Rp)</th>
+                            <th class="px-2 py-3 text-center w-[11%]"></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr v-for="(row, idx) in formEntries" :key="idx" class="border-t border-gray-100">
-                            <td class="p-2">
+                    <tbody class="divide-y divide-slate-100">
+                        <tr v-for="(row, idx) in formEntries" :key="idx" class="bg-white hover:bg-slate-50 transition-colors">
+                            <td class="p-3">
                                 <Dropdown 
                                     v-model="row.account" 
                                     :options="masterAccounts" 
                                     optionLabel="name" 
                                     filter 
-                                    placeholder="Cari Akun..." 
-                                    class="w-full text-xs"
+                                    placeholder="Cari & Pilih Akun..." 
+                                    class="w-full border-slate-200"
                                 >
                                     <template #value="slotProps">
                                         <div v-if="slotProps.value" class="flex gap-2 items-center">
-                                            <span class="font-mono text-xs text-gray-500">{{ slotProps.value.code }}</span>
-                                            <span class="text-xs">{{ slotProps.value.name }}</span>
+                                            <span class="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 rounded">{{ slotProps.value.code }}</span>
+                                            <span class="text-sm truncate">{{ slotProps.value.name }}</span>
                                         </div>
-                                        <span v-else>{{ slotProps.placeholder }}</span>
+                                        <span v-else class="text-slate-400">{{ slotProps.placeholder }}</span>
                                     </template>
                                     <template #option="slotProps">
-                                        <div class="flex flex-col">
-                                            <span class="font-bold text-xs">{{ slotProps.option.code }} - {{ slotProps.option.name }}</span>
+                                        <div class="flex items-center gap-2 py-1">
+                                            <span class="font-mono text-xs font-bold text-slate-500 w-12">{{ slotProps.option.code }}</span>
+                                            <span class="text-sm">{{ slotProps.option.name }}</span>
                                         </div>
                                     </template>
                                 </Dropdown>
                             </td>
-                            <td class="p-2">
-                                <InputNumber v-model="row.debit" inputId="currency-id" mode="currency" currency="IDR" locale="id-ID" class="w-full" :min="0" />
+                            <td class="p-3">
+                                <InputNumber v-model="row.debit" mode="decimal" class="w-full text-right !font-mono" :min="0" />
                             </td>
-                            <td class="p-2">
-                                <InputNumber v-model="row.credit" inputId="currency-id" mode="currency" currency="IDR" locale="id-ID" class="w-full" :min="0" />
+                            <td class="p-3">
+                                <InputNumber v-model="row.credit" mode="decimal" class="w-full text-right !font-mono" :min="0" />
                             </td>
-                            <td class="p-2 text-center">
-                                <Button icon="pi pi-times" severity="danger" text rounded @click="removeRow(idx)" :disabled="formEntries.length <= 2" />
+                            <td class="p-3 text-center">
+                                <button 
+                                    @click="removeRow(idx)" 
+                                    :disabled="formEntries.length <= 2"
+                                    class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
+                                >
+                                    <i class="pi pi-times"></i>
+                                </button>
                             </td>
                         </tr>
                     </tbody>
-                    <tfoot class="bg-gray-50 border-t border-gray-200">
+                    <tfoot class="bg-slate-50 border-t border-slate-200">
                         <tr>
-                            <td class="px-4 py-3">
-                                <Button label="Tambah Baris" icon="pi pi-plus" text class="!p-0 !text-xs font-bold" @click="addRow" />
+                            <td class="px-5 py-4">
+                                <button 
+                                    @click="addRow"
+                                    class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                >
+                                    <i class="pi pi-plus-circle"></i> Tambah Baris Akun
+                                </button>
                             </td>
-                            <td class="px-4 py-3 font-mono font-bold text-right" :class="totalFormDebit !== totalFormCredit ? 'text-red-500' : 'text-emerald-600'">
-                                Rp {{ formatCurrency(totalFormDebit) }}
+                            <td class="px-4 py-4 font-mono font-bold text-right text-lg" :class="totalFormDebit !== totalFormCredit ? 'text-red-500' : 'text-slate-800'">
+                                {{ formatCurrency(totalFormDebit) }}
                             </td>
-                            <td class="px-4 py-3 font-mono font-bold text-right" :class="totalFormDebit !== totalFormCredit ? 'text-red-500' : 'text-emerald-600'">
-                                Rp {{ formatCurrency(totalFormCredit) }}
+                            <td class="px-4 py-4 font-mono font-bold text-right text-lg" :class="totalFormDebit !== totalFormCredit ? 'text-red-500' : 'text-slate-800'">
+                                {{ formatCurrency(totalFormCredit) }}
                             </td>
                             <td></td>
                         </tr>
@@ -475,13 +499,27 @@ watch(dates, loadData);
                 </table>
             </div>
             
-            <div v-if="totalFormDebit !== totalFormCredit" class="text-red-500 text-xs italic mt-2 text-right">
-                Total Debit dan Kredit tidak seimbang! Selisih: Rp {{ formatCurrency(Math.abs(totalFormDebit - totalFormCredit)) }}
+            <div v-if="totalFormDebit !== totalFormCredit" class="flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 mt-4 animate-pulse">
+                <i class="pi pi-exclamation-triangle text-xl"></i>
+                <div class="text-sm">
+                    <span class="font-bold">Saldo Tidak Seimbang!</span> Terdapat selisih 
+                    <span class="font-mono font-bold">Rp {{ formatCurrency(Math.abs(totalFormDebit - totalFormCredit)) }}</span>. 
+                    Pastikan Total Debit = Total Kredit.
+                </div>
             </div>
 
             <template #footer>
-                <Button label="Batal" icon="pi pi-times" text class="p-button-secondary" @click="isModalOpen = false" />
-                <Button label="Simpan Jurnal" icon="pi pi-check" :loading="isSubmitting" :disabled="!isFormBalanced" @click="submitJournal" autofocus />
+                <div class="flex justify-end gap-3 pt-4">
+                    <Button label="Batal" icon="pi pi-times" text class="!text-slate-500 hover:!bg-slate-100" @click="isModalOpen = false" />
+                    <Button 
+                        label="Simpan Jurnal" 
+                        icon="pi pi-check" 
+                        class="bg-indigo-600 hover:bg-indigo-700 border-none px-6 shadow-sm"
+                        :loading="isSubmitting" 
+                        :disabled="!isFormBalanced" 
+                        @click="submitJournal" 
+                    />
+                </div>
             </template>
         </Dialog>
 
@@ -489,7 +527,54 @@ watch(dates, loadData);
 </template>
 
 <style scoped>
-:deep(.p-calendar .p-inputtext) { border: none !important; background: transparent !important; box-shadow: none !important; padding: 0; }
-:deep(.p-datatable .p-datatable-thead > tr > th) { background: #f9fafb; color: #4b5563; font-size: 0.75rem; text-transform: uppercase; padding: 0.75rem 1rem; }
-:deep(.p-datatable-row-expansion) { padding: 0 !important; }
+/* Reset PrimeVue default borders & backgrounds for inputs to match Tailwind closely */
+:deep(.p-calendar .p-inputtext),
+:deep(.p-dropdown),
+:deep(.p-inputnumber .p-inputtext),
+:deep(.p-inputtext) {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+:deep(.p-calendar .p-inputtext:focus),
+:deep(.p-dropdown.p-focus),
+:deep(.p-inputtext:focus) {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 1px #6366f1;
+    outline: none;
+}
+
+/* Specific flat style for the header date picker */
+:deep(.bg-transparent .p-inputtext) {
+    border: none !important; 
+    background: transparent !important; 
+    box-shadow: none !important; 
+    padding: 0; 
+}
+
+/* DataTable Customizations */
+:deep(.custom-datatable .p-datatable-thead > tr > th) { 
+    background: #f8fafc; 
+    color: #64748b; 
+    font-size: 0.75rem; 
+    font-weight: 700;
+    text-transform: uppercase; 
+    padding: 1rem 1.25rem; 
+    border-bottom: 1px solid #e2e8f0;
+}
+:deep(.custom-datatable .p-datatable-tbody > tr > td) {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+:deep(.p-datatable-row-expansion) { 
+    padding: 0 !important; 
+}
+
+/* Paginator Fixes */
+:deep(.p-paginator) {
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    padding: 1rem;
+}
 </style>

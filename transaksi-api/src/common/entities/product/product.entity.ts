@@ -18,6 +18,9 @@ import { ProductPriceEntity } from '../product_price/product_price.entity';
 import { ShelveEntity } from '../shelve/shelve.entity';
 import { BrandEntity } from '../brand/brand.entity';
 
+// 1. TAMBAHKAN IMPORT RECIPE ENTITY DI SINI
+import { RecipeEntity } from '../recipe/recipe.entity';
+
 export enum HppMethod {
   FIFO = 'FIFO',
   LIFO = 'LIFO',
@@ -78,7 +81,6 @@ export class ProductEntity {
   })
   categories: CategoryEntity[];
 
-  // TAMBAHKAN KODE INI UNTUK RELASI RAK
   @ManyToMany(() => ShelveEntity, {
     cascade: true,
   })
@@ -113,6 +115,18 @@ export class ProductEntity {
     orphanedRowAction: 'soft-delete' 
   })
   prices: ProductPriceEntity[];
+
+  // ==========================================
+  // 2. TAMBAHKAN RELASI RECIPES DI SINI
+  // ==========================================
+  // Relasi jika produk ini bertindak sebagai Produk Jadi yang memiliki resep
+  @OneToMany(() => RecipeEntity, (recipe) => recipe.product)
+  recipes: RecipeEntity[];
+
+  // Relasi jika produk ini bertindak sebagai Bahan Baku di resep lain (Opsional, tapi bagus untuk tracking)
+  @OneToMany(() => RecipeEntity, (recipe) => recipe.ingredientProduct)
+  usedAsIngredients: RecipeEntity[];
+  // ==========================================
 
   @Column({ default: true })
   isManageStock: boolean;

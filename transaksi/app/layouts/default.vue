@@ -119,7 +119,7 @@ const items = ref([
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
             { label: 'Media', icon: 'pi pi-image', route: '/media' }, 
             { label: 'Promo', icon: 'pi pi-gift', route: '/promo' }, 
-            { label: 'Akun', icon: 'pi pi-list', route: '/account' }, 
+            { label: 'Akun', icon: 'pi pi-sitemap', route: '/account' }, 
         ]
     },
     { 

@@ -113,7 +113,7 @@ onMounted(() => {
             <div class="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-2xl border border-surface-200 shadow-sm w-full md:w-auto">
                 <Calendar v-model="dates" selectionMode="range" :manualInput="false" showIcon placeholder="Pilih Periode" class="w-full sm:w-64" inputClass="!rounded-xl !py-2 !text-sm" />
                 <Button icon="pi pi-search" label="Terapkan" @click="loadData" :loading="loading" class="!rounded-xl shadow-sm w-full sm:w-auto" severity="primary" />
-                <Button icon="pi pi-cog" label="" @click="router.push('/setting?tab=config_journal')"  :loading="loading" class="!rounded-xl shadow-sm" severity="secondary" />
+                <Button icon="pi pi-cog" label="" @click="router.push('/journal/setting')"  :loading="loading" class="!rounded-xl shadow-sm" severity="secondary" />
             </div>
         </div>
 
