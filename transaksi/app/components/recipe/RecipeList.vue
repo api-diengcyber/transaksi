@@ -63,7 +63,6 @@ const openCreateModal = () => {
 const openEditModal = (productData) => {
     selectedProduct.value = productData; // Isi data = Edit resep produk ini
     isModalOpen.value = true;
-    emit('edit', productData); // Tetap emit jika parent membutuhkannya
 };
 
 onMounted(() => {
