@@ -11,6 +11,7 @@ import { JournalArService } from './journal-ar.service';
 import { JournalApService } from './journal-ap.service';
 import { JournalReturnSaleService } from './journal-return-sale.service';
 import { JournalReturnBuyService } from './journal-return-buy.service';
+import { CreateManualJournalDto } from './dto/create-manual-journal.dto';
 
 @ApiTags('Journal')
 @ApiBearerAuth()
@@ -138,11 +139,12 @@ export class JournalController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
+    @Query('generalType') generalType?: string,
   ) {
     const normalizedType = type.toUpperCase();
     switch (normalizedType) {
       case 'ALL':
-        return this.journalService.findAll(storeUuid, startDate, endDate);
+        return this.journalService.findAll(storeUuid, { type: generalType, page, limit, search, startDate, endDate });
       case 'SALE':
         return this.journalSaleService.getReport(storeUuid, { page, limit, search, startDate, endDate });
       case 'BUY':
@@ -241,7 +243,7 @@ export class JournalController {
     return await this.journalStokService.combineStock(payload, userId, storeUuid);
   }
 
-  @Get(':uuid')
+  @Get('one/:uuid')
   async getJournalByUuid(@Param('uuid') uuid: string) {
     return await this.journalService.getJournalByUuid(uuid);
   }
@@ -324,16 +326,6 @@ export class JournalController {
   ) {
     return await this.journalBuyService.getBuyByCode(storeUuid, code);
   }
-  
-  @Post('manual')
-  @ApiOperation({ summary: 'Membuat Jurnal Umum Manual (Debit/Kredit kustom)' })
-  async createManualJournal(
-    @Body() body: any,
-    @GetUser('sub') userId: string,
-    @GetStore() storeUuid: string,
-  ) {
-    return this.journalService.createManualJournal(body, userId, storeUuid);
-  }
 
   @Delete(':uuid')
   @ApiOperation({ summary: 'Menghapus Jurnal Umum' })
@@ -342,5 +334,19 @@ export class JournalController {
     @GetUser('sub') userId: string,
   ) {
     return this.journalService.deleteJournal(uuid, userId);
+  }
+  
+  @Get('template')
+  async getTemplates(@GetStore() storeUuid: string) {
+    return this.journalService.getTemplates(storeUuid);
+  }
+
+  @Post('manual')
+  async createManual(
+    @Body() dto: CreateManualJournalDto,
+    @GetStore() storeUuid: string,
+    @GetUser('uuid') userUuid: string,
+  ) {
+    return this.journalService.createManual(dto, storeUuid, userUuid);
   }
 }

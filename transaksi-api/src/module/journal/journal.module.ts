@@ -12,6 +12,8 @@ import { JournalArService } from './journal-ar.service';
 import { JournalApService } from './journal-ap.service';
 import { JournalReturnSaleService } from './journal-return-sale.service';
 import { JournalReturnBuyService } from './journal-return-buy.service';
+import { journalTemplateProvider } from 'src/common/entities/journal_template/journal_template.provider';
+import { journalConfigProvider } from 'src/common/entities/journal_config/journal_config.provider';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { JournalReturnBuyService } from './journal-return-buy.service';
   providers: [
     ...journalProvider,
     ...journalDetailProvider,
+    ...journalConfigProvider,
+    ...journalTemplateProvider,
     JournalService,
     JournalSaleService,
     JournalStokService, 

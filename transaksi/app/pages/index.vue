@@ -76,7 +76,7 @@ const transaksiMenu = [
 const manajemenMenu = [
     { label: 'Produk', icon: 'pi pi-box', route: '/product', color: 'text-blue-500 bg-blue-50' },
     { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory', color: 'text-emerald-500 bg-emerald-50' },
-    { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant', color: 'text-orange-500 bg-orange-50' },
+    // { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant', color: 'text-orange-500 bg-orange-50' },
     { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier', color: 'text-cyan-500 bg-cyan-50' },
     // { label: 'Bank & Rek.', icon: 'pi pi-building-columns', route: '/bank', color: 'text-indigo-500 bg-indigo-50' },
     // { label: 'Member', icon: 'pi pi-user', route: '/member', color: 'text-pink-500 bg-pink-50' },

@@ -11,6 +11,7 @@ export const generateWarehouseUuid = (storeUuid: string) => `${storeUuid}-WRH-${
 export const generateCategoryUuid = (storeUuid: string) => `${storeUuid}-CAT-${generateLocalUuid()}`;
 export const generateUnitUuid = (storeUuid: string) => `${storeUuid}-UNT-${generateLocalUuid()}`;
 export const generateJournalUuid = (storeUuid: string) => `${storeUuid}-JRN-${generateLocalUuid()}`;
+export const generateJournalTemplateUuid = (storeUuid: string) => `${storeUuid}-JCT-${generateLocalUuid()}`;
 export const generateJournalConfigUuid = (storeUuid: string) => `${storeUuid}-JCG-${generateLocalUuid()}`;
 export const generateJournalDetailUuid = (storeUuid: string) => `${storeUuid}-JDT-${generateLocalUuid()}`;
 export const generateProductionDetailUuid = (storeUuid: string) => `${storeUuid}-PRDN-${generateLocalUuid()}`;

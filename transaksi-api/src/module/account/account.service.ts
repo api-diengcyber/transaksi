@@ -230,9 +230,11 @@ export class AccountService {
             // A. Coba cari EXACT MATCH dulu (Prioritas Tertinggi)
             // Kita cari semua config yang transactionType & detailKey-nya persis sama
             const exactMatches = configs.filter(c => 
-                c.transactionType === type && 
+                (c.transactionType === type || c.transactionType.split('-')[0] === "MANUAL") && 
                 c.detailKey === detail.key
             );
+
+            console.log("exactMatches: " + type);
 
             if (exactMatches.length > 0) {
                 targetConfigs = exactMatches;

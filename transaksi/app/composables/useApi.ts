@@ -28,7 +28,7 @@ export const useApi = async (url: string, options: any = {}) => {
         });
     } catch (error: any) {
         // 3. Logic Refresh Token (Jika 401 Unauthorized)
-        if (error.response?.status === 401 && refreshToken) {
+        if (error.response?.status === 401) {
             try {
                 const newTokens: any = await $fetch(`${API_BASE}/auth/refresh`, {
                     method: 'POST',

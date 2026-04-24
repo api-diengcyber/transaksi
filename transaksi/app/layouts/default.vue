@@ -114,7 +114,7 @@ const items = ref([
         items: [
             { label: 'Produk', icon: 'pi pi-box', route: '/product' }, 
             { label: 'Stok/Gudang', icon: 'pi pi-database', route: '/inventory' }, 
-            { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, 
+            // { label: 'Restaurant', icon: 'pi pi-th-large', route: '/restaurant' }, 
             { label: 'Ekspedisi', icon: 'pi pi-truck', route: '/courier' }, 
             { label: 'User / Pegawai', icon: 'pi pi-id-card', route: '/user' }, 
             { label: 'Media', icon: 'pi pi-image', route: '/media' }, 

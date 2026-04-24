@@ -9,7 +9,7 @@ export default defineNuxtConfig({
   app: {
     baseURL: '',
     cdnURL: '',
-    buildAssetsDir: 'assets', // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
+    // buildAssetsDir: 'assets', // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
     head: {
       script: [
         {

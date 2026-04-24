@@ -143,7 +143,7 @@ export const useJournalService = () => {
     };
 
     const getTransactionById = async (uuid: string) => {
-        return await useApi(`${API_BASE}/${uuid}`, {
+        return await useApi(`${API_BASE}/one/${uuid}`, {
             method: 'GET',
         });
     };
@@ -186,16 +186,22 @@ export const useJournalService = () => {
         });
     };
 
-    const createManual = async (payload: any) => {
-        return await useApi(`${API_BASE}/manual`, {
-            method: 'POST',
-            body: payload,
-        });
-    };
-
     const remove = async (uuid: string) => {
         return await useApi(`${API_BASE}/${uuid}`, {
             method: 'DELETE',
+        });
+    };
+    
+    const createManual = async (payload: any) => {
+        return await useApi(`${API_BASE}/manual`, {
+            method: 'POST',
+            body: payload
+        });
+    };
+
+    const getTemplates = async () => {
+        return await useApi(`${API_BASE}/template`, {
+            method: 'GET'
         });
     };
 
@@ -224,7 +230,8 @@ export const useJournalService = () => {
         verifyOpnameJournal,
         getSaleByCode,
         getBuyByCode,
-        createManual,
         remove,
+        createManual,
+        getTemplates,
     };
 };
