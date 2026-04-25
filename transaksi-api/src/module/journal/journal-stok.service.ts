@@ -3,7 +3,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { JournalService } from './journal.service';
 import { JournalEntity } from 'src/common/entities/journal/journal.entity';
 import { JournalDetailEntity } from 'src/common/entities/journal_detail/journal_detail.entity';
-import { generateJournalDetailUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
+import { generateJournalDetailUuid, generateJournalUuid, generateLocalUuid } from 'src/common/utils/generate_uuid_util';
 
 @Injectable()
 export class JournalStokService {
@@ -32,10 +32,11 @@ export class JournalStokService {
 
     const work = async (manager: EntityManager) => {
       const codeType = isOpname ? 'OPNAME' : type;
-      const code = await this.journalService.generateCode(codeType, storeUuid);
+      var code = await this.journalService.generateCode(codeType, storeUuid);
+      code = code + "-" + Math.random().toString(36).substring(2, 9);
       
       const journal = manager.create(JournalEntity, {
-        uuid: `${storeUuid}-JRN-${generateLocalUuid()}`,
+        uuid: generateJournalUuid(storeUuid),
         code, createdBy: userId,
         verifiedBy: isDraft ? null : userId,
         verifiedAt: isDraft ? null : new Date(), 
@@ -373,16 +374,15 @@ export class JournalStokService {
   }
 
   async getInventoryReport(storeUuid: string, startDate: string, endDate: string) {
-    const query = this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
-      .leftJoinAndMapMany('journal.details', JournalDetailEntity, 'detail', 'detail.journalCode = journal.code')
+    const journals = await this.dataSource.manager.createQueryBuilder(JournalEntity, 'journal')
+      .leftJoinAndSelect('journal.details', 'detail')
       .where('journal.uuid LIKE :store', { store: `${storeUuid}%` })
       .andWhere('journal.createdAt BETWEEN :start AND :end', { 
         start: `${startDate} 00:00:00`, 
         end: `${endDate} 23:59:59` 
       })
-      .orderBy('journal.createdAt', 'ASC');
-
-    const journals = await query.getMany();
+      .orderBy('journal.createdAt', 'ASC')
+      .getMany();
 
     const inventoryMap = new Map();
 
@@ -445,9 +445,9 @@ export class JournalStokService {
         const qty = Number(detailsMap[`qty#${idx}`] || detailsMap[`qty_return#${idx}`] || detailsMap[`stok_qty_plus#${idx}`] || detailsMap[`stok_qty_min#${idx}`] || detailsMap[`actual_qty#${idx}`] || 0);
 
         if (!inventoryMap.has(pUuid)) {
-          inventoryMap.set(pUuid, { 
+          inventoryMap.set(pUuid, {
             uuid: pUuid, 
-            name: pName, 
+            name: pName,
             unit: unit,
             stockIn: 0, 
             stockOut: 0, 
@@ -459,9 +459,9 @@ export class JournalStokService {
         const item = inventoryMap.get(pUuid);
 
         // Update nilai berdasarkan jenis transaksi
-        if (j.code.startsWith('BUY') || j.code.startsWith('RET_SALE') || j.code.startsWith('STOCK_IN')) {
+        if (j.code.startsWith('RET_SALE') || j.code.startsWith('STOCK_IN')) {
           item.stockIn += qty;
-        } else if (j.code.startsWith('SALE') || j.code.startsWith('RET_BUY') || j.code.startsWith('STOCK_OUT')) {
+        } else if (j.code.startsWith('RET_BUY') || j.code.startsWith('STOCK_OUT')) {
           item.stockOut += qty;
         } else if (j.code.startsWith('ADJ') || j.code.startsWith('OPN')) {
             // Logika adjustment/opname biasanya menyimpan selisih
@@ -513,8 +513,7 @@ export class JournalStokService {
 
           if (j.code.includes('BUY') || j.code.includes('RET_SALE')) {
             entry.masuk += qtyValue;
-          } 
-          else if (j.code.includes('SALE') || j.code.includes('RET_BUY')) {
+          } else if (j.code.includes('SALE') || j.code.includes('RET_BUY')) {
             entry.keluar += qtyValue;
           }
         }

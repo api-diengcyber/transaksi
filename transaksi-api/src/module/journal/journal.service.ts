@@ -178,7 +178,7 @@ export class JournalService {
 
     query.orderBy('journal.createdAt', 'DESC');
 
-    // Menghitung Total Data (Paginasi)
+    // Menghitung Total Data Mentah (Paginasi awal)
     const total = await query.getCount();
     
     if (limit > 0) {
@@ -191,22 +191,19 @@ export class JournalService {
     // INTEGRASI MAPPING CONFIG & ACCOUNT (SERVER-SIDE)
     // =========================================================================
     
-    // 1. Ambil semua tipe transaksi unik dari hasil paginasi saat ini
-    const transactionTypes = [...new Set(data.map(j => j.code.split('-')[0]))];
-    
     let configs: any[] = [];
-    if (transactionTypes.length > 0) {
-      // 2. Query ke journal_config beserta relasi tabel account-nya
+    if (data.length > 0) {
       configs = await this.dataSource.manager.createQueryBuilder(JournalConfigEntity, 'config')
         .leftJoinAndSelect('config.account', 'account')
         .where('config.storeUuid LIKE :storeUuid', { storeUuid: `${storeUuid}%` })
-        .andWhere('config.transactionType IN (:...types)', { types: transactionTypes })
         .getMany();
     }
 
     // 3. Mapping data jurnal
     const mappedData = data.map(journal => {
       const transactionType = journal.code.split('-')[0];
+      const isManual = transactionType === 'MANUAL' || transactionType === 'MAN';
+      
       let ledgerEntries: any[] = [];
       let isMapped = false;
 
@@ -217,74 +214,91 @@ export class JournalService {
         try {
           const parsed = JSON.parse(manualDetailJson);
           ledgerEntries = parsed.map((e: any) => ({
-            account_code: e.accountCode,
-            account_name: e.accountName,
-            debit: Number(e.debit) || 0,
-            credit: Number(e.credit) || 0
+            accountCode: e.accountCode || e.account_code, 
+            accountName: e.accountName || e.account_name,
+            account_code: e.accountCode || e.account_code, 
+            account_name: e.accountName || e.account_name,
+            debit: Number(e.debit || e.DEBIT) || 0,
+            credit: Number(e.credit || e.CREDIT) || 0
           }));
           isMapped = true;
         } catch (err) {
           console.warn('Gagal parse manual_entries JSON', err);
         }
-      } 
-      // LOGIKA UTAMA: Untuk Jurnal Sistem & Jurnal Manual Baru (Terkoneksi journal_config)
-      else {
-        const relevantConfigs = configs.filter(c => c.transactionType === transactionType);
-        
-        if (relevantConfigs.length > 0) {
-          isMapped = true;
-          journal.details.forEach(detail => {
-            const val = Number(detail.value) || 0;
-            if (val <= 0) return;
+      } else {
+        journal.details.forEach(detail => {
+          // Konversi nilai dari detail jurnal. Tangani nilai absolut jika value dari DB negatif
+          const val = Math.abs(Number(detail.value) || 0); 
+          if (val <= 0) return;
 
-            const matches = relevantConfigs.filter(cfg => 
-              cfg.detailKey === detail.key || (cfg.detailKey.endsWith('_') && detail.key.startsWith(cfg.detailKey))
+          let matches = configs.filter(c => 
+            (c.transactionType === transactionType || isManual) && 
+            c.detailKey === detail.key
+          );
+
+          if (matches.length === 0) {
+            matches = configs.filter(c => 
+              (c.transactionType === transactionType || isManual) && 
+              c.detailKey.endsWith('_') && 
+              detail.key.startsWith(c.detailKey)
             );
+          }
 
+          if (matches.length > 0) {
+            isMapped = true; 
             matches.forEach(cfg => {
               ledgerEntries.push({
+                accountCode: cfg.account?.code || cfg.accountCode || '???',
+                accountName: cfg.account?.name || 'Unknown Account',
                 account_code: cfg.account?.code || cfg.accountCode || '???',
                 account_name: cfg.account?.name || 'Unknown Account',
                 debit: cfg.position === 'DEBIT' ? val : 0,
                 credit: cfg.position === 'CREDIT' ? val : 0,
               });
             });
-          });
-        }
+          }
+        });
       }
 
-      // Grouping Saldo berdasar Kode Akun (Menggabungkan nominal jika akunnya sama dalam 1 jurnal)
+      // Grouping Saldo
       const grouped = ledgerEntries.reduce((acc, curr) => {
-        const key = curr.account_code;
-        if (!acc[key]) acc[key] = { ...curr, debit: 0, credit: 0 };
-        else {
+        const key = curr.accountCode; 
+        if (!acc[key]) {
+            acc[key] = { ...curr };
+        } else {
           acc[key].debit += curr.debit;
           acc[key].credit += curr.credit;
         }
         return acc;
       }, {});
 
-      // Sortir debit di atas, kredit di bawah
+      // Urutkan: Debit di atas
       ledgerEntries = Object.values(grouped).sort((a: any, b: any) => b.debit - a.debit);
       
-      // Kalkulasi total (hanya dari sisi debit untuk menghindari duplikasi hitungan)
-      const totalAmount = ledgerEntries.reduce((sum, item: any) => sum + item.debit, 0);
+      // Kalkulasi total (Hitung Total Debit saja)
+      let totalAmount = 0;
+      if (isMapped) {
+         totalAmount = ledgerEntries.reduce((sum, item: any) => sum + item.debit, 0);
+      }
+
       const noteEntry = journal.details.find(d => d.key === 'note');
 
       return {
         ...journal,
         ledgerEntries,
-        // Jika isMapped false (Belum diset di config/JSON tidak valid), kembalikan null
-        totalAmount: isMapped ? totalAmount : null,
+        totalAmount: isMapped && totalAmount > 0 ? totalAmount : null, 
         isMapped,
         note: noteEntry ? noteEntry.value : '-'
       };
     });
 
+    // 4. FILTERING: Hanya ambil jurnal yang statusnya ter-map (memiliki config)
+    const finalData = mappedData.filter((journal) => journal.isMapped);
+
     return {
-      data: mappedData,
+      data: finalData,
       meta: {
-        total,
+        total, // Catatan: Total ini merupakan total halaman di database (sebelum di-filter)
         page: Number(page),
         limit: Number(limit)
       }

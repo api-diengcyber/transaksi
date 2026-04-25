@@ -49,7 +49,7 @@ export class JournalConfigService {
     return discovered.map((item: any) => {
       // Cari config Exact Match
       let matches = existingConfigs.filter(c => 
-        c.transactionType === item.transactionType && 
+        (c.transactionType === item.transactionType || item.transactionType.split('-')[0] === "MANUAL") && 
         c.detailKey === item.detailKey
       );
 
@@ -58,7 +58,7 @@ export class JournalConfigService {
       // Jika tidak ada, cari Wildcard Match
       if (matches.length === 0) {
         matches = existingConfigs.filter(c => 
-          c.transactionType === item.transactionType && 
+          (c.transactionType === item.transactionType || item.transactionType.split('-')[0] === "MANUAL") && 
           c.detailKey.endsWith('_') && 
           item.detailKey.startsWith(c.detailKey)
         );
@@ -130,166 +130,85 @@ export class JournalConfigService {
   async installJournalConfigs(manager: EntityManager, storeUuid: string, userId: string) {
     const rawConfigs: any[] = [
       // ==========================================
-      // TRANSAKSI PENJUALAN (SALE)
+      // 1. TRANSAKSI PENJUALAN (SALE)
       // ==========================================
       {
-        "transactionType": "SALE",
-        "detailKey": "grand_total",
-        "description": "Mengakui Total Pendapatan Penjualan",
-        "items": [
-          { "accountCode": "4001", "position": "CREDIT" } 
-        ]
-      },
-      {
-        "transactionType": "SALE",
-        "detailKey": "amount_cash",
-        "description": "Kas yang masuk dari Penjualan Tunai Lunas",
-        "items": [
-          { "accountCode": "1001", "position": "DEBIT" } 
-        ]
-      },
-      {
-        "transactionType": "SALE",
-        "detailKey": "amount_bank_total",
-        "description": "Kas yang masuk dari Transfer",
-        "items": [
-          { "accountCode": "1002", "position": "DEBIT" } 
-        ]
-      },
-      {
-        "transactionType": "SALE",
-        "detailKey": "amount_member",
-        "description": "Pembayaran Menggunakan Saldo Member",
-        "items": [
-          { "accountCode": "1001", "position": "DEBIT" } // Masuk sebagai Debit (Asumsi uang member ditampung di kas)
-        ]
-      },
-      /* CATATAN PENTING: 
-         - 'amount_credit' DIHAPUS dari SALE. Urusan pengakuan Piutang sepenuhnya dihandle oleh jurnal 'AR'.
-         - 'dp_amount' (Jika ada di SALE) DIHAPUS. Urusan penerimaan DP Piutang dihandle oleh jurnal 'AR'.
-      */
-
-      // ==========================================
-      // TRANSAKSI PEMBELIAN (BUY)
-      // ==========================================
-      {
-        "transactionType": "BUY",
-        "detailKey": "grand_total",
-        "description": "Total Penambahan Nilai Persediaan",
-        "items": [
-          { "accountCode": "1201", "position": "DEBIT" } 
-        ]
-      },
-      {
-        "transactionType": "BUY",
-        "detailKey": "amount_cash",
-        "description": "Kas yang keluar untuk Pembelian Lunas",
-        "items": [
-          { "accountCode": "1001", "position": "CREDIT" } 
-        ]
-      },
-      {
-        "transactionType": "BUY",
-        "detailKey": "amount_bank",
-        "description": "Transfer Bank untuk Pembelian Lunas",
-        "items": [
-          { "accountCode": "1002", "position": "CREDIT" } 
-        ]
-      },
-      /* CATATAN PENTING: 
-         - 'amount_credit' DIHAPUS dari BUY. Urusan pengakuan Hutang sepenuhnya dihandle oleh jurnal 'AP'.
-         - 'dp_amount' DIHAPUS dari BUY. Pengeluaran DP Hutang dihandle oleh jurnal 'AP'.
-      */
-
-      // ==========================================
-      // TRANSAKSI PIUTANG (AR) - TERBIT SAAT PENJUALAN KREDIT
-      // ==========================================
-      {
-        "transactionType": "AR",
-        "detailKey": "amount",
-        "description": "Pengakuan Sisa Piutang ke Pelanggan",
-        "items": [
-          { "accountCode": "1101", "position": "DEBIT" }    // Piutang Bertambah (Hanya 1 Sisi, Kreditnya sudah terakui di SALE grand_total)
-        ]
-      },
-      {
-        "transactionType": "AR",
-        "detailKey": "dp_amount",
-        "description": "Penerimaan DP dari Piutang",
-        "items": [
-          { "accountCode": "1001", "position": "DEBIT" }    // Kas Bertambah dari DP (Hanya 1 Sisi, Kreditnya sudah terakui di SALE grand_total)
+        transactionType: "SALE",
+        detailKey: "grand_total",
+        description: "Pencatatan Pendapatan Penjualan",
+        items: [
+          { accountCode: "1001", position: "DEBIT" },  // Kas / Bank
+          { accountCode: "4001", position: "CREDIT" }  // Pendapatan Penjualan
         ]
       },
 
       // ==========================================
-      // TRANSAKSI HUTANG (AP) - TERBIT SAAT PEMBELIAN KREDIT
+      // 2. ACCOUNT RECEIVABLE (PIUTANG / AR)
       // ==========================================
       {
-        "transactionType": "AP",
-        "detailKey": "amount",
-        "description": "Pengakuan Sisa Hutang ke Supplier",
-        "items": [
-          { "accountCode": "2001", "position": "CREDIT" }   // Hutang Bertambah (Hanya 1 Sisi, Debitnya sudah terakui di BUY grand_total)
+        transactionType: "AR",
+        detailKey: "amount",
+        description: "Penerimaan Pembayaran Piutang",
+        items: [
+          { accountCode: "1001", position: "DEBIT" },  // Kas / Bank Bertambah
+          { accountCode: "1101", position: "CREDIT" }  // Piutang Usaha Berkurang
         ]
       },
       {
-        "transactionType": "AP",
-        "detailKey": "dp_amount",
-        "description": "Pengeluaran Kas untuk DP Hutang",
-        "items": [
-          { "accountCode": "1001", "position": "CREDIT" }   // Kas Keluar karena DP (Hanya 1 Sisi, Debitnya sudah terakui di BUY grand_total)
-        ]
-      },
-
-      // ==========================================
-      // PEMBAYARAN PIUTANG PELANGGAN (PAY_AR) - TERBIT SAAT PELUNASAN/CICILAN
-      // ==========================================
-      {
-        "transactionType": "PAY_AR",
-        "detailKey": "amount",
-        "description": "Penerimaan Kas dari Cicilan/Pelunasan Piutang",
-        "items": [
-          { "accountCode": "1001", "position": "DEBIT" },  // Kas Bertambah
-          { "accountCode": "1101", "position": "CREDIT" }  // Piutang Berkurang
+        transactionType: "AR",
+        detailKey: "dp_amount",
+        description: "Penerimaan DP / Uang Muka Penjualan",
+        items: [
+          { accountCode: "1001", position: "DEBIT" },  // Kas / Bank Bertambah
+          { accountCode: "2101", position: "CREDIT" }  // Pendapatan Diterima Dimuka (Uang Muka)
         ]
       },
 
       // ==========================================
-      // PEMBAYARAN HUTANG SUPPLIER (PAY_AP) - TERBIT SAAT PELUNASAN/CICILAN
+      // 3. ACCOUNT PAYABLE (HUTANG / AP)
       // ==========================================
       {
-        "transactionType": "PAY_AP",
-        "detailKey": "amount",
-        "description": "Pengeluaran Kas untuk Cicilan/Pelunasan Hutang",
-        "items": [
-          { "accountCode": "2001", "position": "DEBIT" },  // Hutang Berkurang
-          { "accountCode": "1001", "position": "CREDIT" }  // Kas Keluar
+        transactionType: "AP",
+        detailKey: "amount",
+        description: "Pembayaran / Pelunasan Hutang",
+        items: [
+          { accountCode: "2001", position: "DEBIT" },  // Hutang Usaha Berkurang
+          { accountCode: "1001", position: "CREDIT" }  // Kas / Bank Berkurang
+        ]
+      },
+      {
+        transactionType: "AP",
+        detailKey: "dp_amount",
+        description: "Pembayaran DP / Uang Muka Pembelian",
+        items: [
+          { accountCode: "1102", position: "DEBIT" },  // Uang Muka Pembelian Bertambah (Aset)
+          { accountCode: "1001", position: "CREDIT" }  // Kas / Bank Berkurang
         ]
       },
 
       // ==========================================
-      // RETUR PENJUALAN (RET_SALE)
+      // 4. TRANSAKSI PEMBELIAN (BUY)
       // ==========================================
       {
-        "transactionType": "RET_SALE",
-        "detailKey": "grand_total",
-        "description": "Pengembalian Dana ke Pelanggan",
-        "items": [
-          { "accountCode": "4002", "position": "DEBIT" },  // Retur Penjualan (Kontra Revenue)
-          { "accountCode": "1001", "position": "CREDIT" }  // Kas Keluar (Refund)
+        transactionType: "BUY",
+        detailKey: "grand_total",
+        description: "Pencatatan Nilai Pembelian Barang",
+        items: [
+          { accountCode: "1201", position: "DEBIT" },  // Persediaan Barang Bertambah (atau 5001 Pembelian)
+          { accountCode: "1001", position: "CREDIT" }  // Kas / Bank Berkurang (Atau 2001 Hutang Usaha)
         ]
       },
-
+      
       // ==========================================
-      // RETUR PEMBELIAN (RET_BUY)
+      // 5. TRANSAKSI RETUR PEMBELIAN (RET_BUY)
       // ==========================================
       {
-        "transactionType": "RET_BUY",
-        "detailKey": "grand_total",
-        "description": "Penerimaan Dana Refund dari Supplier",
-        "items": [
-          { "accountCode": "1001", "position": "DEBIT" },  // Kas Masuk (Refund)
-          { "accountCode": "1201", "position": "CREDIT" }  // Persediaan Berkurang
+        transactionType: "RET_BUY",
+        detailKey: "grand_total",
+        description: "Penerimaan Dana Refund dari Supplier",
+        items: [
+          { accountCode: "1001", position: "DEBIT" },  // Kas Masuk (Refund)
+          { accountCode: "1201", position: "CREDIT" }  // Persediaan Berkurang
         ]
       }
     ];
@@ -302,6 +221,7 @@ export class JournalConfigService {
     // 2. Loop dan buat data Mapping
     for (const config of rawConfigs) {
         for (const item of config.items) {
+             // Pastikan storeAccounts memiliki code yang sama dengan yang didaftarkan di array di atas
              const matchedAccount = storeAccounts.find(acc => acc.code === item.accountCode);
              
              if (matchedAccount) {
@@ -314,11 +234,15 @@ export class JournalConfigService {
                      position: item.position,
                      createdBy: userId
                  }));
+             } else {
+                 console.warn(`[Install Journal Config] Account code ${item.accountCode} not found for Store ${storeUuid}`);
              }
         }
     }
     
     // 3. Simpan
-    await manager.save(JournalConfigEntity, configEntities);
+    if (configEntities.length > 0) {
+        await manager.save(JournalConfigEntity, configEntities);
+    }
   }
 }

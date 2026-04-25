@@ -20,7 +20,7 @@ interface DiscoveredItem {
     transactionType: string;
     detailKey: string;
     frequency: number;
-    totalValue: number; // Field baru untuk menampung SUM value
+    totalValue: number; 
     isMapped: boolean;
     isWildcard: boolean;
     configs: ConfigItem[];
@@ -45,7 +45,7 @@ const accounts = ref<Account[]>([]);
 const loading = ref(false);
 const isDialogVisible = ref(false);
 
-// State Baru untuk Raw Data Modal
+// State untuk Raw Data Modal
 const isRawDataVisible = ref(false);
 
 // Form State
@@ -54,9 +54,40 @@ const currentType = ref('');
 const mappingMode = ref<'EXACT' | 'PATTERN'>('EXACT');
 const formItems = ref<{ accountUuid: string; position: 'DEBIT' | 'CREDIT' }[]>([]);
 
-// Filter Table
-const filters = ref({
-    global: { value: null, matchMode: 'contains' },
+// State Tab & Filter
+const activeTab = ref<string>('');
+const searchQuery = ref('');
+
+// --- Computed untuk Tab & Grid ---
+// Mendapatkan daftar tipe transaksi unik untuk Tab
+const transactionTypes = computed(() => {
+    const types = new Set(discoveryItems.value.map(i => i.transactionType));
+    return Array.from(types).sort();
+});
+
+// Memfilter data berdasarkan Tab yang aktif dan pencarian
+const filteredItems = computed(() => {
+    let items = discoveryItems.value;
+    
+    // Filter berdasarkan Tab aktif
+    if (activeTab.value) {
+        items = items.filter(i => i.transactionType === activeTab.value);
+    }
+    
+    // Filter berdasarkan pencarian kata kunci
+    if (searchQuery.value) {
+        const q = searchQuery.value.toLowerCase();
+        items = items.filter(i => i.detailKey.toLowerCase().includes(q));
+    }
+    
+    return items;
+});
+
+const mappedCount = computed(() => discoveryItems.value.filter(i => i.isMapped).length);
+const unmappedCount = computed(() => discoveryItems.value.length - mappedCount.value);
+const mappedPercentage = computed(() => {
+    if (!discoveryItems.value.length) return 0;
+    return Math.round((mappedCount.value / discoveryItems.value.length) * 100);
 });
 
 // --- Actions ---
@@ -70,6 +101,11 @@ const loadData = async () => {
 
         discoveryItems.value = (discRes.data || discRes || []) as DiscoveredItem[];
         accounts.value = (accRes.data || accRes || []) as Account[];
+        
+        // Set tab pertama sebagai aktif secara default jika belum diset
+        if (!activeTab.value && transactionTypes.value.length > 0) {
+            activeTab.value = transactionTypes.value[0] ?? '';
+        }
     } catch (e) {
         console.error("Gagal memuat data discovery", e);
     } finally {
@@ -111,11 +147,9 @@ const removeFormItem = (index: number) => {
 };
 
 const saveConfig = async () => {
-    // Validasi sederhana
     const validItems = formItems.value.filter(i => i.accountUuid);
     if (validItems.length === 0) return;
     
-    // Logic Wildcard
     let finalKey = currentKey.value;
     if (mappingMode.value === 'PATTERN') {
         if (!finalKey.endsWith('_')) finalKey += '_';
@@ -135,14 +169,6 @@ const saveConfig = async () => {
         console.error("Error save", e);
     }
 };
-
-// Computed
-const mappedCount = computed(() => discoveryItems.value.filter(i => i.isMapped).length);
-const unmappedCount = computed(() => discoveryItems.value.length - mappedCount.value);
-const mappedPercentage = computed(() => {
-    if (!discoveryItems.value.length) return 0;
-    return Math.round((mappedCount.value / discoveryItems.value.length) * 100);
-});
 
 onMounted(loadData);
 </script>
@@ -185,13 +211,14 @@ onMounted(loadData);
         </div>
 
         <div class="bg-surface-0 rounded-2xl shadow-sm border border-surface-200 overflow-hidden flex flex-col min-h-[500px]">
+            
             <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-0 sticky top-0 z-20">
                 <div class="relative w-full sm:w-72">
                     <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input 
-                        v-model="filters['global'].value" 
+                        v-model="searchQuery" 
                         type="text" 
-                        placeholder="Cari Kode..." 
+                        placeholder="Cari Kode Transaksi..." 
                         class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     >
                 </div>
@@ -213,95 +240,96 @@ onMounted(loadData);
                 </div>
             </div>
 
-            <DataTable 
-                :value="discoveryItems" 
-                :filters="filters" 
-                :loading="loading" 
-                paginator :rows="10" 
-                class="w-full"
-                :rowClass="() => 'hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0'"
-            >
-                <template #empty>
-                    <div class="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <i class="pi pi-inbox text-3xl opacity-50 mb-2"></i>
-                        <p class="font-medium">Tidak ada data transaksi ditemukan</p>
-                    </div>
-                </template>
-
-                <Column field="transactionType" header="Tipe" sortable class="w-[10%]">
-                    <template #body="{ data }">
-                        <span class="inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-surface-200">
-                            {{ data.transactionType }}
+            <div class="p-4 flex flex-col flex-1">
+                <div class="flex gap-2 overflow-x-auto pb-2 mb-4 border-b border-surface-200 custom-scrollbar">
+                    <button 
+                        v-for="type in transactionTypes" 
+                        :key="type"
+                        @click="activeTab = type"
+                        class="px-5 py-2.5 font-bold text-sm whitespace-nowrap border-b-2 transition-colors flex items-center gap-2"
+                        :class="activeTab === type ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'"
+                    >
+                        {{ type }}
+                        <span 
+                            class="text-[10px] px-1.5 py-0.5 rounded-full"
+                            :class="activeTab === type ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'"
+                        >
+                            {{ discoveryItems.filter(i => i.transactionType === type).length }}
                         </span>
-                    </template>
-                </Column>
+                    </button>
+                </div>
 
-                <Column field="detailKey" header="Kode Transaksi" sortable class="w-[25%]">
-                    <template #body="{ data }">
-                        <div class="flex flex-col gap-1">
-                            <code class="font-mono text-xs font-bold text-slate-700 bg-slate-50 px-2 py-1 rounded w-fit select-all border border-surface-100">
-                                {{ data.detailKey }}
-                            </code>
-                            <span v-if="data.isWildcard" class="text-[10px] text-amber-600 flex items-center gap-1 font-medium">
-                                <i class="pi pi-bolt text-[9px]"></i> Pola Wildcard
-                            </span>
-                        </div>
-                    </template>
-                </Column>
-                
-                <Column field="totalValue" header="Total Nilai" sortable class="w-[15%]">
-                    <template #body="{ data }">
-                        <div class="flex flex-col items-end text-right">
-                            <span class="text-xs font-bold text-slate-700 font-mono">
-                                {{ formatNumber(data.totalValue) }}
-                            </span>
-                            <span class="text-[9px] text-slate-400">
-                                dr {{ data.frequency }} transaksi
-                            </span>
-                        </div>
-                    </template>
-                </Column>
-                
-                <Column header="Konfigurasi Akun (Jurnal)" class="w-[40%]">
-                    <template #body="{ data }">
-                        <div v-if="data.isMapped && data.configs.length" class="flex flex-col gap-1.5 py-1">
-                            <div v-for="cfg in data.configs" :key="cfg.uuid" 
-                                class="flex items-center justify-between text-xs bg-slate-50 border border-surface-100 rounded px-2 py-1 group hover:border-indigo-100 transition-colors"
-                            >
-                                <div class="flex items-center gap-2">
-                                    <span class="font-mono text-slate-400 text-[10px] bg-surface-0 px-1 rounded border border-surface-100">{{ cfg.accountCode }}</span>
-                                    <span class="font-semibold text-slate-700 group-hover:text-indigo-700 transition-colors">{{ cfg.accountName }}</span>
-                                </div>
-                                <span 
-                                    class="text-[9px] font-bold px-1.5 py-0.5 rounded border"
-                                    :class="cfg.position === 'DEBIT' ? 'text-blue-700 bg-blue-50 border-blue-100' : 'text-red-700 bg-red-50 border-red-100'"
-                                >
-                                    {{ cfg.position }}
+                <div v-if="loading" class="flex flex-col items-center justify-center py-20 text-indigo-500 flex-1">
+                    <i class="pi pi-spin pi-spinner text-4xl mb-4"></i>
+                    <p class="text-sm font-medium text-slate-500">Memuat data konfigurasi...</p>
+                </div>
+
+                <div v-else-if="filteredItems.length === 0" class="flex flex-col items-center justify-center py-20 text-slate-400 flex-1">
+                    <i class="pi pi-inbox text-5xl opacity-30 mb-3"></i>
+                    <p class="font-medium">Tidak ada kode transaksi ditemukan pada tab/pencarian ini.</p>
+                </div>
+
+                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4 animate-fade-in-down flex-1 content-start">
+                    <div 
+                        v-for="item in filteredItems" 
+                        :key="item.detailKey"
+                        class="bg-surface-0 border rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col gap-3 group"
+                        :class="item.isMapped ? 'border-surface-200' : 'border-amber-200 bg-amber-50/10'"
+                    >
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="flex flex-col gap-1 min-w-0">
+                                <code class="font-mono text-sm font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded w-fit border border-surface-200 truncate max-w-full">
+                                    {{ item.detailKey }}
+                                </code>
+                                <span v-if="item.isWildcard" class="text-[10px] text-amber-600 flex items-center gap-1 font-medium mt-0.5">
+                                    <i class="pi pi-bolt text-[9px]"></i> Pola Wildcard
                                 </span>
                             </div>
+                            <div class="flex flex-col items-end text-right shrink-0">
+                                <span class="text-xs font-bold text-slate-700 font-mono">{{ formatNumber(item.totalValue) }}</span>
+                                <span class="text-[10px] text-slate-400">dr {{ item.frequency }} Trx</span>
+                            </div>
                         </div>
-                        <div v-else class="flex items-center gap-2 py-2 opacity-60">
-                            <i class="pi pi-exclamation-circle text-slate-400"></i>
-                            <span class="text-xs text-slate-500 italic">Belum dikonfigurasi</span>
-                        </div>
-                    </template>
-                </Column>
 
-                <Column class="w-[10%] text-right">
-                    <template #body="{ data }">
-                        <button 
-                            @click="openMappingDialog(data)"
-                            class="inline-flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all border"
-                            :class="data.isMapped 
-                                ? 'bg-surface-0 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600' 
-                                : 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 hover:border-indigo-700 shadow-sm hover:shadow'"
-                        >
-                            <i class="pi" :class="data.isMapped ? 'pi-pencil' : 'pi-link'"></i>
-                            {{ data.isMapped ? 'Edit' : 'Atur' }}
-                        </button>
-                    </template>
-                </Column>
-            </DataTable>
+                        <div class="flex-1 bg-slate-50 rounded-lg p-2.5 border border-slate-100 min-h-[70px]">
+                            <div v-if="item.isMapped && item.configs.length" class="flex flex-col gap-1.5">
+                                <div v-for="cfg in item.configs" :key="cfg.uuid" 
+                                    class="flex items-center justify-between text-xs bg-surface-0 border border-surface-200 rounded px-2.5 py-1.5"
+                                >
+                                    <div class="flex items-center gap-2 truncate pr-2">
+                                        <span class="font-mono text-slate-400 text-[10px] bg-slate-50 px-1 rounded border border-surface-100">{{ cfg.accountCode }}</span>
+                                        <span class="font-semibold text-slate-700 truncate" :title="cfg.accountName">{{ cfg.accountName }}</span>
+                                    </div>
+                                    <span 
+                                        class="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0"
+                                        :class="cfg.position === 'DEBIT' ? 'text-blue-700 bg-blue-50 border-blue-100' : 'text-red-700 bg-red-50 border-red-100'"
+                                    >
+                                        {{ cfg.position }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-else class="flex flex-col items-center justify-center h-full gap-1 opacity-70 text-slate-500 py-2">
+                                <i class="pi pi-exclamation-circle text-lg mb-1"></i>
+                                <span class="text-[11px] italic font-medium">Jurnal belum dikonfigurasi</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-1 mt-auto">
+                            <button 
+                                @click="openMappingDialog(item)"
+                                class="w-full inline-flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-lg transition-all border"
+                                :class="item.isMapped 
+                                    ? 'bg-surface-0 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200' 
+                                    : 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 shadow-sm hover:shadow'"
+                            >
+                                <i class="pi" :class="item.isMapped ? 'pi-pencil' : 'pi-link'"></i>
+                                {{ item.isMapped ? 'Edit Jurnal' : 'Atur Jurnal' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
 
         <Dialog 
@@ -491,7 +519,7 @@ onMounted(loadData);
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Custom Scrollbar for better UI inside modal */
+/* Custom Scrollbar for better UI inside modal & tabs */
 .custom-scrollbar::-webkit-scrollbar,
 ::-webkit-scrollbar {
     width: 6px;

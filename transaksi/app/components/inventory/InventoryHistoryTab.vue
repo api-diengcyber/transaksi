@@ -56,7 +56,7 @@ watch(() => props.modelValue, (newUuid) => loadHistory(newUuid), { immediate: tr
                     </template>
                 </Column>
                 <Column field="ref" header="Referensi">
-                    <template #body="{ data }"><span class="font-mono text-xs font-semibold bg-surface-100 px-2 py-1 rounded border">{{ data.ref }}</span></template>
+                    <template #body="{ data }"><span class="font-mono text-xs font-semibold bg-surface-100 px-2 py-1 rounded border">{{ data.ref.split('-')[0] }}</span></template>
                 </Column>
                 <Column field="product" header="Item"></Column>
                 <Column field="type" header="Aktivitas" sortable>

@@ -234,7 +234,7 @@ export class StoreService {
       await this.accountService.createDefaultAccounts(customStoreUuid, manager);
 
       // journal configs
-      // await this.journalConfigService.installJournalConfigs(manager, customStoreUuid, savedUser.uuid);
+      await this.journalConfigService.installJournalConfigs(manager, customStoreUuid, savedUser.uuid);
 
       // 5. SETTINGS
       // Menyiapkan konfigurasi bawaan dari sistem
