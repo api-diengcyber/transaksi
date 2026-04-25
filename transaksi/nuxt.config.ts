@@ -9,11 +9,11 @@ export default defineNuxtConfig({
   app: {
     baseURL: '',
     cdnURL: '',
-    buildAssetsDir: 'assets', // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
+    // buildAssetsDir: 'assets', // The folder name for the built site assets, relative to baseURL (or cdnURL if set). This is set at build time and should not be customized at runtime.
     head: {
       script: [
         {
-          children: `(function() {
+          innerHTML: `(function() {
             const color = localStorage.getItem('nuxt-color-mode') || 'light';
             if (color === 'dark') document.documentElement.classList.add('dark');
           })()`
